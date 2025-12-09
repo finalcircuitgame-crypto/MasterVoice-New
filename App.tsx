@@ -16,6 +16,9 @@ const App: React.FC = () => {
   const [showTrialNotification, setShowTrialNotification] = useState(false);
   const [showFamilyNotification, setShowFamilyNotification] = useState(false);
   
+  // Ref to prevent duplicate welcome toasts
+  const hasWelcomedRef = useRef(false);
+  
   const { path, navigate } = useRouter();
 
   // Presence logic
@@ -73,28 +76,44 @@ const App: React.FC = () => {
         };
         setCurrentUser(userProfile);
         
-        // Show notification once per session load
-        if (userProfile.is_family) {
+        // Show notification once per session load using ref to prevent spam
+        if (userProfile.is_family && !hasWelcomedRef.current) {
              setShowFamilyNotification(true);
+             hasWelcomedRef.current = true;
              setTimeout(() => setShowFamilyNotification(false), 6000);
         }
     };
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-          setupUser(session.user);
-          // Only redirect from auth pages
-          if (['/login', '/register'].includes(window.location.pathname)) {
-            navigate('/conversations');
-          }
-      }
-    });
+    // Check active session safely
+    const initSession = async () => {
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            
+            setSession(data.session);
+            if (data.session?.user) {
+                setupUser(data.session.user);
+                if (['/login', '/register'].includes(window.location.pathname)) {
+                    navigate('/conversations');
+                }
+            }
+        } catch (err: any) {
+            console.error("Session init error:", err.message);
+            // Handle Invalid Refresh Token specifically
+            if (err.message?.includes("Refresh Token") || err.message?.includes("refresh_token")) {
+                await supabase.auth.signOut();
+                setSession(null);
+                setCurrentUser(null);
+                navigate('/login');
+            }
+        }
+    };
+
+    initSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
           setupUser(session.user);
@@ -106,6 +125,8 @@ const App: React.FC = () => {
           setCurrentUser(null);
           setSelectedUser(null);
           setOnlineUsers(new Set());
+          hasWelcomedRef.current = false; // Reset welcome ref on logout
+          
           // If on protected route, kick to login
           if (window.location.pathname === '/conversations') {
             navigate('/login');

@@ -433,7 +433,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                     <MessageItem 
                         key={msg.id} 
                         msg={msg} 
-                        isMe={msg.sender_id === currentUser.id} 
+                        isMe={Boolean(currentUser && currentUser.id && msg.sender_id === currentUser.id)} // STRICT CHECK
                         recipientInitial={recipient.email[0].toUpperCase()}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
