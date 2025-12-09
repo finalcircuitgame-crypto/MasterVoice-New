@@ -10,6 +10,7 @@ export interface Message {
   receiver_id: string;
   content: string;
   created_at: string;
+  status?: 'sending' | 'sent' | 'error';
 }
 
 export interface SignalingPayload {

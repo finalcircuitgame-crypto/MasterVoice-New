@@ -59,7 +59,7 @@ export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
                     recommended={true}
                     features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
                     cta="Start Pro Trial"
-                    onAction={onBack}
+                    onAction={() => window.location.href = '/conversations?trial=true&plan=pro'} // Direct nav for now as PlansPage might be accessed directly
                 />
                 <PricingCard 
                     title="Team"
