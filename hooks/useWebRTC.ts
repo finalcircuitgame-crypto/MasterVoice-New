@@ -13,10 +13,9 @@ export const useWebRTC = (
   const [isMuted, setIsMuted] = useState(false);
   
   const pc = useRef<RTCPeerConnection | null>(null);
-  // Queue for ICE candidates received before remote description is set
   const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
-  // Store incoming offer to answer later manually
   const incomingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
+  const handleSignalRef = useRef<(payload: SignalingPayload) => Promise<void>>();
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -37,7 +36,6 @@ export const useWebRTC = (
 
   // Initialize PeerConnection
   const createPeerConnection = useCallback(() => {
-    // If a PC exists and is not closed, return it.
     if (pc.current && pc.current.signalingState !== 'closed') return pc.current;
 
     console.log('[WebRTC] Creating RTCPeerConnection');
@@ -73,13 +71,11 @@ export const useWebRTC = (
 
   // Handle incoming signaling messages
   const handleSignal = useCallback(async (payload: SignalingPayload) => {
-    // Ignore if no PC exists and it's not an offer (unless we need to create one)
     if (!pc.current && payload.type !== 'offer') return;
 
     try {
       switch (payload.type) {
         case 'offer':
-          // If we receive an offer, we must be the callee
           if (callState !== CallState.IDLE) {
              console.warn('[WebRTC] Received offer while busy');
              return; 
@@ -87,21 +83,18 @@ export const useWebRTC = (
           console.log('[WebRTC] Received offer');
           setCallState(CallState.RECEIVING);
           incomingOfferRef.current = payload.sdp!;
-          // We wait for manual answerCall() now
           break;
 
         case 'answer':
           console.log('[WebRTC] Received answer');
           if (pc.current) {
+            // Check state to avoid InvalidStateError
             if (pc.current.signalingState === 'have-local-offer') {
                 await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
-                // Process queued candidates
                 while(iceCandidateQueue.current.length > 0) {
                     const c = iceCandidateQueue.current.shift();
                     if(c) await pc.current.addIceCandidate(new RTCIceCandidate(c));
                 }
-            } else {
-                console.warn('[WebRTC] Received answer but signaling state is', pc.current.signalingState);
             }
           }
           break;
@@ -115,7 +108,6 @@ export const useWebRTC = (
                    console.error('[WebRTC] Error adding candidate', e);
                }
             } else {
-               // Queue if we haven't set remote description yet
                iceCandidateQueue.current.push(payload.candidate);
             }
           }
@@ -132,20 +124,28 @@ export const useWebRTC = (
     }
   }, [channel, callState, createPeerConnection, cleanup]);
 
-  // Setup channel listener
+  // Ref pattern to prevent stale closures and duplicate listeners
+  useEffect(() => {
+    handleSignalRef.current = handleSignal;
+  }, [handleSignal]);
+
+  // Setup channel listener ONLY ONCE
   useEffect(() => {
     if (!channel) return;
 
     const subscription = channel
       .on('broadcast', { event: 'signal' }, (response) => {
-        handleSignal(response.payload as SignalingPayload);
+        if (handleSignalRef.current) {
+            handleSignalRef.current(response.payload as SignalingPayload);
+        }
       })
       .subscribe();
 
     return () => {
-       // Channel cleanup handled by parent
+       // Channel cleanup handled by parent usually, but we unsubscribe specific listener if needed
+       // supabase.removeChannel(channel) happens in parent
     };
-  }, [channel, handleSignal]);
+  }, [channel]);
 
   // Actions
   const startCall = async () => {
@@ -179,17 +179,16 @@ export const useWebRTC = (
      
      try {
          const peer = createPeerConnection();
+         // If we are already connected or connecting, don't reset
          if (peer.signalingState !== 'stable') return;
 
          await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
           
-         // Process queued candidates
          while(iceCandidateQueue.current.length > 0) {
             const c = iceCandidateQueue.current.shift();
             if(c) await peer.addIceCandidate(new RTCIceCandidate(c));
          }
 
-         // Get User Media
          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
          setLocalStream(stream);
          stream.getTracks().forEach(track => peer.addTrack(track, stream));
@@ -203,8 +202,9 @@ export const useWebRTC = (
             payload: { type: 'answer', sdp: answer } as SignalingPayload,
          });
          
-         // State should naturally update to CONNECTED when ICE connects, but we can optimistically set connected if needed, 
-         // though 'RECEIVING' state usually transitions to connected via onconnectionstatechange
+         // Optimistically update state to update UI immediately
+         setCallState(CallState.CONNECTED);
+         
      } catch (err) {
          console.error('[WebRTC] Failed to answer call:', err);
          cleanup();
