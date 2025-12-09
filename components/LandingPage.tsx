@@ -32,17 +32,17 @@ const SectionHeading = ({ title, subtitle }: { title: string; subtitle: string }
 
 const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
   const [messages, setMessages] = useState<{ id: number; text: string; isMe: boolean }[]>([
-    { id: 1, text: "Is this P2P?", isMe: false },
-    { id: 2, text: "Yes! Direct & encrypted.", isMe: true },
+    { id: 1, text: "Hey! Did you see the new chat update?", isMe: false },
+    { id: 2, text: "Yeah, the sync is instant now.", isMe: true },
   ]);
   
   useEffect(() => {
     const interval = setInterval(() => {
         setMessages(prev => {
-            if (prev.length > 5) return [{ id: 1, text: "Is this P2P?", isMe: false }];
+            if (prev.length > 5) return [{ id: 1, text: "Hey! Did you see the new chat update?", isMe: false }];
             const newMsg = prev.length % 2 === 0 
-                ? { id: Date.now(), text: "Latency is practically zero.", isMe: false }
-                : { id: Date.now(), text: "Audio quality is amazing too.", isMe: true };
+                ? { id: Date.now(), text: "And voice calls are still P2P?", isMe: false }
+                : { id: Date.now(), text: "Exactly. Best of both worlds.", isMe: true };
             return [...prev, newMsg];
         })
     }, 2500);
@@ -102,10 +102,10 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
               </div>
               <h1 className="text-7xl font-extrabold leading-[1.1] tracking-tight">
                   The future of <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-400">secure voice.</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-400">secure communication.</span>
               </h1>
               <p className="text-xl text-gray-400 max-w-2xl leading-relaxed">
-                  Direct peer-to-peer connections. Sub-30ms latency. No middleman servers recording your calls.
+                  Seamlessly sync text messages across devices while enjoying crystal-clear P2P voice calls. The best of both worlds.
               </p>
               <div className="flex gap-4 pt-4">
                   <button onClick={() => onNavigate('/register')} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-600/25 transition-all hover:scale-105">Start Chatting</button>
@@ -131,33 +131,33 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
       {/* --- Section 2: Features Bento Grid --- */}
       <div className="py-24 bg-[#050510]">
           <div className="max-w-[1400px] mx-auto px-8">
-              <SectionHeading title="Engineered for Performance" subtitle="We removed the cloud processing to give you raw speed and privacy." />
+              <SectionHeading title="Complete Communication Suite" subtitle="More than just a walkie-talkie. A full-featured modern chat app." />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Large Card */}
                   <div className="md:col-span-2 bg-white/5 border border-white/5 rounded-3xl p-10 relative overflow-hidden group hover:bg-white/10 transition-colors">
                       <div className="relative z-10">
-                          <h3 className="text-2xl font-bold mb-4">Peer-to-Peer Architecture</h3>
-                          <p className="text-gray-400 max-w-md">Your voice data goes directly from your device to your friend's device. No servers in between to log, record, or lag your conversation.</p>
+                          <h3 className="text-2xl font-bold mb-4">Hybrid Architecture</h3>
+                          <p className="text-gray-400 max-w-md">We use encrypted cloud storage for your text history so you never miss a message, but switch to direct Peer-to-Peer connections for voice calls to ensure zero-latency privacy.</p>
                       </div>
                       <div className="absolute right-[-50px] top-10 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-colors"></div>
                   </div>
                   {/* Tall Card */}
                   <div className="md:row-span-2 bg-gradient-to-b from-indigo-900/20 to-transparent border border-white/5 rounded-3xl p-10 flex flex-col justify-end group">
                       <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-600/30 group-hover:scale-110 transition-transform">
-                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                       </div>
-                      <h3 className="text-2xl font-bold mb-4">End-to-End Encrypted</h3>
-                      <p className="text-gray-400">DTLS-SRTP encryption is mandatory for all calls. Not even we can listen in.</p>
+                      <h3 className="text-2xl font-bold mb-4">Instant Messaging</h3>
+                      <p className="text-gray-400">Send text, emojis, and updates instantly. Your chats are always ready when you are.</p>
                   </div>
                   {/* Small Card 1 */}
                   <div className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:border-indigo-500/50 transition-colors">
-                      <h3 className="text-xl font-bold mb-2">Opus Audio</h3>
-                      <p className="text-gray-400 text-sm">HD voice clarity at 48kHz sampling rate.</p>
+                      <h3 className="text-xl font-bold mb-2">Cloud Sync</h3>
+                      <p className="text-gray-400 text-sm">Access your message history from any device.</p>
                   </div>
                   {/* Small Card 2 */}
                   <div className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:border-fuchsia-500/50 transition-colors">
-                      <h3 className="text-xl font-bold mb-2">Low Latency</h3>
-                      <p className="text-gray-400 text-sm">Sub-30ms ping via direct UDP routing.</p>
+                      <h3 className="text-xl font-bold mb-2">HD Voice</h3>
+                      <p className="text-gray-400 text-sm">Switch to voice instantly with one tap.</p>
                   </div>
               </div>
           </div>
@@ -169,12 +169,12 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
           <div className="max-w-[1400px] mx-auto px-8 relative z-10">
               <div className="flex items-center gap-16">
                   <div className="flex-1">
-                      <h2 className="text-4xl font-bold mb-6">How it works under the hood</h2>
+                      <h2 className="text-4xl font-bold mb-6">Seamless Technology</h2>
                       <div className="space-y-8">
                           {[
-                              { step: "01", title: "Signaling", desc: "Users exchange handshake data via Supabase Realtime WebSocket." },
-                              { step: "02", title: "ICE Negotiation", desc: "Devices find the best direct path through the internet (STUN/TURN)." },
-                              { step: "03", title: "Direct Stream", desc: "An encrypted UDP tunnel is established. Audio flows directly." }
+                              { step: "01", title: "Real-time Database", desc: "Messages are delivered instantly via WebSocket and stored securely." },
+                              { step: "02", title: "Smart Signaling", desc: "When you call, we upgrade the connection to P2P automatically." },
+                              { step: "03", title: "Direct Stream", desc: "Audio flows directly between devices, bypassing the cloud entirely." }
                           ].map((item, i) => (
                               <div key={i} className="flex gap-6 group">
                                   <div className="text-5xl font-bold text-white/10 group-hover:text-indigo-500/50 transition-colors">{item.step}</div>
@@ -195,8 +195,13 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                                <div className="w-16 h-16 bg-gray-800 rounded-full border-2 border-indigo-500 flex items-center justify-center"><span className="font-bold">A</span></div>
                                <span className="text-sm text-gray-400">User A</span>
                            </div>
-                           <div className="flex-1 h-1 bg-gradient-to-r from-indigo-500 to-purple-500 mx-4 relative">
-                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black px-3 py-1 text-xs border border-white/20 rounded-full">Encrypted UDP</div>
+                           <div className="flex-1 flex flex-col gap-2 mx-4">
+                                <div className="h-1 bg-gray-700 w-full rounded-full relative">
+                                     <div className="absolute inset-0 bg-indigo-500/50 w-1/2 animate-pulse"></div>
+                                </div>
+                                <div className="text-[10px] text-center text-gray-400">Secure Cloud Msg</div>
+                                <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500 w-full rounded-full"></div>
+                                <div className="text-[10px] text-center text-gray-400">Direct P2P Voice</div>
                            </div>
                            <div className="flex flex-col items-center gap-2">
                                <div className="w-16 h-16 bg-gray-800 rounded-full border-2 border-purple-500 flex items-center justify-center"><span className="font-bold">B</span></div>
@@ -211,36 +216,36 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
       {/* --- Section 4: Comparison --- */}
       <div className="py-24 bg-[#050510]">
           <div className="max-w-[1000px] mx-auto px-8">
-              <SectionHeading title="Why switch?" subtitle="See how we stack up against the giants." />
+              <SectionHeading title="The Modern Standard" subtitle="See why users are switching." />
               <div className="overflow-hidden rounded-3xl border border-white/10">
                   <table className="w-full text-left border-collapse">
                       <thead>
                           <tr className="bg-white/5">
                               <th className="p-6 text-sm font-bold text-gray-400 uppercase">Feature</th>
                               <th className="p-6 text-indigo-400 font-bold text-xl">MasterVoice</th>
-                              <th className="p-6 text-gray-500 font-medium">Standard VoIP</th>
+                              <th className="p-6 text-gray-500 font-medium">Others</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                           <tr>
-                              <td className="p-6 font-medium">Privacy</td>
-                              <td className="p-6 text-green-400">P2P (No server logs)</td>
-                              <td className="p-6 text-gray-400">Server Interceptable</td>
+                              <td className="p-6 font-medium">Message History</td>
+                              <td className="p-6 text-green-400">Secure Cloud Sync</td>
+                              <td className="p-6 text-gray-400">Often Missing in P2P</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium">Voice Privacy</td>
+                              <td className="p-6 text-green-400">Direct P2P (No Logging)</td>
+                              <td className="p-6 text-gray-400">Server Recorded</td>
                           </tr>
                           <tr>
                               <td className="p-6 font-medium">Audio Quality</td>
                               <td className="p-6">48kHz Opus</td>
-                              <td className="p-6 text-gray-400">Variable / Compressed</td>
-                          </tr>
-                          <tr>
-                              <td className="p-6 font-medium">Latency</td>
-                              <td className="p-6">Direct (~20ms)</td>
-                              <td className="p-6 text-gray-400">Relayed (~150ms)</td>
+                              <td className="p-6 text-gray-400">Compressed</td>
                           </tr>
                           <tr>
                               <td className="p-6 font-medium">Cost</td>
                               <td className="p-6">Free & Open Source</td>
-                              <td className="p-6 text-gray-400">Subscription / Ads</td>
+                              <td className="p-6 text-gray-400">Data Selling / Ads</td>
                           </tr>
                       </tbody>
                   </table>
@@ -254,9 +259,10 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                <SectionHeading title="Frequently Asked Questions" subtitle="Everything you need to know." />
                <div className="space-y-4">
                    {[
-                       { q: "Is it really free?", a: "Yes. Because we use P2P technology, we don't have massive server bills to pay. You connect directly to your friends." },
+                       { q: "Is this just for voice calls?", a: "No! MasterVoice is a fully featured chat application. You can send text messages to your friends anytime, and they will receive them instantly or when they come online." },
+                       { q: "Is it really free?", a: "Yes. The core P2P technology is extremely cost-effective, allowing us to offer the service for free." },
                        { q: "Can I use it on mobile?", a: "Absolutely. MasterVoice works in any modern mobile browser (Chrome, Safari, Firefox) without installing an app." },
-                       { q: "What is Supabase used for?", a: "We use Supabase only for Authentication (logging you in) and Signaling (telling devices how to find each other). Once the call starts, Supabase is out of the loop." }
+                       { q: "What is Supabase used for?", a: "We use Supabase for secure authentication and to store your chat history so you can access it from any device." }
                    ].map((faq, i) => (
                        <details key={i} className="group bg-white/5 rounded-2xl border border-white/5 open:bg-white/10 transition-colors">
                            <summary className="p-6 font-bold cursor-pointer flex justify-between items-center list-none select-none">
@@ -274,7 +280,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
       {/* --- Section 6: Footer CTA --- */}
       <div className="py-32 px-8 text-center bg-gradient-to-t from-indigo-900/40 to-transparent">
-          <h2 className="text-5xl font-bold mb-8">Ready to reclaim your voice?</h2>
+          <h2 className="text-5xl font-bold mb-8">Ready to connect?</h2>
           <button onClick={() => onNavigate('/register')} className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.3)]">
               Get Started for Free
           </button>
@@ -312,11 +318,11 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
         <div className="px-6 pt-6 pb-12 flex flex-col relative z-10 border-b border-white/5">
             <div className="mb-8 animate-fade-in-up">
                 <h1 className="text-5xl font-bold leading-none mb-4 tracking-tighter">
-                    Talk <br/> <span className="text-indigo-500">Free.</span> <br/>
-                    Talk <span className="text-purple-500">Safe.</span>
+                    Chat <br/> <span className="text-indigo-500">Freely.</span> <br/>
+                    Speak <span className="text-purple-500">Safely.</span>
                 </h1>
                 <p className="text-gray-400 text-lg leading-snug">
-                    The first truly private P2P voice chat for the web. No downloads required.
+                    The ultimate secure chat and voice app for the web. No downloads required.
                 </p>
             </div>
             <div className="w-full aspect-[4/5] bg-gray-900/50 rounded-3xl border border-white/10 relative overflow-hidden mb-8 animate-float shadow-2xl">
@@ -336,15 +342,15 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
             
             <div className="p-8 rounded-3xl bg-indigo-600 text-white relative overflow-hidden">
                 <div className="relative z-10">
-                    <h3 className="text-2xl font-bold mb-2">Zero Tracking</h3>
-                    <p className="opacity-80">We connect you directly to your peer. We can't hear you even if we wanted to.</p>
+                    <h3 className="text-2xl font-bold mb-2">Instant Chat</h3>
+                    <p className="opacity-80">Message your friends instantly with a familiar, modern interface.</p>
                 </div>
-                <div className="absolute -right-5 -bottom-5 text-9xl opacity-10 rotate-12">🛡️</div>
+                <div className="absolute -right-5 -bottom-5 text-9xl opacity-10 rotate-12">💬</div>
             </div>
 
             <div className="p-8 rounded-3xl bg-[#111] border border-white/10">
-                <h3 className="text-2xl font-bold mb-2 text-indigo-400">Crystal Clear</h3>
-                <p className="text-gray-400">Powered by Opus codec at 48kHz for studio-quality vocals.</p>
+                <h3 className="text-2xl font-bold mb-2 text-indigo-400">Private Voice</h3>
+                <p className="text-gray-400">Direct P2P voice calls that no server can record.</p>
             </div>
 
             <div className="p-8 rounded-3xl bg-[#111] border border-white/10">
@@ -358,9 +364,9 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
             <h2 className="text-3xl font-bold mb-10">How it works</h2>
             <div className="space-y-0 pl-4 border-l-2 border-white/10">
                 {[
-                    { t: "Create Account", d: "Sign up anonymously with just an email." },
-                    { t: "Share ID", d: "Find your friend via their email." },
-                    { t: "Connect P2P", d: "Browser connects directly to browser." }
+                    { t: "Create Account", d: "Sign up instantly with just an email." },
+                    { t: "Start Chatting", d: "Send text messages to any user on the platform." },
+                    { t: "Call P2P", d: "One tap upgrades you to a secure voice call." }
                 ].map((step, i) => (
                     <div key={i} className="relative pl-8 pb-10 last:pb-0">
                         <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-4 border-black"></div>
@@ -377,7 +383,7 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
             <div className="space-y-4">
                 <div className="bg-white/5 p-6 rounded-2xl">
                     <h4 className="font-bold mb-2">Is it secure?</h4>
-                    <p className="text-sm text-gray-400">Yes. All calls are encrypted with DTLS-SRTP standards.</p>
+                    <p className="text-sm text-gray-400">Yes. Chats are secure and voice is encrypted P2P.</p>
                 </div>
                 <div className="bg-white/5 p-6 rounded-2xl">
                     <h4 className="font-bold mb-2">Do I need an app?</h4>
