@@ -136,6 +136,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   // Status check
   const isRecipientOnline = onlineUsers.has(recipient.id);
+  const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
 
   useEffect(() => {
     // Clean up old channel if exists
@@ -366,7 +367,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                 </div>
             </div>
             <div>
-                <h2 className="font-bold text-white text-lg leading-tight">{recipient.email}</h2>
+                <div className="flex items-center gap-2">
+                    <h2 className="font-bold text-white text-lg leading-tight">{recipient.email}</h2>
+                    {isPenguin && <span className="text-xl animate-wobble" title="Special Penguin Badge">🐧</span>}
+                </div>
                 <div className="flex items-center gap-2">
                     <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-400'}`}>
                         {isRecipientOnline ? 'Online' : 'Offline'}

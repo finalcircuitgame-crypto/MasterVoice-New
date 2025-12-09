@@ -89,6 +89,13 @@
         100% { background-position: 200% center; }
       }
 
+      /* Penguin Wobble */
+      @keyframes wobble {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(-10deg); }
+        75% { transform: rotate(10deg); }
+      }
+
       .animate-float {
         animation: float 15s ease-in-out infinite;
       }
@@ -134,6 +141,11 @@
         -webkit-background-clip: text;
         background-clip: text;
         animation: text-shimmer 3s linear infinite;
+      }
+
+      .animate-wobble {
+        animation: wobble 2s ease-in-out infinite;
+        display: inline-block;
       }
 
       .glass-panel {

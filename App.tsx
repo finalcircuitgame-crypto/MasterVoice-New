@@ -19,7 +19,7 @@ const App: React.FC = () => {
   // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
   
-  const { path, navigate } = useRouter();
+  const { path, navigate, query } = useRouter();
 
   // Presence logic
   useEffect(() => {
@@ -137,6 +137,31 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Handle URL-based Chat Selection (Deep Linking)
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const userIdParam = query.get('userId');
+    
+    if (userIdParam) {
+        // If the URL has a userId, and it's different from currently selected, fetch and select it
+        if (!selectedUser || selectedUser.id !== userIdParam) {
+            const fetchUser = async () => {
+                const { data, error } = await supabase.from('profiles').select('*').eq('id', userIdParam).single();
+                if (data && !error) {
+                    setSelectedUser(data);
+                }
+            };
+            fetchUser();
+        }
+    } else {
+        // If URL has no userId (e.g. user pressed Back), clear selection
+        if (selectedUser) {
+            setSelectedUser(null);
+        }
+    }
+  }, [query, currentUser, selectedUser]); // Re-run when URL changes
+
   // Check for trial params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -148,6 +173,11 @@ const App: React.FC = () => {
         return () => clearTimeout(timer);
     }
   }, [path]);
+
+  const handleSelectUser = (user: UserProfile) => {
+      // Update URL instead of just state, this keeps browser history in sync
+      navigate(`/conversations?userId=${user.id}`);
+  };
 
   // Simple Router Switch
   const renderView = () => {
@@ -195,7 +225,7 @@ const App: React.FC = () => {
               <div className={`flex-none w-full md:w-80 h-full ${selectedUser ? 'hidden md:block' : 'block'}`}>
                 <ChatList 
                     currentUser={currentUser} 
-                    onSelectUser={setSelectedUser} 
+                    onSelectUser={handleSelectUser} 
                     onlineUsers={onlineUsers}
                 />
               </div>
@@ -203,7 +233,7 @@ const App: React.FC = () => {
                 {selectedUser ? (
                     <>
                         <div className="md:hidden bg-[#0a0a0f] p-4 border-b border-white/5 flex items-center gap-2">
-                            <button onClick={() => setSelectedUser(null)} className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition">
+                            <button onClick={() => navigate('/conversations')} className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             </button>
                             <span className="font-bold text-white">Back to chats</span>
