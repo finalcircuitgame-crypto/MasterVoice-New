@@ -30,6 +30,52 @@ const SectionHeading = ({ title, subtitle }: { title: string; subtitle: string }
     </div>
 );
 
+const PricingCard = ({ 
+    title, 
+    price, 
+    features, 
+    recommended = false,
+    cta = "Get Started",
+    onAction
+}: { 
+    title: string; 
+    price: string; 
+    features: string[]; 
+    recommended?: boolean;
+    cta?: string;
+    onAction: () => void;
+}) => (
+  <div className={`p-8 rounded-[2rem] border flex flex-col h-full relative transition-all duration-300 hover:-translate-y-2 ${recommended ? 'bg-gradient-to-b from-indigo-900/40 to-[#050510] border-indigo-500/50 shadow-2xl shadow-indigo-500/20 z-10 scale-105' : 'bg-white/5 border-white/5 hover:border-white/10'}`}>
+    {recommended && (
+        <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-6 py-2 bg-gradient-to-r from-indigo-500 to-fuchsia-500 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-500/40 text-white">
+            Most Popular
+        </div>
+    )}
+    <h3 className={`text-xl font-bold mb-2 ${recommended ? 'text-indigo-300' : 'text-gray-300'}`}>{title}</h3>
+    <div className="flex items-baseline gap-1 mb-6">
+        <span className="text-4xl font-bold text-white">{price}</span>
+        {price !== 'Free' && <span className="text-lg text-gray-500 font-normal">/mo</span>}
+    </div>
+    <div className="h-px w-full bg-white/5 mb-8"></div>
+    <ul className="space-y-4 flex-1 mb-8">
+        {features.map((f, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
+                <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${recommended ? 'bg-indigo-500/20 text-indigo-400' : 'bg-gray-800 text-gray-500'}`}>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <span className="leading-tight">{f}</span>
+            </li>
+        ))}
+    </ul>
+    <button 
+        onClick={onAction}
+        className={`w-full py-4 rounded-xl font-bold transition-all active:scale-95 ${recommended ? 'bg-white text-black hover:bg-gray-200 shadow-lg shadow-white/10' : 'bg-white/5 hover:bg-white/10 text-white border border-white/5'}`}
+    >
+        {cta}
+    </button>
+  </div>
+);
+
 const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
   const [messages, setMessages] = useState<{ id: number; text: string; isMe: boolean }[]>([
     { id: 1, text: "Hey! Did you see the new chat update?", isMe: false },
@@ -253,8 +299,40 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
           </div>
       </div>
 
-      {/* --- Section 5: FAQ --- */}
-      <div className="py-24">
+      {/* --- Section 5: Pricing --- */}
+      <div className="py-24 relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-indigo-900/5 blur-3xl pointer-events-none"></div>
+        <div className="max-w-[1200px] mx-auto px-8 relative z-10">
+            <SectionHeading title="Choose your plan" subtitle="Start for free, upgrade when you need more power." />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <PricingCard 
+                    title="Personal"
+                    price="Free"
+                    features={["Unlimited Text Messages", "1-on-1 P2P Voice Calls", "30-Day Message History", "1 Active Device", "Community Support"]}
+                    cta="Get Started Free"
+                    onAction={() => onNavigate('/register')}
+                />
+                <PricingCard 
+                    title="Pro"
+                    price="$8"
+                    recommended={true}
+                    features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
+                    cta="Start Pro Trial"
+                    onAction={() => onNavigate('/register')}
+                />
+                <PricingCard 
+                    title="Team"
+                    price="$20"
+                    features={["Everything in Pro", "Unlimited Group Size", "Admin Dashboard", "Team Analytics", "Custom Retention Policy", "24/7 Dedicated Support"]}
+                    cta="Contact Sales"
+                    onAction={() => onNavigate('/contact')}
+                />
+            </div>
+        </div>
+      </div>
+
+      {/* --- Section 6: FAQ --- */}
+      <div className="py-24 bg-[#050510]">
            <div className="max-w-[800px] mx-auto px-8">
                <SectionHeading title="Frequently Asked Questions" subtitle="Everything you need to know." />
                <div className="space-y-4">
@@ -278,7 +356,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
            </div>
       </div>
 
-      {/* --- Section 6: Footer CTA --- */}
+      {/* --- Section 7: Footer CTA --- */}
       <div className="py-32 px-8 text-center bg-gradient-to-t from-indigo-900/40 to-transparent">
           <h2 className="text-5xl font-bold mb-8">Ready to connect?</h2>
           <button onClick={() => onNavigate('/register')} className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.3)]">
@@ -377,8 +455,30 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
             </div>
         </div>
 
-        {/* --- Section 4: FAQ Mobile --- */}
+        {/* --- Section 4: Mobile Pricing --- */}
         <div className="px-6 py-16">
+            <h2 className="text-3xl font-bold mb-10">Simple Pricing</h2>
+            <div className="space-y-6">
+                 <PricingCard 
+                    title="Personal"
+                    price="Free"
+                    features={["Unlimited Chats", "P2P Voice", "30-Day History"]}
+                    cta="Sign Up Free"
+                    onAction={() => onNavigate('/register')}
+                />
+                <PricingCard 
+                    title="Pro"
+                    price="$8"
+                    recommended={true}
+                    features={["Unlimited History", "Group Calls", "HD Audio"]}
+                    cta="Try Pro"
+                    onAction={() => onNavigate('/register')}
+                />
+            </div>
+        </div>
+
+        {/* --- Section 5: FAQ Mobile --- */}
+        <div className="px-6 py-16 bg-[#0a0a0a]">
             <h2 className="text-3xl font-bold mb-8">FAQ</h2>
             <div className="space-y-4">
                 <div className="bg-white/5 p-6 rounded-2xl">
@@ -392,7 +492,7 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
             </div>
         </div>
 
-        {/* --- Section 5: Mobile Footer --- */}
+        {/* --- Section 6: Mobile Footer --- */}
         <div className="px-6 pt-10 pb-20 text-center border-t border-white/5">
              <button onClick={() => onNavigate('/register')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg mb-8 shadow-lg shadow-indigo-600/30">
                 Join Now
