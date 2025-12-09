@@ -1,387 +1,410 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface LandingPageProps {
-  onGetStarted: () => void;
-  onLogin: () => void;
+  onNavigate: (page: string) => void;
 }
 
-// --- Interactive Mock Chat Component ---
-const InteractiveChat = () => {
-  const [messages, setMessages] = useState<{ id: number; text: string; isMe: boolean }[]>([
-    { id: 1, text: "Hey! Welcome to MasterVoice. 👋", isMe: false },
-    { id: 2, text: "This demo is live. Try typing something below!", isMe: false },
-  ]);
-  const [inputText, setInputText] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+// --- Hook to detect screen size for conditional rendering ---
+function useWindowSize() {
+  const [size, setSize] = useState([window.innerWidth, window.innerHeight]);
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    const handleResize = () => setSize([window.innerWidth, window.innerHeight]);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  return size;
+}
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+// --- Shared Components ---
 
-    const newMsg = { id: Date.now(), text: inputText, isMe: true };
-    setMessages(prev => [...prev, newMsg]);
-    setInputText("");
-    setIsTyping(true);
+const TechBadge = ({ color, name }: { color: string; name: string }) => (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${color} bg-opacity-10 border border-opacity-20`}>
+        {name}
+    </span>
+);
 
-    // Simulate generic AI/Peer reply
-    setTimeout(() => {
-      const replies = [
-        "That's the power of WebRTC! 🚀",
-        "Zero latency, crystal clear audio.",
-        "Secure by default. No middlemen.",
-        "I can hear you loud and clear!",
-        "Supabase makes this realtime magic happen."
-      ];
-      const randomReply = replies[Math.floor(Math.random() * replies.length)];
-      
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: randomReply, isMe: false }]);
-      setIsTyping(false);
-    }, 1500);
-  };
+const SectionHeading = ({ title, subtitle }: { title: string; subtitle: string }) => (
+    <div className="text-center mb-16 space-y-4">
+        <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{title}</h2>
+        <p className="text-gray-400 max-w-2xl mx-auto text-lg">{subtitle}</p>
+    </div>
+);
+
+const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
+  const [messages, setMessages] = useState<{ id: number; text: string; isMe: boolean }[]>([
+    { id: 1, text: "Is this P2P?", isMe: false },
+    { id: 2, text: "Yes! Direct & encrypted.", isMe: true },
+  ]);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+        setMessages(prev => {
+            if (prev.length > 5) return [{ id: 1, text: "Is this P2P?", isMe: false }];
+            const newMsg = prev.length % 2 === 0 
+                ? { id: Date.now(), text: "Latency is practically zero.", isMe: false }
+                : { id: Date.now(), text: "Audio quality is amazing too.", isMe: true };
+            return [...prev, newMsg];
+        })
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="relative w-full max-w-sm mx-auto perspective-1000 group">
-      <div className="glass-panel rounded-[2.5rem] p-4 transform transition-all duration-700 md:rotate-y-[-12deg] md:rotate-x-[5deg] md:group-hover:rotate-0 shadow-2xl border border-white/10 h-[600px] flex flex-col bg-black/40">
-        
-        {/* Notch/Header */}
-        <div className="flex items-center space-x-3 mb-4 px-2 pt-2 border-b border-white/5 pb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-emerald-600 flex items-center justify-center text-sm font-bold shadow-lg shadow-green-500/20">
-            A
-          </div>
-          <div>
-            <div className="text-sm font-bold text-white">Alex</div>
-            <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </span>
-                <span className="text-[10px] text-green-400 font-medium tracking-wide">Encrypted P2P</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto space-y-4 px-2 pr-1 custom-scrollbar scroll-smooth">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-              <div
-                className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                  msg.isMe
-                    ? 'bg-indigo-600 text-white rounded-br-none'
-                    : 'bg-white/10 text-gray-200 rounded-bl-none border border-white/5'
-                }`}
-              >
-                {msg.text}
-              </div>
-            </div>
-          ))}
-          {isTyping && (
-             <div className="flex items-center space-x-1 ml-2 mt-2 bg-white/5 w-12 h-8 rounded-full rounded-bl-none justify-center">
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <form onSubmit={handleSend} className="mt-4 pt-3 border-t border-white/5 flex space-x-2 relative z-20">
-            <input 
-                type="text" 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-white/10 focus:border-indigo-500/50 transition-all"
-            />
-            <button 
-                type="submit"
-                className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/20"
-            >
-                <svg className="w-4 h-4 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>
-            </button>
-        </form>
-      </div>
-      
-      {/* Decorative blobs behind phone */}
-      <div className="absolute -z-10 top-[10%] right-[-10%] w-64 h-64 bg-fuchsia-500/20 rounded-full blur-[80px] animate-pulse-glow"></div>
-      <div className="absolute -z-10 bottom-[10%] left-[-20%] w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px] animate-pulse-glow" style={{animationDelay: '1.5s'}}></div>
+    <div className={`relative w-full ${mobile ? 'h-[350px]' : 'h-[500px]'} overflow-hidden`}>
+       <div className={`glass-panel w-full h-full rounded-[2rem] p-4 flex flex-col bg-black/40 ${mobile ? 'border-none shadow-none' : 'border border-white/10 shadow-2xl'}`}>
+           <div className="flex-1 space-y-3 overflow-hidden p-2">
+               {messages.map((m) => (
+                   <div key={m.id} className={`flex ${m.isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                       <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${m.isMe ? 'bg-indigo-600 text-white' : 'bg-white/10 text-gray-200'}`}>
+                           {m.text}
+                       </div>
+                   </div>
+               ))}
+           </div>
+           <div className="mt-2 h-10 bg-white/5 rounded-full w-full flex items-center px-4">
+               <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-pulse"></div>
+           </div>
+       </div>
     </div>
   );
 };
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
+// --- Desktop Landing Page ---
+const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
   return (
-    <div className="min-h-screen bg-[#030014] text-white overflow-hidden relative selection:bg-indigo-500 selection:text-white font-['Outfit']">
+    <div className="min-h-screen bg-[#030014] text-white font-['Outfit'] overflow-x-hidden selection:bg-indigo-500">
       
-      {/* Global Background Effects */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[20%] w-[50vw] h-[50vw] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse-glow" />
-        <div className="absolute bottom-[-10%] right-[10%] w-[40vw] h-[40vw] bg-fuchsia-600/10 rounded-full blur-[120px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]"></div>
-      </div>
-
-      {/* Navbar */}
-      <nav className="relative z-50 container mx-auto px-6 py-6 flex justify-between items-center backdrop-blur-sm sticky top-0 bg-[#030014]/50 border-b border-white/5">
-        <div className="flex items-center space-x-3 cursor-pointer group">
-          <div className="relative w-10 h-10 flex items-center justify-center">
-             <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-fuchsia-500 rounded-xl rotate-6 group-hover:rotate-12 transition-transform opacity-80 blur-[2px]"></div>
-             <div className="relative w-full h-full bg-black/80 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-             </div>
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
-            MasterVoice
-          </span>
-        </div>
-        <div className="flex items-center space-x-6">
-          <button 
-            onClick={onLogin}
-            className="hidden md:block text-sm font-semibold text-gray-300 hover:text-white transition-colors tracking-wide"
-          >
-            LOG IN
-          </button>
-          <button 
-            onClick={onGetStarted}
-            className="px-6 py-2.5 bg-white text-black hover:bg-gray-100 rounded-full font-bold text-sm transition shadow-[0_0_20px_-5px_rgba(255,255,255,0.4)] hover:shadow-[0_0_25px_-5px_rgba(255,255,255,0.6)] transform hover:-translate-y-0.5"
-          >
-            GET STARTED
-          </button>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <main className="relative z-10 container mx-auto px-6 pt-16 md:pt-24 pb-20">
-        <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
-            
-            {/* Left Content */}
-            <div className="flex-1 text-center lg:text-left animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                <div className="inline-flex items-center px-4 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-bold uppercase tracking-widest mb-8 backdrop-blur-md shadow-lg shadow-indigo-900/20">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 mr-2 animate-pulse"></span>
-                    Live Preview v2.0
+      {/* --- Navbar --- */}
+      <nav className="w-full fixed top-0 z-50 bg-[#030014]/80 backdrop-blur-md border-b border-white/5 h-20 flex items-center">
+         <div className="w-full max-w-[1400px] mx-auto px-8 flex justify-between items-center">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => onNavigate('/')}>
+                <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-fuchsia-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
-                
-                <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold mb-8 tracking-tighter leading-[1.1] text-white">
-                  Talk freely.<br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-400 animate-gradient-x bg-[length:200%_auto]">
-                    Securely. Instantly.
-                  </span>
-                </h1>
-                
-                <p className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto lg:mx-0 font-light leading-relaxed">
-                  Experience the next generation of communication. Peer-to-peer encrypted voice and messaging, powered by Supabase and WebRTC. No middlemen, no limits.
-                </p>
-                
-                <div className="flex flex-col sm:flex-row justify-center lg:justify-start items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                  <button 
-                      onClick={onGetStarted}
-                      className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-all duration-300 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:-translate-y-1 flex items-center justify-center group"
-                  >
-                      Launch App
-                      <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                  </button>
-                  <button 
-                      onClick={() => window.open('https://github.com', '_blank')}
-                      className="w-full sm:w-auto px-8 py-4 glass-button text-white rounded-2xl font-bold text-lg transition hover:bg-white/10 flex items-center justify-center hover:-translate-y-1"
-                  >
-                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                      GitHub
-                  </button>
-                </div>
+                <span className="text-xl font-bold tracking-tight">MasterVoice</span>
             </div>
-
-            {/* Right Graphic - Interactive Mockup */}
-            <div className="flex-1 w-full max-w-md lg:max-w-full flex justify-center lg:justify-end animate-fade-in-up relative" style={{ animationDelay: '0.4s' }}>
-                <InteractiveChat />
-                {/* Floating Labels */}
-                <div className="absolute top-10 -right-4 bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-xl shadow-xl animate-float hidden lg:block">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-xs font-mono">Status: Connected</span>
-                  </div>
-                </div>
-                <div className="absolute bottom-20 -left-10 bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-xl shadow-xl animate-float-delayed hidden lg:block">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono">Latency: 24ms</span>
-                  </div>
-                </div>
-            </div>
-        </div>
-      </main>
-
-      {/* Tech Stack Strip */}
-      <div className="relative z-10 border-y border-white/5 bg-black/30 backdrop-blur-sm py-10 overflow-hidden">
-        <div className="container mx-auto px-6">
-          <p className="text-center text-sm text-gray-500 uppercase tracking-widest mb-6">Powered by modern infrastructure</p>
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 items-center opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-             {/* Simple text representations for demo, replace with SVGs in prod */}
-             <span className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-green-500 rounded-md"></div>Supabase</span>
-             <span className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-blue-500 rounded-full"></div>WebRTC</span>
-             <span className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-cyan-400 rounded-lg"></div>React 19</span>
-             <span className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-sky-500 rounded-sm"></div>Tailwind</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Deep Dive Section 1 */}
-      <section className="relative z-10 container mx-auto px-6 py-24 md:py-32">
-        <div className="flex flex-col md:flex-row items-center gap-16">
-          <div className="flex-1 order-2 md:order-1">
-             <div className="w-full aspect-square max-w-md mx-auto relative group">
-                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 rounded-full blur-3xl group-hover:blur-[100px] transition-all duration-700"></div>
-                <div className="relative h-full w-full glass-panel rounded-3xl border border-white/10 flex items-center justify-center p-8 overflow-hidden">
-                   {/* Abstract representation of encryption */}
-                   <div className="grid grid-cols-2 gap-4 w-full h-full opacity-50">
-                      {[...Array(4)].map((_, i) => (
-                        <div key={i} className="bg-white/5 rounded-2xl animate-pulse" style={{animationDelay: `${i * 0.5}s`}}></div>
-                      ))}
-                   </div>
-                   <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-2xl flex items-center justify-center">
-                        <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          </div>
-          <div className="flex-1 order-1 md:order-2">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">End-to-End Privacy</h2>
-            <p className="text-gray-400 text-lg leading-relaxed mb-8">
-              We don't store your voice calls. In fact, we <span className="text-white font-semibold">can't</span>. 
-              MasterVoice connects you directly to your peer using ephemeral WebRTC channels. 
-              Your data flows from your device to theirs, skipping our servers entirely.
-            </p>
-            <ul className="space-y-4">
-              {["No call recording", "Direct P2P Audio Streaming", "Ephemeral signaling data"].map((item, i) => (
-                <li key={i} className="flex items-center text-gray-300">
-                  <svg className="w-5 h-5 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Feature Grid */}
-      <section className="relative z-10 bg-white/5 border-y border-white/5 py-24">
-        <div className="container mx-auto px-6">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold mb-6">Everything you need to connect</h2>
-            <p className="text-gray-400">Built for developers and privacy enthusiasts who demand quality and speed.</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-                {
-                    title: "Realtime Sync",
-                    desc: "Instant message delivery across all devices using Supabase Realtime.",
-                    icon: (
-                        <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    ),
-                    color: "bg-indigo-500/20",
-                    border: "hover:border-indigo-500/50"
-                },
-                {
-                    title: "Secure Signaling",
-                    desc: "Encrypted WebSocket channels establish your P2P connections securely.",
-                    icon: (
-                        <svg className="w-6 h-6 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                    ),
-                    color: "bg-fuchsia-500/20",
-                    border: "hover:border-fuchsia-500/50"
-                },
-                {
-                    title: "HD Voice",
-                    desc: "High-fidelity Opus codec audio streaming at low latency.",
-                    icon: (
-                        <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                    ),
-                    color: "bg-cyan-500/20",
-                    border: "hover:border-cyan-500/50"
-                }
-            ].map((feature, idx) => (
-                <div key={idx} className={`glass-panel p-8 rounded-3xl border border-white/5 ${feature.border} transition duration-300 group hover:-translate-y-1`}>
-                    <div className={`w-14 h-14 ${feature.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                        {feature.icon}
-                    </div>
-                    <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                        {feature.desc}
-                    </p>
-                </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="relative z-10 container mx-auto px-6 py-24">
-        <h2 className="text-3xl font-bold text-center mb-16">Trusted by developers</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[
-            { q: "Finally, a voice app that doesn't track me.", u: "Sarah J.", r: "Security Researcher" },
-            { q: "The audio quality beats standard cellular calls.", u: "David K.", r: "Remote Worker" },
-            { q: "Integration with Supabase is seamless.", u: "Elena R.", r: "Frontend Dev" }
-          ].map((t, i) => (
-            <div key={i} className="glass-panel p-6 rounded-2xl hover:bg-white/5 transition border border-white/5">
-               <div className="flex text-yellow-500 mb-4">★★★★★</div>
-               <p className="text-gray-300 mb-6">"{t.q}"</p>
-               <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-600"></div>
-                  <div>
-                    <div className="text-sm font-bold text-white">{t.u}</div>
-                    <div className="text-xs text-gray-500">{t.r}</div>
-                  </div>
-               </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="relative z-10 container mx-auto px-6 pb-24">
-         <div className="glass-panel rounded-3xl p-12 md:p-20 text-center relative overflow-hidden border border-indigo-500/30">
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-indigo-900/40 to-fuchsia-900/40 z-0"></div>
-            <div className="relative z-10">
-               <h2 className="text-4xl md:text-5xl font-bold mb-6">Ready to talk?</h2>
-               <p className="text-xl text-gray-300 mb-10 max-w-xl mx-auto">Join thousands of users experiencing the future of secure communication today.</p>
-               <button 
-                onClick={onGetStarted}
-                className="px-10 py-5 bg-white text-black hover:bg-gray-200 rounded-full font-bold text-lg transition shadow-2xl hover:scale-105"
-               >
-                Get Started for Free
-               </button>
+            <div className="flex items-center gap-8">
+                <button onClick={() => onNavigate('/login')} className="text-white hover:text-indigo-300 transition text-sm font-bold">LOG IN</button>
+                <button onClick={() => onNavigate('/register')} className="px-6 py-2.5 bg-white text-black hover:bg-gray-100 rounded-lg font-bold text-sm transition transform hover:-translate-y-0.5 shadow-lg shadow-white/10">GET STARTED</button>
             </div>
          </div>
-      </section>
+      </nav>
 
-      <footer className="border-t border-white/5 py-12 relative z-10 bg-black/40 backdrop-blur-md">
-          <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 gap-4">
-             <div className="flex items-center gap-2 mb-4 md:mb-0">
-               <span className="text-white font-bold text-lg">MasterVoice</span>
-               <span>© 2024</span>
-             </div>
-             <div className="flex space-x-8">
-                <a href="#" className="hover:text-white transition">Privacy Policy</a>
-                <a href="#" className="hover:text-white transition">Terms of Service</a>
-                <a href="#" className="hover:text-white transition">Contact Support</a>
-                <a href="#" className="hover:text-white transition">Twitter</a>
-             </div>
+      {/* --- Section 1: Hero --- */}
+      <div className="pt-32 pb-32 px-8 w-full max-w-[1400px] mx-auto flex items-center gap-20 relative">
+          <div className="flex-1 space-y-8 animate-fade-in-up z-10">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-indigo-300 text-sm font-mono">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                  </span>
+                  v2.0 Public Beta
+              </div>
+              <h1 className="text-7xl font-extrabold leading-[1.1] tracking-tight">
+                  The future of <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-400">secure voice.</span>
+              </h1>
+              <p className="text-xl text-gray-400 max-w-2xl leading-relaxed">
+                  Direct peer-to-peer connections. Sub-30ms latency. No middleman servers recording your calls.
+              </p>
+              <div className="flex gap-4 pt-4">
+                  <button onClick={() => onNavigate('/register')} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-600/25 transition-all hover:scale-105">Start Chatting</button>
+                  <button onClick={() => onNavigate('/login')} className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-lg transition-all">Log In</button>
+              </div>
           </div>
-      </footer>
+          <div className="flex-1 relative h-[700px] flex items-center justify-center perspective-1000 z-10">
+              <div className="relative w-[380px] h-[680px] bg-black rounded-[3rem] border-4 border-gray-800 shadow-2xl transform rotate-y-[-12deg] rotate-x-[5deg] hover:rotate-0 transition-transform duration-700 overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-full bg-[#0c0c0c] flex flex-col">
+                      <div className="h-24 bg-gradient-to-b from-gray-900 to-transparent p-6 flex items-end">
+                          <div className="w-full flex justify-between items-center">
+                              <span className="font-bold text-lg">Alex</span>
+                              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                          </div>
+                      </div>
+                      <div className="flex-1 p-4"><InteractiveChat /></div>
+                  </div>
+              </div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none"></div>
+          </div>
+      </div>
+
+      {/* --- Section 2: Features Bento Grid --- */}
+      <div className="py-24 bg-[#050510]">
+          <div className="max-w-[1400px] mx-auto px-8">
+              <SectionHeading title="Engineered for Performance" subtitle="We removed the cloud processing to give you raw speed and privacy." />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Large Card */}
+                  <div className="md:col-span-2 bg-white/5 border border-white/5 rounded-3xl p-10 relative overflow-hidden group hover:bg-white/10 transition-colors">
+                      <div className="relative z-10">
+                          <h3 className="text-2xl font-bold mb-4">Peer-to-Peer Architecture</h3>
+                          <p className="text-gray-400 max-w-md">Your voice data goes directly from your device to your friend's device. No servers in between to log, record, or lag your conversation.</p>
+                      </div>
+                      <div className="absolute right-[-50px] top-10 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-colors"></div>
+                  </div>
+                  {/* Tall Card */}
+                  <div className="md:row-span-2 bg-gradient-to-b from-indigo-900/20 to-transparent border border-white/5 rounded-3xl p-10 flex flex-col justify-end group">
+                      <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-600/30 group-hover:scale-110 transition-transform">
+                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
+                      <h3 className="text-2xl font-bold mb-4">End-to-End Encrypted</h3>
+                      <p className="text-gray-400">DTLS-SRTP encryption is mandatory for all calls. Not even we can listen in.</p>
+                  </div>
+                  {/* Small Card 1 */}
+                  <div className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:border-indigo-500/50 transition-colors">
+                      <h3 className="text-xl font-bold mb-2">Opus Audio</h3>
+                      <p className="text-gray-400 text-sm">HD voice clarity at 48kHz sampling rate.</p>
+                  </div>
+                  {/* Small Card 2 */}
+                  <div className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:border-fuchsia-500/50 transition-colors">
+                      <h3 className="text-xl font-bold mb-2">Low Latency</h3>
+                      <p className="text-gray-400 text-sm">Sub-30ms ping via direct UDP routing.</p>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {/* --- Section 3: Technical Deep Dive --- */}
+      <div className="py-32 relative overflow-hidden">
+          <div className="absolute inset-0 bg-indigo-900/5 -skew-y-3 transform origin-left"></div>
+          <div className="max-w-[1400px] mx-auto px-8 relative z-10">
+              <div className="flex items-center gap-16">
+                  <div className="flex-1">
+                      <h2 className="text-4xl font-bold mb-6">How it works under the hood</h2>
+                      <div className="space-y-8">
+                          {[
+                              { step: "01", title: "Signaling", desc: "Users exchange handshake data via Supabase Realtime WebSocket." },
+                              { step: "02", title: "ICE Negotiation", desc: "Devices find the best direct path through the internet (STUN/TURN)." },
+                              { step: "03", title: "Direct Stream", desc: "An encrypted UDP tunnel is established. Audio flows directly." }
+                          ].map((item, i) => (
+                              <div key={i} className="flex gap-6 group">
+                                  <div className="text-5xl font-bold text-white/10 group-hover:text-indigo-500/50 transition-colors">{item.step}</div>
+                                  <div>
+                                      <h3 className="text-xl font-bold mb-2">{item.title}</h3>
+                                      <p className="text-gray-400">{item.desc}</p>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                  <div className="flex-1 h-[400px] bg-black/40 rounded-3xl border border-white/10 p-8 flex items-center justify-center relative">
+                      {/* Diagram representation */}
+                      <div className="absolute w-32 h-32 bg-blue-500 rounded-full blur-[80px] top-10 left-10 opacity-50"></div>
+                      <div className="absolute w-32 h-32 bg-purple-500 rounded-full blur-[80px] bottom-10 right-10 opacity-50"></div>
+                      <div className="flex justify-between w-full max-w-sm items-center relative z-10">
+                           <div className="flex flex-col items-center gap-2">
+                               <div className="w-16 h-16 bg-gray-800 rounded-full border-2 border-indigo-500 flex items-center justify-center"><span className="font-bold">A</span></div>
+                               <span className="text-sm text-gray-400">User A</span>
+                           </div>
+                           <div className="flex-1 h-1 bg-gradient-to-r from-indigo-500 to-purple-500 mx-4 relative">
+                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black px-3 py-1 text-xs border border-white/20 rounded-full">Encrypted UDP</div>
+                           </div>
+                           <div className="flex flex-col items-center gap-2">
+                               <div className="w-16 h-16 bg-gray-800 rounded-full border-2 border-purple-500 flex items-center justify-center"><span className="font-bold">B</span></div>
+                               <span className="text-sm text-gray-400">User B</span>
+                           </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {/* --- Section 4: Comparison --- */}
+      <div className="py-24 bg-[#050510]">
+          <div className="max-w-[1000px] mx-auto px-8">
+              <SectionHeading title="Why switch?" subtitle="See how we stack up against the giants." />
+              <div className="overflow-hidden rounded-3xl border border-white/10">
+                  <table className="w-full text-left border-collapse">
+                      <thead>
+                          <tr className="bg-white/5">
+                              <th className="p-6 text-sm font-bold text-gray-400 uppercase">Feature</th>
+                              <th className="p-6 text-indigo-400 font-bold text-xl">MasterVoice</th>
+                              <th className="p-6 text-gray-500 font-medium">Standard VoIP</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                          <tr>
+                              <td className="p-6 font-medium">Privacy</td>
+                              <td className="p-6 text-green-400">P2P (No server logs)</td>
+                              <td className="p-6 text-gray-400">Server Interceptable</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium">Audio Quality</td>
+                              <td className="p-6">48kHz Opus</td>
+                              <td className="p-6 text-gray-400">Variable / Compressed</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium">Latency</td>
+                              <td className="p-6">Direct (~20ms)</td>
+                              <td className="p-6 text-gray-400">Relayed (~150ms)</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium">Cost</td>
+                              <td className="p-6">Free & Open Source</td>
+                              <td className="p-6 text-gray-400">Subscription / Ads</td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </div>
+
+      {/* --- Section 5: FAQ --- */}
+      <div className="py-24">
+           <div className="max-w-[800px] mx-auto px-8">
+               <SectionHeading title="Frequently Asked Questions" subtitle="Everything you need to know." />
+               <div className="space-y-4">
+                   {[
+                       { q: "Is it really free?", a: "Yes. Because we use P2P technology, we don't have massive server bills to pay. You connect directly to your friends." },
+                       { q: "Can I use it on mobile?", a: "Absolutely. MasterVoice works in any modern mobile browser (Chrome, Safari, Firefox) without installing an app." },
+                       { q: "What is Supabase used for?", a: "We use Supabase only for Authentication (logging you in) and Signaling (telling devices how to find each other). Once the call starts, Supabase is out of the loop." }
+                   ].map((faq, i) => (
+                       <details key={i} className="group bg-white/5 rounded-2xl border border-white/5 open:bg-white/10 transition-colors">
+                           <summary className="p-6 font-bold cursor-pointer flex justify-between items-center list-none select-none">
+                               {faq.q}
+                               <span className="transform group-open:rotate-180 transition-transform">▼</span>
+                           </summary>
+                           <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                               {faq.a}
+                           </div>
+                       </details>
+                   ))}
+               </div>
+           </div>
+      </div>
+
+      {/* --- Section 6: Footer CTA --- */}
+      <div className="py-32 px-8 text-center bg-gradient-to-t from-indigo-900/40 to-transparent">
+          <h2 className="text-5xl font-bold mb-8">Ready to reclaim your voice?</h2>
+          <button onClick={() => onNavigate('/register')} className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.3)]">
+              Get Started for Free
+          </button>
+      </div>
+
+      <div className="w-full border-t border-white/5 py-12 px-8 bg-black">
+          <div className="flex justify-between items-center text-gray-600 text-sm">
+              <p>&copy; 2025 MasterVoice Inc.</p>
+              <div className="flex gap-6">
+                  <button onClick={() => onNavigate('/privacy')} className="hover:text-white">Privacy</button>
+                  <button onClick={() => onNavigate('/terms')} className="hover:text-white">Terms</button>
+                  <button onClick={() => onNavigate('/contact')} className="hover:text-white">Contact</button>
+              </div>
+          </div>
+      </div>
     </div>
   );
+};
+
+// --- Mobile Landing Page ---
+const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
+  return (
+    <div className="min-h-screen bg-[#050505] text-white font-['Outfit'] overflow-hidden relative pb-20">
+        
+        {/* --- Header --- */}
+        <div className="flex justify-between items-center p-6 sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-md">
+            <div className="font-bold text-xl tracking-tighter flex items-center gap-2">
+                <div className="w-6 h-6 bg-indigo-600 rounded-lg"></div>
+                MasterVoice
+            </div>
+            <button onClick={() => onNavigate('/login')} className="text-sm font-semibold text-gray-300 px-4 py-2 bg-white/5 rounded-full">Log In</button>
+        </div>
+
+        {/* --- Section 1: Hero --- */}
+        <div className="px-6 pt-6 pb-12 flex flex-col relative z-10 border-b border-white/5">
+            <div className="mb-8 animate-fade-in-up">
+                <h1 className="text-5xl font-bold leading-none mb-4 tracking-tighter">
+                    Talk <br/> <span className="text-indigo-500">Free.</span> <br/>
+                    Talk <span className="text-purple-500">Safe.</span>
+                </h1>
+                <p className="text-gray-400 text-lg leading-snug">
+                    The first truly private P2P voice chat for the web. No downloads required.
+                </p>
+            </div>
+            <div className="w-full aspect-[4/5] bg-gray-900/50 rounded-3xl border border-white/10 relative overflow-hidden mb-8 animate-float shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10"></div>
+                <div className="p-6 h-full flex flex-col justify-end">
+                    <InteractiveChat mobile={true} />
+                </div>
+            </div>
+            <button onClick={() => onNavigate('/register')} className="w-full py-4 bg-white text-black rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform">
+                Get Started
+            </button>
+        </div>
+
+        {/* --- Section 2: Features Cards --- */}
+        <div className="px-6 py-16 space-y-6">
+            <h2 className="text-3xl font-bold mb-8">Why MasterVoice?</h2>
+            
+            <div className="p-8 rounded-3xl bg-indigo-600 text-white relative overflow-hidden">
+                <div className="relative z-10">
+                    <h3 className="text-2xl font-bold mb-2">Zero Tracking</h3>
+                    <p className="opacity-80">We connect you directly to your peer. We can't hear you even if we wanted to.</p>
+                </div>
+                <div className="absolute -right-5 -bottom-5 text-9xl opacity-10 rotate-12">🛡️</div>
+            </div>
+
+            <div className="p-8 rounded-3xl bg-[#111] border border-white/10">
+                <h3 className="text-2xl font-bold mb-2 text-indigo-400">Crystal Clear</h3>
+                <p className="text-gray-400">Powered by Opus codec at 48kHz for studio-quality vocals.</p>
+            </div>
+
+            <div className="p-8 rounded-3xl bg-[#111] border border-white/10">
+                <h3 className="text-2xl font-bold mb-2 text-purple-400">Always Free</h3>
+                <p className="text-gray-400">Open source and community driven. No premium paywalls.</p>
+            </div>
+        </div>
+
+        {/* --- Section 3: How it Works Stepper --- */}
+        <div className="px-6 py-16 bg-[#0a0a0a]">
+            <h2 className="text-3xl font-bold mb-10">How it works</h2>
+            <div className="space-y-0 pl-4 border-l-2 border-white/10">
+                {[
+                    { t: "Create Account", d: "Sign up anonymously with just an email." },
+                    { t: "Share ID", d: "Find your friend via their email." },
+                    { t: "Connect P2P", d: "Browser connects directly to browser." }
+                ].map((step, i) => (
+                    <div key={i} className="relative pl-8 pb-10 last:pb-0">
+                        <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-4 border-black"></div>
+                        <h4 className="text-xl font-bold">{step.t}</h4>
+                        <p className="text-gray-500 mt-1">{step.d}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* --- Section 4: FAQ Mobile --- */}
+        <div className="px-6 py-16">
+            <h2 className="text-3xl font-bold mb-8">FAQ</h2>
+            <div className="space-y-4">
+                <div className="bg-white/5 p-6 rounded-2xl">
+                    <h4 className="font-bold mb-2">Is it secure?</h4>
+                    <p className="text-sm text-gray-400">Yes. All calls are encrypted with DTLS-SRTP standards.</p>
+                </div>
+                <div className="bg-white/5 p-6 rounded-2xl">
+                    <h4 className="font-bold mb-2">Do I need an app?</h4>
+                    <p className="text-sm text-gray-400">No. It works right in your browser on iOS and Android.</p>
+                </div>
+            </div>
+        </div>
+
+        {/* --- Section 5: Mobile Footer --- */}
+        <div className="px-6 pt-10 pb-20 text-center border-t border-white/5">
+             <button onClick={() => onNavigate('/register')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg mb-8 shadow-lg shadow-indigo-600/30">
+                Join Now
+            </button>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs text-gray-500">
+                <span onClick={() => onNavigate('/privacy')}>Privacy Policy</span>
+                <span onClick={() => onNavigate('/terms')}>Terms of Service</span>
+                <span onClick={() => onNavigate('/contact')}>Contact Support</span>
+            </div>
+            <p className="text-gray-700 text-[10px] mt-8">&copy; 2025 MasterVoice Inc.</p>
+        </div>
+    </div>
+  );
+};
+
+export const LandingPage: React.FC<LandingPageProps> = (props) => {
+  const [width] = useWindowSize();
+  const isMobile = width < 768; // Tailwind md breakpoint
+
+  return isMobile ? <MobileLanding {...props} /> : <DesktopLanding {...props} />;
 };

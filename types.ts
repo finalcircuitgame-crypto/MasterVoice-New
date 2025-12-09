@@ -19,9 +19,12 @@ export interface SignalingPayload {
   callerId?: string;
 }
 
-export enum CallState {
-  IDLE = 'IDLE',
-  OFFERING = 'OFFERING',
-  RECEIVING = 'RECEIVING',
-  CONNECTED = 'CONNECTED',
-}
+// Changed from enum to const object to ensure runtime availability
+export const CallState = {
+  IDLE: 'IDLE',
+  OFFERING: 'OFFERING',
+  RECEIVING: 'RECEIVING',
+  CONNECTED: 'CONNECTED',
+} as const;
+
+export type CallState = typeof CallState[keyof typeof CallState];

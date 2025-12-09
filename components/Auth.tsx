@@ -2,24 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 interface AuthProps {
-  initialMode: 'signin' | 'signup';
+  mode: 'signin' | 'signup';
+  onBack: () => void;
+  onSwitchMode: () => void;
 }
 
-export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
+export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [authStep, setAuthStep] = useState<'credentials' | 'verify'>('credentials');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Reset state when mode changes externally or toggled
   useEffect(() => {
-    setMode(initialMode);
     setAuthStep('credentials');
     setError(null);
-  }, [initialMode]);
+  }, [mode]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,14 +29,9 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         
-        // Check if session exists (user might already be confirmed or auto-confirmed)
         if (data.session) {
-          // Already logged in, App.tsx will handle redirect
-          return;
+          return; // Auto-logged in
         }
-
-        // If no session, user likely needs to verify email.
-        // Transition to verification step.
         setAuthStep('verify');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -61,21 +55,15 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
             type: 'signup'
         });
         if (error) throw error;
-        // Success! Session will be set automatically, triggering App.tsx redirect.
+        // Success will trigger session change in App.tsx
     } catch (err: any) {
         setError(err.message);
         setLoading(false);
     }
   };
 
-  const toggleMode = () => {
-    setError(null);
-    setMode(mode === 'signin' ? 'signup' : 'signin');
-    setAuthStep('credentials');
-  };
-
   return (
-    <div className="min-h-screen bg-[#030014] flex items-center justify-center p-4 relative overflow-hidden font-['Outfit']">
+    <div className="min-h-screen bg-[#030014] flex flex-col items-center justify-center p-4 relative overflow-hidden font-['Outfit'] animate-slide-up">
       
       {/* Background Effects */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -84,22 +72,33 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
       </div>
 
-      {/* Glass Card */}
-      <div className="w-full max-w-md glass-panel p-8 rounded-3xl relative z-10 animate-fade-in-up animate-float border border-white/10 shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] transition-all duration-500">
+      {/* Back Button */}
+      <div className="absolute top-6 left-6 z-50">
+          <button 
+            onClick={onBack} 
+            className="flex items-center text-gray-400 hover:text-white transition group bg-black/20 p-2 rounded-full backdrop-blur-sm border border-white/5"
+          >
+              <svg className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              <span className="text-sm font-medium pr-2">Back</span>
+          </button>
+      </div>
+
+      {/* Main Container */}
+      <div className="w-full max-w-md glass-panel p-8 md:p-10 rounded-[2rem] relative z-10 border border-white/10 shadow-2xl">
         
         {authStep === 'credentials' ? (
           <>
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-fuchsia-500 mb-4 shadow-lg shadow-indigo-500/20">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-fuchsia-500 mb-6 shadow-lg shadow-indigo-500/20">
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
-                {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
+              <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">
+                {mode === 'signin' ? 'Welcome Back' : 'Join MasterVoice'}
               </h1>
               <p className="text-gray-400 text-sm">
-                {mode === 'signin' ? 'Enter your credentials to access your secure chats.' : 'Join the peer-to-peer revolution.'}
+                {mode === 'signin' ? 'Enter your credentials to access your secure chats.' : 'Start your secure P2P journey today.'}
               </p>
             </div>
 
@@ -148,7 +147,7 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
                     Processing...
                   </span>
                 ) : (
-                  mode === 'signin' ? 'Sign In' : 'Sign Up'
+                  mode === 'signin' ? 'Sign In' : 'Create Account'
                 )}
               </button>
             </form>
@@ -157,7 +156,7 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
               <p className="text-gray-400 text-sm">
                 {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
                 <button
-                  onClick={toggleMode}
+                  onClick={onSwitchMode}
                   className="ml-2 text-indigo-400 hover:text-indigo-300 font-semibold transition-colors hover:underline decoration-2 underline-offset-4"
                 >
                   {mode === 'signin' ? 'Sign Up' : 'Log In'}
@@ -169,8 +168,8 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
           // Verification Step UI
           <div className="animate-fade-in-up">
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-green-500/20 border border-green-500/30 mb-4 text-green-400 animate-pulse">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-green-500/20 border border-green-500/30 mb-4 text-green-400 animate-pulse">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -213,7 +212,7 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
                onClick={() => setAuthStep('credentials')}
                className="w-full mt-6 text-sm text-gray-500 hover:text-gray-300 transition-colors"
             >
-               &larr; Back to Sign Up
+               &larr; Back to details
             </button>
           </div>
         )}
@@ -221,3 +220,5 @@ export const Auth: React.FC<AuthProps> = ({ initialMode }) => {
     </div>
   );
 };
+
+export default Auth;
