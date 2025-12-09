@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 interface LandingPageProps {
   onNavigate: (page: string) => void;
+  isAuthenticated: boolean;
 }
 
 // --- Hook to detect screen size for conditional rendering ---
@@ -116,7 +117,7 @@ const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
 };
 
 // --- Desktop Landing Page ---
-const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
+const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
   return (
     <div className="min-h-screen bg-[#030014] text-white font-['Outfit'] overflow-x-hidden selection:bg-indigo-500">
       
@@ -130,8 +131,16 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 <span className="text-xl font-bold tracking-tight">MasterVoice</span>
             </div>
             <div className="flex items-center gap-8">
-                <button onClick={() => onNavigate('/login')} className="text-white hover:text-indigo-300 transition text-sm font-bold">LOG IN</button>
-                <button onClick={() => onNavigate('/register')} className="px-6 py-2.5 bg-white text-black hover:bg-gray-100 rounded-lg font-bold text-sm transition transform hover:-translate-y-0.5 shadow-lg shadow-white/10">GET STARTED</button>
+                {isAuthenticated ? (
+                  <button onClick={() => onNavigate('/app')} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm transition transform hover:-translate-y-0.5 shadow-lg shadow-indigo-600/20">
+                    OPEN APP
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => onNavigate('/login')} className="text-white hover:text-indigo-300 transition text-sm font-bold">LOG IN</button>
+                    <button onClick={() => onNavigate('/register')} className="px-6 py-2.5 bg-white text-black hover:bg-gray-100 rounded-lg font-bold text-sm transition transform hover:-translate-y-0.5 shadow-lg shadow-white/10">GET STARTED</button>
+                  </>
+                )}
             </div>
          </div>
       </nav>
@@ -154,8 +163,16 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                   Seamlessly sync text messages across devices while enjoying crystal-clear P2P voice calls. The best of both worlds.
               </p>
               <div className="flex gap-4 pt-4">
-                  <button onClick={() => onNavigate('/register')} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-600/25 transition-all hover:scale-105">Start Chatting</button>
-                  <button onClick={() => onNavigate('/login')} className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-lg transition-all">Log In</button>
+                  {isAuthenticated ? (
+                    <button onClick={() => onNavigate('/app')} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-600/25 transition-all hover:scale-105">
+                      Launch App
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => onNavigate('/register')} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-600/25 transition-all hover:scale-105">Start Chatting</button>
+                      <button onClick={() => onNavigate('/login')} className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-lg transition-all">Log In</button>
+                    </>
+                  )}
               </div>
           </div>
           <div className="flex-1 relative h-[700px] flex items-center justify-center perspective-1000 z-10">
@@ -309,8 +326,8 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     title="Personal"
                     price="Free"
                     features={["Unlimited Text Messages", "1-on-1 P2P Voice Calls", "30-Day Message History", "1 Active Device", "Community Support"]}
-                    cta="Get Started Free"
-                    onAction={() => onNavigate('/register')}
+                    cta={isAuthenticated ? "Your Current Plan" : "Get Started Free"}
+                    onAction={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')}
                 />
                 <PricingCard 
                     title="Pro"
@@ -318,7 +335,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     recommended={true}
                     features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
                     cta="Start Pro Trial"
-                    onAction={() => onNavigate('/register')}
+                    onAction={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')}
                 />
                 <PricingCard 
                     title="Team"
@@ -359,8 +376,8 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
       {/* --- Section 7: Footer CTA --- */}
       <div className="py-32 px-8 text-center bg-gradient-to-t from-indigo-900/40 to-transparent">
           <h2 className="text-5xl font-bold mb-8">Ready to connect?</h2>
-          <button onClick={() => onNavigate('/register')} className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.3)]">
-              Get Started for Free
+          <button onClick={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')} className="px-10 py-5 bg-white text-black text-xl font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.3)]">
+              {isAuthenticated ? "Launch App" : "Get Started for Free"}
           </button>
       </div>
 
@@ -379,7 +396,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
 };
 
 // --- Mobile Landing Page ---
-const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
+const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
   return (
     <div className="min-h-screen bg-[#050505] text-white font-['Outfit'] overflow-hidden relative pb-20">
         
@@ -389,7 +406,11 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 <div className="w-6 h-6 bg-indigo-600 rounded-lg"></div>
                 MasterVoice
             </div>
-            <button onClick={() => onNavigate('/login')} className="text-sm font-semibold text-gray-300 px-4 py-2 bg-white/5 rounded-full">Log In</button>
+            {isAuthenticated ? (
+               <button onClick={() => onNavigate('/app')} className="text-sm font-semibold text-white px-4 py-2 bg-indigo-600 rounded-full shadow-lg shadow-indigo-500/20">Open App</button>
+            ) : (
+               <button onClick={() => onNavigate('/login')} className="text-sm font-semibold text-gray-300 px-4 py-2 bg-white/5 rounded-full">Log In</button>
+            )}
         </div>
 
         {/* --- Section 1: Hero --- */}
@@ -409,8 +430,8 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     <InteractiveChat mobile={true} />
                 </div>
             </div>
-            <button onClick={() => onNavigate('/register')} className="w-full py-4 bg-white text-black rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform">
-                Get Started
+            <button onClick={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')} className="w-full py-4 bg-white text-black rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform">
+                {isAuthenticated ? "Launch App" : "Get Started"}
             </button>
         </div>
 
@@ -463,8 +484,8 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     title="Personal"
                     price="Free"
                     features={["Unlimited Chats", "P2P Voice", "30-Day History"]}
-                    cta="Sign Up Free"
-                    onAction={() => onNavigate('/register')}
+                    cta={isAuthenticated ? "Current Plan" : "Sign Up Free"}
+                    onAction={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')}
                 />
                 <PricingCard 
                     title="Pro"
@@ -472,7 +493,7 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     recommended={true}
                     features={["Unlimited History", "Group Calls", "HD Audio"]}
                     cta="Try Pro"
-                    onAction={() => onNavigate('/register')}
+                    onAction={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')}
                 />
             </div>
         </div>
@@ -494,8 +515,8 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
         {/* --- Section 6: Mobile Footer --- */}
         <div className="px-6 pt-10 pb-20 text-center border-t border-white/5">
-             <button onClick={() => onNavigate('/register')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg mb-8 shadow-lg shadow-indigo-600/30">
-                Join Now
+             <button onClick={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg mb-8 shadow-lg shadow-indigo-600/30">
+                {isAuthenticated ? "Launch App" : "Join Now"}
             </button>
             <div className="grid grid-cols-3 gap-2 text-center text-xs text-gray-500">
                 <span onClick={() => onNavigate('/privacy')}>Privacy Policy</span>

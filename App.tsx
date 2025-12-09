@@ -24,8 +24,9 @@ const App: React.FC = () => {
               id: session.user.id,
               email: session.user.email || 'No Email',
           });
-          // If user is logged in and on a public page, redirect to app
-          if (['/', '/login', '/register'].includes(window.location.pathname)) {
+          // Only redirect from auth pages if logged in. 
+          // Allow user to stay on Landing Page ('/') if they wish.
+          if (['/login', '/register'].includes(window.location.pathname)) {
             navigate('/app');
           }
       }
@@ -40,7 +41,8 @@ const App: React.FC = () => {
               id: session.user.id,
               email: session.user.email || 'No Email',
           });
-          if (['/', '/login', '/register'].includes(window.location.pathname)) {
+          // Only redirect from auth pages
+          if (['/login', '/register'].includes(window.location.pathname)) {
              navigate('/app');
           }
       } else {
@@ -121,7 +123,7 @@ const App: React.FC = () => {
               return <ContactSupport onBack={() => navigate('/')} />;
           case '/':
           default:
-              return <LandingPage onNavigate={navigate} />;
+              return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;
       }
   };
 
