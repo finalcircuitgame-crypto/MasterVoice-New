@@ -13,6 +13,7 @@ interface ChatWindowProps {
 interface MessageItemProps {
     msg: Message;
     isMe: boolean;
+    recipientInitial?: string;
     onEdit: (msg: Message) => void;
     onDelete: (id: string) => void;
     onRetry: (msg: Message) => void;
@@ -22,6 +23,7 @@ interface MessageItemProps {
 const MessageItem: React.FC<MessageItemProps> = ({ 
     msg, 
     isMe, 
+    recipientInitial,
     onEdit, 
     onDelete,
     onRetry
@@ -37,23 +39,23 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
     return (
         <div 
-            className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 animate-message-enter group relative`}
+            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 animate-message-enter group relative`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
              {/* Action Buttons for user's own messages */}
              {isMe && isHovered && !isSending && !isError && (
-                <div className="flex items-center space-x-2 mr-2 animate-fade-in absolute right-full top-1/2 -translate-y-1/2 px-2">
+                <div className="flex items-center space-x-2 mr-2 animate-fade-in absolute right-full top-1/2 -translate-y-1/2 px-2 z-10">
                     <button 
                         onClick={() => onEdit(msg)}
-                        className="p-1.5 bg-gray-700 hover:bg-blue-600 rounded-full text-gray-300 hover:text-white transition"
+                        className="p-1.5 bg-gray-700 hover:bg-blue-600 rounded-full text-gray-300 hover:text-white transition shadow-md"
                         title="Edit"
                     >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     </button>
                     <button 
                         onClick={() => onDelete(msg.id)}
-                        className="p-1.5 bg-gray-700 hover:bg-red-600 rounded-full text-gray-300 hover:text-white transition"
+                        className="p-1.5 bg-gray-700 hover:bg-red-600 rounded-full text-gray-300 hover:text-white transition shadow-md"
                         title="Delete"
                     >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -61,35 +63,48 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
             )}
 
-            <div className={`flex items-end ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`relative max-w-xs md:max-w-md px-4 py-2 rounded-2xl shadow-md transition-all duration-300 ${
-                    isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-700 text-gray-200 rounded-bl-none'
-                } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-2 border-red-500 bg-red-900/20' : ''}`}>
-                    
-                    <p>{msg.content}</p>
-                    
-                    <div className="flex items-center justify-between mt-1 gap-4">
-                        <div className="flex items-center gap-2">
-                             <p className={`text-[10px] ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                                {isSending ? 'Sending...' : isError ? 'Failed' : new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                             </p>
-                             {isSending && (
-                                <svg className="animate-spin h-3 w-3 text-blue-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                             )}
+            <div className={`flex items-end gap-3 max-w-[85%] md:max-w-[70%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                
+                {/* Avatar for Recipient (Friend) */}
+                {!isMe && (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-xs text-white font-bold shrink-0 mb-1 shadow-md border border-gray-600">
+                        {recipientInitial}
+                    </div>
+                )}
+
+                <div className="flex flex-col">
+                    <div className={`relative px-4 py-2.5 shadow-md transition-all duration-300 ${
+                        isMe 
+                        ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' 
+                        : 'bg-gray-700 text-gray-100 rounded-2xl rounded-tl-sm'
+                    } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-2 border-red-500 bg-red-900/20' : ''}`}>
+                        
+                        <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                        
+                        <div className="flex items-center justify-between mt-1 gap-4 select-none">
+                            <div className="flex items-center gap-2">
+                                <p className={`text-[10px] ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
+                                    {isSending ? 'Sending...' : isError ? 'Failed' : new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </p>
+                                {isSending && (
+                                    <svg className="animate-spin h-3 w-3 text-blue-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                )}
+                            </div>
+                            {isRecentlyEdited && (
+                                <span className={`text-[9px] opacity-70 italic ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>edited</span>
+                            )}
                         </div>
-                        {isRecentlyEdited && (
-                            <span className={`text-[9px] opacity-70 italic ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>edited</span>
-                        )}
                     </div>
                 </div>
 
+                {/* Retry Button placed nicely next to bubble if error */}
                 {isError && (
                     <button 
                         onClick={() => onRetry(msg)}
-                        className="mb-2 mx-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg"
+                        className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0"
                         title="Retry sending"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -362,7 +377,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-1">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {loading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -375,6 +390,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                         key={msg.id} 
                         msg={msg} 
                         isMe={msg.sender_id === currentUser.id} 
+                        recipientInitial={recipient.email[0].toUpperCase()}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onRetry={(m) => handleSendMessage(undefined, m)}
@@ -383,11 +399,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                 
                 {/* Typing Indicator */}
                 {isTyping && (
-                    <div className="flex justify-start mb-4 animate-fade-in-up">
-                        <div className="bg-gray-700 rounded-2xl rounded-bl-none px-4 py-3 flex space-x-1 items-center">
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0s' }}></div>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0.2s' }}></div>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0.4s' }}></div>
+                    <div className="flex justify-start mb-4 animate-fade-in-up w-full">
+                        <div className="flex items-end gap-2">
+                            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs text-white shrink-0 mb-1 border border-gray-600">
+                                {recipient.email[0].toUpperCase()}
+                            </div>
+                            <div className="bg-gray-700 rounded-2xl rounded-tl-sm px-4 py-3 flex space-x-1 items-center">
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0s' }}></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-typing-bounce" style={{ animationDelay: '0.4s' }}></div>
+                            </div>
                         </div>
                     </div>
                 )}
