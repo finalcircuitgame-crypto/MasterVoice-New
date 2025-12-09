@@ -16,14 +16,25 @@ export const useWebRTC = (
   const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
   const incomingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
   const handleSignalRef = useRef<(payload: SignalingPayload) => Promise<void>>();
+  
+  // Keep a ref to the channel to avoid stale closures in event listeners (fixes 15s drop)
+  const channelRef = useRef(channel);
+  useEffect(() => {
+    channelRef.current = channel;
+  }, [channel]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
+    console.log('[WebRTC] Cleaning up call resources');
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
       setLocalStream(null);
     }
     if (pc.current) {
+      // Remove listeners to prevent memory leaks
+      pc.current.onicecandidate = null;
+      pc.current.ontrack = null;
+      pc.current.onconnectionstatechange = null;
       pc.current.close();
       pc.current = null;
     }
@@ -42,12 +53,13 @@ export const useWebRTC = (
     const newPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     newPc.onicecandidate = (event) => {
-      if (event.candidate && channel) {
-        channel.send({
+      // Use channelRef.current to ensure we send on the ACTIVE channel
+      if (event.candidate && channelRef.current) {
+        channelRef.current.send({
           type: 'broadcast',
           event: 'signal',
           payload: { type: 'candidate', candidate: event.candidate } as SignalingPayload,
-        });
+        }).catch(err => console.error("Failed to send candidate:", err));
       }
     };
 
@@ -60,24 +72,39 @@ export const useWebRTC = (
       console.log('[WebRTC] Connection state:', newPc.connectionState);
       if (newPc.connectionState === 'connected') {
         setCallState(CallState.CONNECTED);
-      } else if (newPc.connectionState === 'disconnected' || newPc.connectionState === 'failed') {
+      } 
+      // Only cleanup on FAILED. Disconnected can be temporary (especially on mobile/WiFi switch)
+      else if (newPc.connectionState === 'failed') {
+        console.warn('[WebRTC] Connection failed, cleaning up.');
         cleanup();
       }
     };
 
     pc.current = newPc;
     return newPc;
-  }, [channel, cleanup]);
+  }, [cleanup]);
 
   // Handle incoming signaling messages
   const handleSignal = useCallback(async (payload: SignalingPayload) => {
-    if (!pc.current && payload.type !== 'offer') return;
+    // 1. PRIORITY: Handle Hangup first, regardless of PC state.
+    // This fixes the issue where one side remains "Connected" if the PC was buggy.
+    if (payload.type === 'hangup') {
+      console.log('[WebRTC] Received hangup signal. Ending call.');
+      cleanup();
+      return;
+    }
+
+    if (!pc.current && payload.type !== 'offer') {
+        // If we don't have a PC and it's not an offer, ignore (except hangup, handled above)
+        return;
+    }
 
     try {
       switch (payload.type) {
         case 'offer':
           if (callState !== CallState.IDLE) {
              console.warn('[WebRTC] Received offer while busy');
+             // Optionally send a "busy" signal back
              return; 
           }
           console.log('[WebRTC] Received offer');
@@ -88,13 +115,21 @@ export const useWebRTC = (
         case 'answer':
           console.log('[WebRTC] Received answer');
           if (pc.current) {
-            // Check state to avoid InvalidStateError
+            // Only set remote description if we are waiting for an answer
             if (pc.current.signalingState === 'have-local-offer') {
                 await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
+                
+                // Process buffered candidates now that Remote Description is set
                 while(iceCandidateQueue.current.length > 0) {
                     const c = iceCandidateQueue.current.shift();
-                    if(c) await pc.current.addIceCandidate(new RTCIceCandidate(c));
+                    if(c) {
+                        try {
+                            await pc.current.addIceCandidate(new RTCIceCandidate(c));
+                        } catch(e) { console.error("Error adding buffered candidate", e) }
+                    }
                 }
+            } else {
+                console.warn('[WebRTC] Ignored answer in wrong state:', pc.current.signalingState);
             }
           }
           break;
@@ -108,21 +143,18 @@ export const useWebRTC = (
                    console.error('[WebRTC] Error adding candidate', e);
                }
             } else {
+               // Buffer candidate if Remote Description isn't set yet (common race condition)
+               console.log('[WebRTC] Buffering candidate (no remote desc)');
                iceCandidateQueue.current.push(payload.candidate);
             }
           }
           break;
-
-        case 'hangup':
-          console.log('[WebRTC] Received hangup');
-          cleanup();
-          break;
       }
     } catch (error) {
       console.error('[WebRTC] Error handling signal:', error);
-      cleanup();
+      // Don't auto-cleanup on signal error, might be recoverable
     }
-  }, [channel, callState, createPeerConnection, cleanup]);
+  }, [callState, createPeerConnection, cleanup]);
 
   // Ref pattern to prevent stale closures and duplicate listeners
   useEffect(() => {
@@ -142,8 +174,7 @@ export const useWebRTC = (
       .subscribe();
 
     return () => {
-       // Channel cleanup handled by parent usually, but we unsubscribe specific listener if needed
-       // supabase.removeChannel(channel) happens in parent
+       // We let the parent manage channel lifecycle
     };
   }, [channel]);
 
@@ -184,9 +215,14 @@ export const useWebRTC = (
 
          await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
           
+         // Process any candidates that arrived BEFORE the user clicked "Answer"
          while(iceCandidateQueue.current.length > 0) {
             const c = iceCandidateQueue.current.shift();
-            if(c) await peer.addIceCandidate(new RTCIceCandidate(c));
+            if(c) {
+                 try {
+                     await peer.addIceCandidate(new RTCIceCandidate(c));
+                 } catch (e) { console.error("Error adding pre-answer candidate", e); }
+            }
          }
 
          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -196,7 +232,7 @@ export const useWebRTC = (
          const answer = await peer.createAnswer();
          await peer.setLocalDescription(answer);
 
-         channel?.send({
+         channelRef.current?.send({
             type: 'broadcast',
             event: 'signal',
             payload: { type: 'answer', sdp: answer } as SignalingPayload,
@@ -212,11 +248,14 @@ export const useWebRTC = (
   };
 
   const endCall = () => {
-    channel?.send({
+    // Send hangup first
+    channelRef.current?.send({
       type: 'broadcast',
       event: 'signal',
       payload: { type: 'hangup' } as SignalingPayload,
-    });
+    }).catch(e => console.error("Failed to send hangup", e));
+    
+    // Then cleanup locally
     cleanup();
   };
   

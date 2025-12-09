@@ -22,14 +22,14 @@
         width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #030014;
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #374151;
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #4b5563;
+        background: rgba(255, 255, 255, 0.2);
       }
       
       /* Animations */
@@ -83,6 +83,12 @@
         30% { transform: translateY(-5px); }
       }
 
+      /* Gold Shimmer for Family Features */
+      @keyframes text-shimmer {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+      }
+
       .animate-float {
         animation: float 15s ease-in-out infinite;
       }
@@ -119,6 +125,15 @@
 
       .animate-typing-bounce {
         animation: typing-bounce 1s infinite ease-in-out;
+      }
+      
+      .animate-text-shimmer {
+        background: linear-gradient(to right, #fbbf24 20%, #fef3c7 40%, #fef3c7 60%, #fbbf24 80%);
+        background-size: 200% auto;
+        color: transparent;
+        -webkit-background-clip: text;
+        background-clip: text;
+        animation: text-shimmer 3s linear infinite;
       }
 
       .glass-panel {

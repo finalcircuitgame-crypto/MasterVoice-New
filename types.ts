@@ -2,6 +2,7 @@ export interface UserProfile {
   id: string;
   email: string; // Using email as username for simplicity in this demo
   updated_at?: string;
+  is_family?: boolean; // New feature flag
 }
 
 export interface Message {

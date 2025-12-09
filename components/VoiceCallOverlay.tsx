@@ -23,6 +23,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   React.useEffect(() => {
     if (audioRef.current && remoteStream) {
       audioRef.current.srcObject = remoteStream;
+      // Force play for mobile browsers which might block autoplay
       audioRef.current.play().catch(e => console.error("Auto-play failed", e));
     }
   }, [remoteStream]);
@@ -32,8 +33,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   // --- CONNECTED STATE (Compact/Floating Mode) ---
   if (callState === CallState.CONNECTED) {
     return (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-slide-up w-full max-w-md px-4 pointer-events-none">
-            <div className="bg-gray-800/90 backdrop-blur-md border border-gray-600 rounded-full shadow-2xl p-2 px-4 flex items-center justify-between pointer-events-auto">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] animate-slide-up w-full max-w-md px-4 pointer-events-none">
+            <div className="bg-gray-800/95 backdrop-blur-md border border-gray-600 rounded-full shadow-2xl p-2 px-4 flex items-center justify-between pointer-events-auto">
                 <div className="flex items-center space-x-3">
                      <div className="relative">
                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse absolute top-0 right-0 border border-gray-800"></div>
@@ -77,8 +78,10 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   }
 
   // --- INCOMING / OFFERING STATE (Full Screen Overlay) ---
+  // Using h-[100dvh] fixes mobile address bar hiding the bottom buttons
+  // z-[100] ensures it sits above everything else
   return (
-    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 h-[100dvh] bg-black/90 flex items-center justify-center z-[100] backdrop-blur-md animate-fade-in touch-action-none">
       {/* Background Pulse Effect */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px] animate-pulse"></div>
@@ -110,7 +113,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                 <>
                     <button
                         onClick={onEndCall}
-                        className="group flex flex-col items-center gap-3"
+                        className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
                     >
                         <div className="w-16 h-16 bg-red-500/20 group-hover:bg-red-500 text-red-500 group-hover:text-white rounded-full flex items-center justify-center transition-all duration-300 border-2 border-red-500/50">
                              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -120,7 +123,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
 
                     <button
                         onClick={onAnswer}
-                        className="group flex flex-col items-center gap-3"
+                        className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
                     >
                          <div className="w-16 h-16 bg-green-500 group-hover:bg-green-400 text-white rounded-full flex items-center justify-center transition-all duration-300 shadow-lg shadow-green-500/30 animate-bounce">
                              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
@@ -133,7 +136,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             {callState === CallState.OFFERING && (
                  <button
                     onClick={onEndCall}
-                    className="group flex flex-col items-center gap-3"
+                    className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
                 >
                      <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg shadow-red-500/30">
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
