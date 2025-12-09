@@ -1,0 +1,8 @@
+{
+  "name": "Supabase WebRTC Chat",
+  "description": "A production-ready chat application with Supabase Auth, Realtime messaging, and WebRTC voice calls using OpenRelay TURN servers.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
