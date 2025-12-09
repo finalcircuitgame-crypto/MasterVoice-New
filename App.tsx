@@ -13,6 +13,7 @@ const App: React.FC = () => {
   
   // Navigation State
   const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   useEffect(() => {
     // Check active session
@@ -49,7 +50,18 @@ const App: React.FC = () => {
   }, []);
 
   if (view === 'landing') {
-    return <LandingPage onGetStarted={() => setView('auth')} onLogin={() => setView('auth')} />;
+    return (
+      <LandingPage 
+        onGetStarted={() => {
+          setAuthMode('signup');
+          setView('auth');
+        }} 
+        onLogin={() => {
+          setAuthMode('signin');
+          setView('auth');
+        }} 
+      />
+    );
   }
 
   if (view === 'auth') {
@@ -65,7 +77,7 @@ const App: React.FC = () => {
                     Back
                 </button>
             </div>
-            <Auth />
+            <Auth initialMode={authMode} />
         </div>
     );
   }
