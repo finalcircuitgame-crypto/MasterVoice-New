@@ -35,7 +35,20 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
         setAuthStep('verify');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+             // Handle unconfirmed email case
+             if (error.message.includes("Email not confirmed")) {
+                 await supabase.auth.resend({
+                     type: 'signup',
+                     email: email,
+                 });
+                 setAuthStep('verify');
+                 setError("Your email is not verified. We've sent you a new code.");
+                 setLoading(false);
+                 return;
+             }
+             throw error;
+        }
       }
     } catch (err: any) {
       setError(err.message);

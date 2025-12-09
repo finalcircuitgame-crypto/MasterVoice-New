@@ -18,12 +18,6 @@ function useWindowSize() {
 
 // --- Shared Components ---
 
-const TechBadge = ({ color, name }: { color: string; name: string }) => (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${color} bg-opacity-10 border border-opacity-20`}>
-        {name}
-    </span>
-);
-
 const SectionHeading = ({ title, subtitle }: { title: string; subtitle: string }) => (
     <div className="text-center mb-16 space-y-4">
         <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{title}</h2>
@@ -31,7 +25,8 @@ const SectionHeading = ({ title, subtitle }: { title: string; subtitle: string }
     </div>
 );
 
-const PricingCard = ({ 
+// Exporting so Pages.tsx can use it
+export const PricingCard = ({ 
     title, 
     price, 
     features, 
@@ -496,6 +491,12 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated
                     onAction={() => isAuthenticated ? onNavigate('/app') : onNavigate('/register')}
                 />
             </div>
+            <button 
+                onClick={() => onNavigate('/plans/show-more?plan=free')}
+                className="w-full mt-6 py-3 border border-white/10 rounded-xl text-gray-300 font-medium hover:bg-white/5"
+            >
+                Compare All Plans &rarr;
+            </button>
         </div>
 
         {/* --- Section 5: FAQ Mobile --- */}

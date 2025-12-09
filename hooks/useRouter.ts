@@ -9,15 +9,17 @@ export const useRouter = () => {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const navigate = (newPath: string) => {
+  const navigate = (url: string) => {
     try {
-      window.history.pushState({}, '', newPath);
+      window.history.pushState({}, '', url);
     } catch (e) {
-      // In some sandboxed environments, pushState might fail. 
-      // We catch it so the React state update still happens.
       console.warn('History API restricted, falling back to state only navigation.', e);
     }
-    setPath(newPath);
+    
+    // Extract just the pathname for internal routing logic (ignore query params)
+    const urlObj = new URL(url, window.location.origin);
+    setPath(urlObj.pathname);
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

@@ -5,7 +5,7 @@ import { Auth } from './components/Auth';
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
 import { LandingPage } from './components/LandingPage';
-import { PrivacyPolicy, TermsOfService, ContactSupport } from './components/Pages';
+import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 
 const App: React.FC = () => {
@@ -121,6 +121,8 @@ const App: React.FC = () => {
               return <TermsOfService onBack={() => navigate('/')} />;
           case '/contact':
               return <ContactSupport onBack={() => navigate('/')} />;
+          case '/plans/show-more':
+              return <PlansPage onBack={() => navigate('/')} />;
           case '/':
           default:
               return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;

@@ -1,10 +1,11 @@
 import React from 'react';
+import { PricingCard } from './LandingPage';
 
 interface PageProps {
   onBack: () => void;
 }
 
-const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: () => void }> = ({ title, children, onBack }) => (
+const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: () => void; wide?: boolean }> = ({ title, children, onBack, wide }) => (
   <div className="min-h-screen bg-[#030014] text-white overflow-y-auto animate-slide-up relative font-['Outfit']">
     {/* Background Effects */}
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -12,7 +13,7 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
     </div>
 
-    <div className="relative z-10 container mx-auto px-6 py-12 max-w-4xl">
+    <div className={`relative z-10 container mx-auto px-6 py-12 ${wide ? 'max-w-6xl' : 'max-w-4xl'}`}>
       <button 
         onClick={onBack} 
         className="group flex items-center text-gray-400 hover:text-white transition mb-8"
@@ -23,7 +24,7 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
         <span className="text-sm font-semibold tracking-wide">BACK TO HOME</span>
       </button>
 
-      <div className="glass-panel p-8 md:p-12 rounded-3xl border border-white/10">
+      <div className={`glass-panel p-8 md:p-12 rounded-3xl border border-white/10 ${wide ? 'bg-[#050510]/80' : ''}`}>
         <h1 className="text-4xl md:text-5xl font-bold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">{title}</h1>
         <div className="prose prose-invert prose-lg max-w-none text-gray-300">
             {children}
@@ -32,6 +33,91 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
     </div>
   </div>
 );
+
+export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
+    // Basic check for URL params to potentially highlight a plan (optional enhancement)
+    const params = new URLSearchParams(window.location.search);
+    const highlightedPlan = params.get('plan');
+
+    return (
+        <PageLayout title="Plans & Pricing" onBack={onBack} wide={true}>
+            <div className="text-center max-w-2xl mx-auto mb-16">
+                <p className="text-xl text-gray-400">Choose the perfect plan for your communication needs. From secure personal chat to enterprise-grade collaboration.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
+                <PricingCard 
+                    title="Personal"
+                    price="Free"
+                    features={["Unlimited Text Messages", "1-on-1 P2P Voice Calls", "30-Day Message History", "1 Active Device", "Community Support"]}
+                    cta="Get Started Free"
+                    onAction={onBack} // Redirects to login/register logic via router usually, simplified here
+                />
+                <PricingCard 
+                    title="Pro"
+                    price="$8"
+                    recommended={true}
+                    features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
+                    cta="Start Pro Trial"
+                    onAction={onBack}
+                />
+                <PricingCard 
+                    title="Team"
+                    price="$20"
+                    features={["Everything in Pro", "Unlimited Group Size", "Admin Dashboard", "Team Analytics", "Custom Retention Policy", "24/7 Dedicated Support"]}
+                    cta="Contact Sales"
+                    onAction={() => window.location.href = 'mailto:sales@mastervoice.com'}
+                />
+            </div>
+
+            <h2 className="text-3xl font-bold mb-8 text-white text-center">Feature Comparison</h2>
+            <div className="overflow-x-auto rounded-3xl border border-white/10 not-prose">
+                  <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                          <tr className="bg-white/5">
+                              <th className="p-6 text-sm font-bold text-gray-400 uppercase w-1/3">Feature</th>
+                              <th className="p-6 text-white font-bold text-lg w-1/5">Personal</th>
+                              <th className="p-6 text-indigo-400 font-bold text-lg w-1/5">Pro</th>
+                              <th className="p-6 text-fuchsia-400 font-bold text-lg w-1/5">Team</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-sm">
+                          <tr>
+                              <td className="p-6 font-medium text-gray-300">Message History</td>
+                              <td className="p-6 text-gray-400">30 Days</td>
+                              <td className="p-6 text-white">Unlimited</td>
+                              <td className="p-6 text-white">Unlimited / Custom</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium text-gray-300">Voice Quality</td>
+                              <td className="p-6 text-gray-400">Standard (32kHz)</td>
+                              <td className="p-6 text-white">HD (48kHz Opus)</td>
+                              <td className="p-6 text-white">Ultra HD / Lossless</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium text-gray-300">Group Calls</td>
+                              <td className="p-6 text-gray-400">1-on-1 Only</td>
+                              <td className="p-6 text-white">Up to 5 Users</td>
+                              <td className="p-6 text-white">Unlimited</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium text-gray-300">Active Devices</td>
+                              <td className="p-6 text-gray-400">1</td>
+                              <td className="p-6 text-white">3</td>
+                              <td className="p-6 text-white">Unlimited</td>
+                          </tr>
+                          <tr>
+                              <td className="p-6 font-medium text-gray-300">Support</td>
+                              <td className="p-6 text-gray-400">Community</td>
+                              <td className="p-6 text-white">Priority Email</td>
+                              <td className="p-6 text-white">24/7 Dedicated Agent</td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
+        </PageLayout>
+    );
+}
 
 export const PrivacyPolicy: React.FC<PageProps> = ({ onBack }) => (
   <PageLayout title="Privacy Policy" onBack={onBack}>
