@@ -170,3 +170,28 @@ export const ContactSupport: React.FC<PageProps> = ({ onBack }) => (
     </form>
   </PageLayout>
 );
+
+export const NotFoundPage: React.FC<PageProps> = ({ onBack }) => (
+  <div className="min-h-screen bg-[#030014] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-['Outfit']">
+    {/* Background Elements */}
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+    
+    <div className="relative z-10 text-center animate-fade-in-up">
+        <div className="text-[10rem] font-bold leading-none bg-clip-text text-transparent bg-gradient-to-b from-indigo-500 to-transparent opacity-50 select-none">
+            404
+        </div>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">Lost in Space?</h1>
+        <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+            The destination you are looking for doesn't exist or has been moved to another galaxy.
+        </p>
+        
+        <button 
+            onClick={onBack}
+            className="px-8 py-4 bg-white text-black rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+        >
+            Return to Base
+        </button>
+    </div>
+  </div>
+);
