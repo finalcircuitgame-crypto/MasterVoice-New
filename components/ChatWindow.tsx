@@ -272,7 +272,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     currentUser, 
     recipient, 
     onlineUsers,
-    channel, // Received from App
+    channel: _signalingChannel, // Not used for messages, we create a dedicated channel
     callState,
     onStartCall,
     onEndCall,
@@ -287,6 +287,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [familyModeEnabled, setFamilyModeEnabled] = useState(true); 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<any>(null);
+  
+  // Local channel for chat messages and typing indicators
+  const [chatChannel, setChatChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -304,10 +307,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const roomId = [currentUser.id, recipient.id].sort().join('_');
 
   useEffect(() => {
-    // If channel provided by App, use it for messaging
-    if (!channel) return;
+    // Create a separate channel for Message updates to ensure postgres_changes subscribes correctly
+    // independently of the WebRTC/Signaling channel passed from App.tsx.
+    // We use a different channel topic name to avoid collision/sharing state unexpectedly.
+    const chatRoomId = [currentUser.id, recipient.id].sort().join('_');
+    const newChannel = supabase.channel(`chat_messages:${chatRoomId}`);
 
-    const subscription = channel
+    newChannel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages' },
@@ -324,6 +330,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             if (eventType === 'INSERT') {
                 setMessages((prev) => {
+                    // Prevent duplicates if optimistic update already added it
                     if (prev.find(m => m.id === newRecord.id)) return prev;
                     return [...prev, { ...newRecord, status: 'sent' } as Message];
                 });
@@ -348,11 +355,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       })
       .subscribe();
 
+    setChatChannel(newChannel);
+
     return () => {
-       // Cleanup handled by App.tsx logic largely, but we unsubscribe specific listeners if needed
-       // Supabase client handles duplicates well.
+       supabase.removeChannel(newChannel);
     };
-  }, [channel, currentUser.id, recipient.id]);
+  }, [currentUser.id, recipient.id]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -427,7 +435,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
       setNewMessage(e.target.value);
-      channel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } });
+      chatChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } });
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
