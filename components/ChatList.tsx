@@ -10,7 +10,7 @@ interface ChatListProps {
 }
 
 export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onlineUsers, onOpenSettings }) => {
-  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files' | 'voicemail'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files'>('chats');
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
@@ -250,7 +250,6 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
               { id: 'favorites', label: 'Favorites' },
               { id: 'archived', label: 'Archived' },
               { id: 'files', label: 'Files' },
-              { id: 'voicemail', label: 'Voicemail' },
           ].map((tab: any) => (
              <button 
                 key={tab.id}
@@ -384,8 +383,6 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
              <EmptyTab label="archived chats" icon="📦" />
         ) : activeTab === 'files' ? (
              <EmptyTab label="shared files" icon="📁" />
-        ) : activeTab === 'voicemail' ? (
-             <EmptyTab label="voicemails" icon="📼" />
         ) : (
             /* --- FRIENDS LIST MODE --- */
             <>
