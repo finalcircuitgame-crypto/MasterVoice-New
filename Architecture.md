@@ -65,26 +65,51 @@ create table public.messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Enable Realtime for messages
+-- Create friend_requests table
+create table public.friend_requests (
+  id uuid default gen_random_uuid() primary key,
+  sender_id uuid references public.profiles(id) not null,
+  receiver_id uuid references public.profiles(id) not null,
+  status text check (status in ('pending', 'accepted', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(sender_id, receiver_id)
+);
+
+-- Enable Realtime for messages and requests
 alter publication supabase_realtime add table messages;
+alter publication supabase_realtime add table friend_requests;
 
 -- Optional: Add Row Level Security (RLS) policies
 alter table public.messages enable row level security;
 alter table public.profiles enable row level security;
+alter table public.friend_requests enable row level security;
 
 -- Policy: Anyone can read profiles
 create policy "Public profiles are viewable by everyone."
   on profiles for select
   using ( true );
 
--- Policy: Authenticated users can insert messages
+-- Policy: Users can insert their own messages
 create policy "Users can insert their own messages."
   on messages for insert
   with check ( auth.uid() = sender_id );
 
--- Policy: Users can view messages sent to them or by them
+-- Policy: Users can view their own messages
 create policy "Users can view their own messages."
   on messages for select
+  using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+
+-- Policy: Friend Requests
+create policy "Users can view their own requests."
+  on friend_requests for select
+  using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+
+create policy "Users can insert requests."
+  on friend_requests for insert
+  with check ( auth.uid() = sender_id );
+
+create policy "Users can update their own requests."
+  on friend_requests for update
   using ( auth.uid() = sender_id or auth.uid() = receiver_id );
 ```
 

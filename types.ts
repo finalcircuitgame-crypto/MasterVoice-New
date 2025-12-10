@@ -14,6 +14,16 @@ export interface Message {
   status?: 'sending' | 'sent' | 'error';
 }
 
+export interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+}
+
+export type FriendshipStatus = 'none' | 'pending_sent' | 'pending_received' | 'friends';
+
 export interface SignalingPayload {
   type: 'offer' | 'answer' | 'candidate' | 'hangup';
   sdp?: RTCSessionDescriptionInit;
