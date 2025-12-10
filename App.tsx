@@ -193,7 +193,7 @@ const App: React.FC = () => {
           }
 
           return (
-            <div className="flex h-screen w-screen bg-gray-900 overflow-hidden animate-fade-in-up relative font-['Outfit']">
+            <div className="flex h-screen w-screen bg-[#030014] overflow-hidden animate-fade-in-up relative font-['Outfit']">
               
               {/* Notifications Layer */}
               <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-3 w-full max-w-md px-4 pointer-events-none">
@@ -238,7 +238,14 @@ const App: React.FC = () => {
                             </button>
                             <span className="font-bold text-white">Back to chats</span>
                         </div>
+                        {/* 
+                            KEY FIX: 
+                            Adding the `key={selectedUser.id}` prop forces React to completely unmount 
+                            the old ChatWindow and mount a new one when the user switches. 
+                            This resets all state (WebRTC, messages, timers) immediately, preventing glitching.
+                        */}
                         <ChatWindow 
+                            key={selectedUser.id}
                             currentUser={currentUser} 
                             recipient={selectedUser} 
                             onlineUsers={onlineUsers}
@@ -247,7 +254,12 @@ const App: React.FC = () => {
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-[#030014] relative overflow-hidden">
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
-                        <div className="w-24 h-24 bg-gradient-to-tr from-indigo-500/20 to-fuchsia-500/20 rounded-[2rem] flex items-center justify-center mb-6 animate-float relative z-10 border border-white/5 shadow-2xl">
+                        
+                        {/* Decorative background blobs */}
+                        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+                        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+                        <div className="w-24 h-24 bg-gradient-to-tr from-indigo-500/20 to-fuchsia-500/20 rounded-[2rem] flex items-center justify-center mb-6 animate-float relative z-10 border border-white/5 shadow-2xl backdrop-blur-sm">
                             <svg className="w-10 h-10 text-indigo-400 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>

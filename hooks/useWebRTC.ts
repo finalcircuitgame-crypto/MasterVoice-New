@@ -15,7 +15,7 @@ export const useWebRTC = (
   const pc = useRef<RTCPeerConnection | null>(null);
   const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
   const incomingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
-  const handleSignalRef = useRef<(payload: SignalingPayload) => Promise<void>>();
+  const handleSignalRef = useRef<((payload: SignalingPayload) => Promise<void>) | null>(null);
   
   // Keep a ref to the channel to avoid stale closures in event listeners (fixes 15s drop)
   const channelRef = useRef(channel);
@@ -241,41 +241,4 @@ export const useWebRTC = (
          // Optimistically update state to update UI immediately
          setCallState(CallState.CONNECTED);
          
-     } catch (err) {
-         console.error('[WebRTC] Failed to answer call:', err);
-         cleanup();
-     }
-  };
-
-  const endCall = () => {
-    // Send hangup first
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'signal',
-      payload: { type: 'hangup' } as SignalingPayload,
-    }).catch(e => console.error("Failed to send hangup", e));
-    
-    // Then cleanup locally
-    cleanup();
-  };
-  
-  const toggleMute = () => {
-      if (localStream) {
-          localStream.getAudioTracks().forEach(track => {
-              track.enabled = !track.enabled;
-          });
-          setIsMuted(!localStream.getAudioTracks()[0]?.enabled);
-      }
-  };
-
-  return {
-    callState,
-    localStream,
-    remoteStream,
-    startCall,
-    endCall,
-    answerCall,
-    toggleMute,
-    isMuted
-  };
-};
+     } catch (err)

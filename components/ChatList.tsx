@@ -10,10 +10,15 @@ interface ChatListProps {
 
 export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onlineUsers }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check URL for active user on mount to highlight correctly
+    const params = new URLSearchParams(window.location.search);
+    const userIdParam = params.get('userId');
+    if (userIdParam) setActiveId(userIdParam);
+
     const fetchUsers = async () => {
-        // In a real app, query 'profiles' table. 
         const { data, error } = await supabase.from('profiles').select('*');
         if (!error && data) {
             setUsers(data.filter((u: UserProfile) => u.id !== currentUser.id));
@@ -21,7 +26,6 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     };
     fetchUsers();
     
-    // Subscribe to new profiles (optional, for real-time user list)
     const channel = supabase.channel('public:profiles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
             fetchUsers();
@@ -31,6 +35,20 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     return () => { supabase.removeChannel(channel); };
   }, [currentUser.id]);
 
+  // Update active state when URL changes (via parent or nav)
+  useEffect(() => {
+      const handleLocationChange = () => {
+        const params = new URLSearchParams(window.location.search);
+        setActiveId(params.get('userId'));
+      };
+      
+      // Listen for pushState calls (monkeypatched in Router or native events)
+      // Since App.tsx handles nav, we just check query param on render usually,
+      // but explicitly updating state ensures instant feedback
+      const params = new URLSearchParams(window.location.search);
+      setActiveId(params.get('userId'));
+  }, [window.location.search]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -38,80 +56,101 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const isPenguinUser = (email: string) => email === 'cindygaldamez@yahoo.com';
 
   return (
-    <div className="w-full md:w-80 bg-[#060609] border-r border-white/5 flex flex-col h-full font-['Outfit'] relative z-20">
+    <div className="w-full md:w-80 bg-[#060609]/95 backdrop-blur-xl border-r border-white/5 flex flex-col h-full font-['Outfit'] relative z-20 shadow-2xl">
       {/* Current User Header */}
-      <div className="p-6 border-b border-white/5 bg-[#0a0a0f]">
-        <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400 mb-1">MasterVoice</h1>
-        <div className="flex items-center gap-2 mt-2 bg-white/5 p-2 rounded-xl">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold shadow-lg shadow-indigo-500/20">
+      <div className="p-6 bg-gradient-to-b from-white/5 to-transparent border-b border-white/5">
+        <h1 className="text-xl font-bold text-white tracking-tight mb-4 flex items-center gap-2">
+            <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+            MasterVoice
+        </h1>
+        
+        <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors cursor-default">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-sm font-bold shadow-lg text-white">
                 {currentUser.email[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1">
-                    <p className="text-xs font-medium text-gray-300 truncate">{currentUser.email}</p>
+                <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-gray-200 truncate">{currentUser.email.split('@')[0]}</p>
                     {isPenguinUser(currentUser.email) && <span className="text-sm animate-wobble" title="Special Penguin Badge">🐧</span>}
                 </div>
                 {currentUser.is_family && (
-                    <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                        FAMILY MEMBER
+                        Family
                     </p>
                 )}
             </div>
         </div>
       </div>
       
-      {/* Search (Visual Only) */}
+      {/* Search */}
       <div className="p-4">
-          <div className="bg-white/5 border border-white/5 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-gray-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input className="bg-transparent outline-none w-full placeholder-gray-600" placeholder="Search chats..." />
+          <div className="bg-[#1a1a20] border border-white/5 rounded-xl px-4 py-3 flex items-center gap-3 text-sm text-gray-400 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all focus-within:bg-[#202025]">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input className="bg-transparent outline-none w-full placeholder-gray-600 text-gray-200" placeholder="Search friends..." />
           </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-4 mb-2 mt-2">All Chats</h3>
+      <div className="flex-1 overflow-y-auto px-3 space-y-1">
+        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2">Direct Messages</h3>
         {users.length === 0 && (
-            <div className="p-4 text-center text-gray-600 text-sm mt-10">
-                <div className="w-12 h-12 bg-gray-800 rounded-full mx-auto mb-3 flex items-center justify-center text-xl">👻</div>
-                No users found.<br/>Invite friends to chat!
+            <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-white/5 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl grayscale opacity-50">👻</div>
+                <p className="text-gray-500 text-sm">No one here yet.</p>
             </div>
         )}
         {users.map((user) => {
             const isOnline = onlineUsers.has(user.id);
+            const isActive = activeId === user.id;
+            
             return (
               <button
                 key={user.id}
-                onClick={() => onSelectUser(user)}
-                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 rounded-xl transition-all duration-200 text-left group mb-1"
+                onClick={() => {
+                    setActiveId(user.id);
+                    onSelectUser(user);
+                }}
+                className={`w-full p-3 flex items-center space-x-3 rounded-xl transition-all duration-200 text-left group relative overflow-hidden ${
+                    isActive 
+                    ? 'bg-indigo-600/10 border border-indigo-500/30' 
+                    : 'hover:bg-white/5 border border-transparent'
+                }`}
               >
-                <div className="relative">
-                    <div className="w-11 h-11 rounded-full bg-gray-800 border border-white/5 flex items-center justify-center text-gray-400 font-bold group-hover:bg-gray-700 transition-colors">
+                {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
+                
+                <div className="relative shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold transition-colors ${
+                        isActive ? 'bg-indigo-600 shadow-lg shadow-indigo-500/20' : 'bg-gray-800 group-hover:bg-gray-700'
+                    }`}>
                        {user.email[0].toUpperCase()}
                     </div>
                     {isOnline && (
-                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#060609]"></div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#060609]"></div>
                     )}
                 </div>
+                
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
                       <div className="flex items-center gap-1.5 truncate">
-                        <p className="text-sm font-semibold text-gray-200 truncate group-hover:text-white transition-colors">{user.email}</p>
-                        {isPenguinUser(user.email) && <span className="text-sm animate-wobble">🐧</span>}
+                        <p className={`text-sm font-medium truncate transition-colors ${isActive ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
+                            {user.email}
+                        </p>
+                        {isPenguinUser(user.email) && <span className="text-xs animate-wobble">🐧</span>}
                       </div>
-                      {isOnline && <span className="text-[10px] text-green-400 font-bold bg-green-500/10 px-1.5 py-0.5 rounded">ONLINE</span>}
                   </div>
-                  <p className="text-xs text-gray-500 truncate group-hover:text-gray-400">Tap to start conversation</p>
+                  <p className={`text-xs truncate ${isActive ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                      {isOnline ? 'Active now' : 'Offline'}
+                  </p>
                 </div>
               </button>
             );
         })}
       </div>
 
-      <div className="p-4 border-t border-white/5 bg-[#0a0a0f]">
+      <div className="p-4 border-t border-white/5 bg-[#0a0a0f]/50">
         <button
             onClick={handleLogout}
-            className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-400 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 border border-white/5 hover:border-red-500/20"
         >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             Sign Out
