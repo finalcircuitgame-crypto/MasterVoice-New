@@ -114,11 +114,9 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStream(stream);
       
-      // Safety play attempt for some browsers
-      const audioEl = new Audio();
-      audioEl.srcObject = stream;
-      audioEl.muted = true; // start muted to bypass autoplay
-      audioEl.play().catch(() => {}); 
+      // CRITICAL FIX: Explicitly set CONNECTED when media starts flowing
+      // This prevents the UI from getting stuck in "Connecting..." if connectionState lags
+      setCallState(CallState.CONNECTED); 
     };
 
     newPc.onconnectionstatechange = () => {

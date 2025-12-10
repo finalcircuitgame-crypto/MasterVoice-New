@@ -299,6 +299,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // Delete Modal State
+    const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+
     const isRecipientOnline = onlineUsers.has(recipient.id);
     const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
     const roomId = [currentUser.id, recipient.id].sort().join('_');
@@ -584,10 +587,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         inputRef.current?.focus();
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure?")) return;
-        setMessages(prev => prev.filter(m => m.id !== id));
-        await supabase.from('messages').delete().eq('id', id);
+    const handleDeleteClick = (id: string) => {
+        setMessageToDelete(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!messageToDelete) return;
+        
+        // Optimistic Update
+        setMessages(prev => prev.filter(m => m.id !== messageToDelete));
+        
+        // DB Deletion
+        const { error } = await supabase.from('messages').delete().eq('id', messageToDelete);
+        
+        if (error) {
+            console.error("Failed to delete message", error);
+            // Optionally revert UI if needed, but optimistic usually preferred
+        }
+        
+        setMessageToDelete(null);
     };
 
     return (
@@ -688,7 +706,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 recipient={recipient}
                                 currentUser={currentUser}
                                 onEdit={handleEdit}
-                                onDelete={handleDelete}
+                                onDelete={handleDeleteClick}
                                 onRetry={(m) => handleSendMessage(undefined, m)}
                                 onReply={handleReply}
                                 onReaction={handleReaction}
@@ -855,6 +873,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 className="w-full py-3.5 text-gray-500 font-medium hover:text-white transition-colors text-sm"
                             >
                                 Decline & Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE CONFIRMATION MODAL */}
+            {messageToDelete && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-[#1a1a20] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+                        <div className="flex justify-center mb-4">
+                            <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </div>
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-2 text-center">Delete Message?</h3>
+                        <p className="text-gray-400 text-sm mb-6 text-center leading-relaxed">
+                            This action cannot be undone. The message will be permanently removed for everyone in the chat.
+                        </p>
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setMessageToDelete(null)} 
+                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-sm font-medium transition active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmDelete} 
+                                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20 active:scale-95"
+                            >
+                                Delete
                             </button>
                         </div>
                     </div>

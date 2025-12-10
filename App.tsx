@@ -293,7 +293,7 @@ const App: React.FC = () => {
 
               {/* Chat Window Column */}
               <div className={`flex-1 h-full flex flex-col relative ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
-                {selectedUser ? (
+                {selectedUser && !isSettingsOpen ? (
                     <>
                         <div className="md:hidden bg-[#060609] p-4 pt-4 border-b border-white/5 flex items-center gap-3">
                             <button 
