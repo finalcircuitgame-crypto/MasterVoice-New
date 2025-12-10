@@ -614,6 +614,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
+            {/* Active Call Banner */}
+            {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
+                 <div className="bg-green-500/10 border-b border-green-500/20 py-1.5 px-4 flex justify-between items-center relative z-30 animate-fade-in-up backdrop-blur-md">
+                     <div className="flex items-center gap-2">
+                        {callState === CallState.RECONNECTING ? (
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        ) : (
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        )}
+                        <span className={`text-xs font-bold uppercase tracking-wide ${callState === CallState.RECONNECTING ? 'text-amber-400' : 'text-green-400'}`}>
+                            {callState === CallState.RECONNECTING ? 'Connection Unstable - Reconnecting...' : 'Call Active'}
+                        </span>
+                     </div>
+                     {/* Note: Clicking anywhere else or maximizing restores overlay, this visual cue just reminds user call is active */}
+                 </div>
+            )}
+
             {/* Header */}
             <div className="hidden md:flex px-6 py-4 justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
                 <div className="flex items-center space-x-4">
@@ -650,10 +667,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleStartCallClick}
-                        disabled={callState !== CallState.IDLE}
+                        disabled={callState !== CallState.IDLE && callState !== CallState.CONNECTED && callState !== CallState.RECONNECTING}
                         className={`p-2.5 rounded-full transition-all duration-300 shadow-lg group ${callState === CallState.IDLE
                                 ? 'bg-white/10 hover:bg-white/20 text-white hover:scale-105 border border-white/10'
-                                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                                : 'bg-green-500/20 text-green-400 animate-pulse border border-green-500/50'
                             }`}
                         title="Start Voice Call"
                     >
@@ -668,10 +685,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="md:hidden absolute top-4 right-4 z-30">
                 <button
                     onClick={handleStartCallClick}
-                    disabled={callState !== CallState.IDLE}
+                    disabled={callState !== CallState.IDLE && callState !== CallState.CONNECTED && callState !== CallState.RECONNECTING}
                     className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${callState === CallState.IDLE
                             ? 'bg-white/10 text-white border border-white/10 backdrop-blur-md'
-                            : 'bg-gray-800/80 text-gray-500'
+                            : 'bg-green-500/20 text-green-400 border border-green-500/50'
                         }`}
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -16,6 +16,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   const incomingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
   const handleSignalRef = useRef<((payload: SignalingPayload) => Promise<void>) | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
 
   // Keep ref for local stream for cleanup
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -24,6 +25,11 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   // --- Cleanup Function ---
   const cleanup = useCallback(() => {
     console.log('[WebRTC] Cleaning up call resources');
+
+    if (reconnectTimeoutRef.current) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+    }
 
     const ls = localStreamRef.current;
     if (ls) {
@@ -122,7 +128,23 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     newPc.onconnectionstatechange = () => {
       console.log('[WebRTC] Connection state:', newPc.connectionState);
       if (newPc.connectionState === 'connected') {
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+        }
         setCallState(CallState.CONNECTED);
+      } else if (newPc.connectionState === 'disconnected') {
+         // Grace Period Logic
+         console.warn('[WebRTC] Peer disconnected, starting grace period...');
+         setCallState(CallState.RECONNECTING);
+         
+         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+         
+         reconnectTimeoutRef.current = window.setTimeout(() => {
+             console.log('[WebRTC] Reconnection timed out. Ending call.');
+             cleanup();
+         }, 3 * 60 * 1000); // 3 minutes
+
       } else if (newPc.connectionState === 'failed' || newPc.connectionState === 'closed') {
         cleanup();
       }
@@ -187,8 +209,21 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     }
 
     // If we are IDLE and get an offer, we can accept it
-    if (!pc.current && payload.type === 'offer') {
-        if (callState !== CallState.IDLE) return; // Busy
+    // ALSO: If we are RECONNECTING, we accept an offer (Rejoin scenario)
+    if ((callState === CallState.IDLE || callState === CallState.RECONNECTING) && payload.type === 'offer') {
+        
+        // If rejoining, clean up old PC first implicitly or reuse? 
+        // Better to reuse cleanup() to reset PC but keep UI/User context if needed.
+        // For simplicity: Treat as new incoming call, but if it was RECONNECTING, it feels like a rejoin.
+        
+        if (callState === CallState.RECONNECTING) {
+             console.log('[WebRTC] Rejoin Offer Received');
+             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+             // We need to reset PC to accept new offer cleanly
+             if (pc.current) pc.current.close();
+             pc.current = null;
+        }
+
         console.log('[WebRTC] Received Offer');
         setCallState(CallState.RECEIVING);
         incomingOfferRef.current = payload.sdp!;

@@ -10,7 +10,7 @@ interface ChatListProps {
 }
 
 export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onlineUsers, onOpenSettings }) => {
-  const [activeTab, setActiveTab] = useState<'chats' | 'requests'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files' | 'voicemail'>('chats');
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
@@ -213,6 +213,13 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
       );
   };
 
+  const EmptyTab = ({ label, icon }: { label: string, icon: string }) => (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-500 animate-fade-in">
+          <div className="text-4xl mb-2 opacity-30">{icon}</div>
+          <p className="text-xs">No {label} yet</p>
+      </div>
+  );
+
   return (
     <div className="w-full md:w-80 bg-[#060609] md:bg-[#060609]/95 md:backdrop-blur-xl md:border-r border-white/5 flex flex-col h-full font-['Outfit'] relative z-20 shadow-2xl overflow-hidden">
       {/* Current User Header */}
@@ -234,23 +241,28 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         </button>
       </div>
       
-      {/* Tabs */}
-      <div className="flex px-4 pt-4 gap-2 shrink-0">
-          <button 
-            onClick={() => { setActiveTab('chats'); setSearchQuery(''); }}
-            className={`flex-1 pb-3 text-sm font-bold tracking-wide border-b-2 transition-all ${activeTab === 'chats' ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-          >
-              Chats
-          </button>
-          <button 
-            onClick={() => { setActiveTab('requests'); setSearchQuery(''); }}
-            className={`flex-1 pb-3 text-sm font-bold tracking-wide border-b-2 transition-all flex items-center justify-center gap-2 ${activeTab === 'requests' ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-          >
-              Requests
-              {incomingRequests.length > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{incomingRequests.length}</span>
-              )}
-          </button>
+      {/* Scrollable Tabs */}
+      <div className="flex px-4 pt-4 gap-4 overflow-x-auto no-scrollbar shrink-0 border-b border-white/5 pb-0">
+          {[
+              { id: 'chats', label: 'Chats' },
+              { id: 'requests', label: 'Requests', count: incomingRequests.length },
+              { id: 'groups', label: 'Groups' },
+              { id: 'favorites', label: 'Favorites' },
+              { id: 'archived', label: 'Archived' },
+              { id: 'files', label: 'Files' },
+              { id: 'voicemail', label: 'Voicemail' },
+          ].map((tab: any) => (
+             <button 
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(''); }}
+                className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+             >
+                  {tab.label}
+                  {tab.count > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{tab.count}</span>
+                  )}
+             </button>
+          ))}
       </div>
 
       {/* Search */}
@@ -259,7 +271,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
               <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               <input 
                 className="bg-transparent outline-none w-full placeholder-gray-600 text-gray-200" 
-                placeholder={activeTab === 'chats' ? "Find friends..." : "Search users..."} 
+                placeholder={activeTab === 'chats' ? "Find friends..." : "Search..."} 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -364,6 +376,16 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                     </>
                 )}
             </>
+        ) : activeTab === 'groups' ? (
+             <EmptyTab label="groups" icon="👥" />
+        ) : activeTab === 'favorites' ? (
+             <EmptyTab label="favorites" icon="⭐" />
+        ) : activeTab === 'archived' ? (
+             <EmptyTab label="archived chats" icon="📦" />
+        ) : activeTab === 'files' ? (
+             <EmptyTab label="shared files" icon="📁" />
+        ) : activeTab === 'voicemail' ? (
+             <EmptyTab label="voicemails" icon="📼" />
         ) : (
             /* --- FRIENDS LIST MODE --- */
             <>

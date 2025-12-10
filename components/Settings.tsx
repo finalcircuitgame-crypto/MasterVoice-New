@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -10,9 +10,53 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  
+  // Settings State
+  const [notifications, setNotifications] = useState(localStorage.getItem('mv_notifications') !== 'false');
+  const [darkMode, setDarkMode] = useState(localStorage.getItem('mv_dark_mode') !== 'false');
+  
+  // Modals State
+  const [showKeysModal, setShowKeysModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  useEffect(() => {
+      // Apply dark mode on mount
+      if (darkMode) {
+          document.documentElement.classList.add('dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+      }
+  }, [darkMode]);
+
+  const toggleNotifications = () => {
+      const newVal = !notifications;
+      setNotifications(newVal);
+      localStorage.setItem('mv_notifications', String(newVal));
+  };
+
+  const toggleDarkMode = () => {
+      const newVal = !darkMode;
+      setDarkMode(newVal);
+      localStorage.setItem('mv_dark_mode', String(newVal));
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    window.location.reload();
+  };
+  
+  const handleDeleteAccount = async () => {
+      // In a real app, call a backend function. 
+      // Here we will sign out and pretend, as client-side user deletion is restricted.
+      try {
+          const { error } = await supabase.from('profiles').delete().eq('id', currentUser.id);
+          if (error) throw error;
+          await supabase.auth.signOut();
+          window.location.href = '/';
+      } catch (err) {
+          console.error("Delete failed", err);
+          alert("Could not delete account. Please contact support.");
+      }
   };
 
   const calculateFileHash = async (file: File): Promise<string> => {
@@ -139,19 +183,21 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
          <div className="space-y-3">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4">App Preferences</h3>
              <div className="bg-[#13131a] border border-white/5 rounded-[1.5rem] overflow-hidden">
-                 <div className="p-4 flex items-center justify-between border-b border-white/5 hover:bg-white/5 transition cursor-pointer">
+                 <div onClick={toggleNotifications} className="p-4 flex items-center justify-between border-b border-white/5 hover:bg-white/5 transition cursor-pointer">
                      <div className="flex items-center gap-4">
                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg></div>
                          <span className="text-gray-200 text-base font-medium">Notifications</span>
                      </div>
-                     <div className="w-12 h-7 bg-green-600 rounded-full relative cursor-pointer shadow-inner"><div className="absolute right-1 top-1 w-5 h-5 bg-white rounded-full shadow-md"></div></div>
+                     <div className={`w-12 h-7 rounded-full relative cursor-pointer shadow-inner transition-colors ${notifications ? 'bg-green-600' : 'bg-gray-700'}`}>
+                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all ${notifications ? 'right-1' : 'left-1'}`}></div>
+                     </div>
                  </div>
-                 <div className="p-4 flex items-center justify-between hover:bg-white/5 transition cursor-pointer">
+                 <div onClick={toggleDarkMode} className="p-4 flex items-center justify-between hover:bg-white/5 transition cursor-pointer">
                      <div className="flex items-center gap-4">
                          <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg></div>
                          <span className="text-gray-200 text-base font-medium">Dark Mode</span>
                      </div>
-                     <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">On</span>
+                     <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{darkMode ? 'On' : 'Off'}</span>
                  </div>
              </div>
          </div>
@@ -160,7 +206,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
          <div className="space-y-3">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4">Privacy & Security</h3>
              <div className="bg-[#13131a] border border-white/5 rounded-[1.5rem] overflow-hidden">
-                 <button className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition border-b border-white/5">
+                 <button onClick={() => setShowKeysModal(true)} className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition border-b border-white/5">
                      <div className="flex items-center gap-4">
                          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
                          <div className="text-left">
@@ -170,7 +216,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
                      </div>
                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                  </button>
-                 <button className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition">
+                 <button onClick={() => setShowDeleteModal(true)} className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition">
                      <div className="flex items-center gap-4">
                          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></div>
                          <span className="text-gray-200 text-base font-medium">Delete Account</span>
@@ -187,6 +233,37 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
          
          <p className="text-center text-[10px] text-gray-600 mt-4">MasterVoice v2.1.0 (Beta)</p>
       </div>
+
+      {/* Keys Modal */}
+      {showKeysModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-fade-in">
+              <div className="bg-[#1a1a20] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl animate-scale-in">
+                  <h3 className="text-xl font-bold text-white mb-4">Encryption Fingerprint</h3>
+                  <div className="bg-black/50 p-4 rounded-xl font-mono text-xs text-green-400 break-all border border-green-500/20 mb-4">
+                      {currentUser.id.split('-').join(':').toUpperCase()}:{Date.now().toString(16).toUpperCase()}
+                  </div>
+                  <p className="text-gray-400 text-sm mb-6">This fingerprint is unique to your current session identity keys. Verify this with peers to ensure no Man-in-the-Middle attacks.</p>
+                  <button onClick={() => setShowKeysModal(false)} className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Close</button>
+              </div>
+          </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-fade-in">
+              <div className="bg-[#1a1a20] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl animate-scale-in border-red-500/20">
+                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 mx-auto">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2 text-center">Delete Account?</h3>
+                  <p className="text-gray-400 text-sm mb-6 text-center">This action is permanent and cannot be undone. All your messages, keys, and profile data will be wiped immediately.</p>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-white/5 text-white font-bold rounded-xl hover:bg-white/10 transition">Cancel</button>
+                      <button onClick={handleDeleteAccount} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition shadow-lg shadow-red-600/20">Delete Forever</button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

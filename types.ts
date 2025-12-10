@@ -56,6 +56,7 @@ export const CallState = {
   OFFERING: 'OFFERING',
   RECEIVING: 'RECEIVING',
   CONNECTED: 'CONNECTED',
+  RECONNECTING: 'RECONNECTING', // Added for grace period
 } as const;
 
 export type CallState = typeof CallState[keyof typeof CallState];

@@ -20,6 +20,9 @@ const App: React.FC = () => {
   const [showFamilyNotification, setShowFamilyNotification] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
+  // Call Navigation Guard
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
   // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
   
@@ -49,14 +52,14 @@ const App: React.FC = () => {
     rtcStats
   } = useWebRTC(roomId, currentUser?.id || '');
 
-  // Auto-End Call if leaving the authenticated app area (e.g. going to Landing Page)
+  // Detect navigation to Landing Page while in call
   useEffect(() => {
-    if (callState !== CallState.IDLE) {
-        if (['/', '/login', '/register'].includes(path)) {
-            endCall();
-        }
-    }
-  }, [path, callState, endCall]);
+      if (path === '/' && callState !== CallState.IDLE) {
+          setShowLeaveConfirm(true);
+      } else {
+          setShowLeaveConfirm(false);
+      }
+  }, [path, callState]);
 
   // Presence logic
   useEffect(() => {
@@ -212,6 +215,9 @@ const App: React.FC = () => {
   const showChatInterface = (path === '/conversations' || isSettingsOpen) && session && currentUser;
 
   const renderPublicView = () => {
+      // If we are showing the confirmation modal, just render a background placeholder or the landing page blurred
+      // But we will overlay the modal in the main return
+      
       switch (path) {
           case '/login':
               return (
@@ -246,7 +252,54 @@ const App: React.FC = () => {
   };
 
   if (!showChatInterface) {
-      return renderPublicView();
+      return (
+          <>
+            {renderPublicView()}
+            {/* Landing Page Leave Confirmation Modal */}
+            {showLeaveConfirm && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-6 animate-fade-in">
+                    <div className="bg-[#1a1a20] w-full max-w-sm rounded-3xl p-8 border border-white/10 shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-6 text-indigo-400">
+                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">Call in Progress</h2>
+                        <p className="text-gray-400 mb-8">Do you want to end your current call or continue chatting?</p>
+                        
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={() => { 
+                                    navigate('/conversations'); 
+                                    setShowLeaveConfirm(false); 
+                                }} 
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition"
+                            >
+                                Continue Call
+                            </button>
+                            <button 
+                                onClick={() => { 
+                                    endCall(); 
+                                    setShowLeaveConfirm(false); 
+                                }} 
+                                className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-red-400 font-bold rounded-xl transition"
+                            >
+                                End Call & Leave
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <VoiceCallOverlay 
+                callState={callState} 
+                remoteStream={remoteStream} 
+                onEndCall={endCall} 
+                onAnswer={answerCall} 
+                toggleMute={toggleMute}
+                isMuted={isMuted}
+                recipient={selectedUser || undefined}
+                rtcStats={rtcStats}
+            />
+          </>
+      );
   }
 
   return (

@@ -57,7 +57,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   // Timer Logic
   useEffect(() => {
     let interval: number;
-    if (callState === CallState.CONNECTED) {
+    if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
       interval = window.setInterval(() => {
         setDuration(prev => prev + 1);
       }, 1000);
@@ -178,8 +178,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             </div>
         )}
 
-        {/* --- CONNECTED STATE --- */}
-        {callState === CallState.CONNECTED && (
+        {/* --- CONNECTED / RECONNECTING STATE --- */}
+        {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
             isMaximized ? (
                 // FULLSCREEN CONNECTED VIEW
                 <div className="fixed inset-0 h-[100dvh] w-screen bg-[#080808] flex flex-col items-center z-[9999] animate-fade-in overflow-hidden">
@@ -189,9 +189,9 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </button>
                         <div className="flex flex-col items-center">
-                            <span className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div> 
-                                Encrypted P2P
+                            <span className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${callState === CallState.RECONNECTING ? 'text-amber-400' : 'text-green-400'}`}>
+                                 <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${callState === CallState.RECONNECTING ? 'bg-amber-500' : 'bg-green-500'}`}></div> 
+                                 {callState === CallState.RECONNECTING ? 'Reconnecting...' : 'Encrypted P2P'}
                             </span>
                         </div>
                         <button onClick={() => setShowDebug(!showDebug)} className={`p-2 rounded-full transition ${showDebug ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>
@@ -202,15 +202,19 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                     {/* Main Content */}
                     <div className="flex-1 w-full flex flex-col items-center justify-center relative">
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30">
-                            <div className="w-[300px] h-[300px] border border-indigo-500/30 rounded-full animate-ping" style={{ animationDuration: '3s' }}></div>
-                            <div className="absolute w-[400px] h-[400px] border border-indigo-500/20 rounded-full animate-ping" style={{ animationDuration: '3s', animationDelay: '1s' }}></div>
+                            <div className={`w-[300px] h-[300px] border rounded-full animate-ping ${callState === CallState.RECONNECTING ? 'border-amber-500/30' : 'border-indigo-500/30'}`} style={{ animationDuration: '3s' }}></div>
+                            <div className={`absolute w-[400px] h-[400px] border rounded-full animate-ping ${callState === CallState.RECONNECTING ? 'border-amber-500/20' : 'border-indigo-500/20'}`} style={{ animationDuration: '3s', animationDelay: '1s' }}></div>
                         </div>
 
                         <div className="relative z-10 mb-8">
                             {renderAvatar('large')}
                         </div>
                         <h2 className="text-3xl font-bold text-white mb-2">{recipient ? recipient.email.split('@')[0] : 'Unknown'}</h2>
-                        <p className="text-indigo-300 text-xl font-mono">{formatTime(duration)}</p>
+                        <p className={`text-xl font-mono ${callState === CallState.RECONNECTING ? 'text-amber-400 animate-pulse' : 'text-indigo-300'}`}>
+                            {callState === CallState.RECONNECTING ? 'Connection Lost' : formatTime(duration)}
+                        </p>
+                        {callState === CallState.RECONNECTING && <p className="text-xs text-gray-500 mt-2">Waiting for peer...</p>}
+
 
                         {/* Debug Stats Overlay */}
                         {showDebug && rtcStats && (
@@ -271,13 +275,15 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                         >
                             <div className="flex items-center space-x-3 min-w-0">
                                 <div className="relative shrink-0">
-                                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse absolute -top-0.5 -right-0.5 border-2 border-gray-800 z-10"></div>
+                                    <div className={`w-2.5 h-2.5 rounded-full animate-pulse absolute -top-0.5 -right-0.5 border-2 border-gray-800 z-10 ${callState === CallState.RECONNECTING ? 'bg-amber-500' : 'bg-green-500'}`}></div>
                                     {renderAvatar('small')}
                                 </div>
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-white text-sm font-bold leading-none mb-0.5 truncate">{recipient ? recipient.email.split('@')[0] : 'Connected'}</span>
                                     <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] text-indigo-300 font-mono bg-indigo-500/10 px-1 rounded">{formatTime(duration)}</span>
+                                        <span className={`text-[10px] font-mono bg-opacity-10 px-1 rounded ${callState === CallState.RECONNECTING ? 'text-amber-400 bg-amber-500' : 'text-indigo-300 bg-indigo-500'}`}>
+                                            {callState === CallState.RECONNECTING ? 'Reconnecting...' : formatTime(duration)}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
