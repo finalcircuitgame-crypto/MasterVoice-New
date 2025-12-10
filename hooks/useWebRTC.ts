@@ -214,7 +214,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         
         // If rejoining, clean up old PC first implicitly or reuse? 
         // Better to reuse cleanup() to reset PC but keep UI/User context if needed.
-        // For simplicity: Treat as new incoming call, but if it was RECONNECTING, it feels like a rejoin.
         
         if (callState === CallState.RECONNECTING) {
              console.log('[WebRTC] Rejoin Offer Received');
@@ -237,10 +236,23 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
           console.log('[WebRTC] Received Answer');
           if (pc.current.signalingState === 'have-local-offer') {
             await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
+            
+            // Process queued candidates for Caller
+            // This is critical if candidates arrived before the answer
+            while (iceCandidateQueue.current.length > 0) {
+                const c = iceCandidateQueue.current.shift();
+                if (c) {
+                    try {
+                        await pc.current.addIceCandidate(new RTCIceCandidate(c));
+                    } catch (e) {
+                        console.warn("Error adding queued candidate", e);
+                    }
+                }
+            }
           }
       } else if (payload.type === 'candidate' && payload.candidate) {
           try {
-              if (pc.current.remoteDescription) {
+              if (pc.current.remoteDescription && pc.current.remoteDescription.type) {
                   await pc.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
               } else {
                   iceCandidateQueue.current.push(payload.candidate);
@@ -303,7 +315,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       // 1. Set Remote Description (Offer)
       await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
 
-      // 2. Process queued candidates
+      // 2. Process queued candidates (For Callee)
       while (iceCandidateQueue.current.length > 0) {
           const c = iceCandidateQueue.current.shift();
           if (c) await peer.addIceCandidate(new RTCIceCandidate(c));
