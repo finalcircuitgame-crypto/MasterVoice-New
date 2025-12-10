@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { ICE_SERVERS } from '../constants';
@@ -103,12 +102,14 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
 
     newPc.ontrack = (event) => {
       console.log('[WebRTC] Received remote track');
+      // Fix: Create a NEW MediaStream instance to force React state update
+      // even if the underlying ID is the same.
       if (event.streams && event.streams[0]) {
-        setRemoteStream(event.streams[0]);
-      } else {
-        const s = new MediaStream();
-        if (event.track) s.addTrack(event.track);
-        setRemoteStream(s);
+        const newStreamWrapper = new MediaStream(event.streams[0].getTracks());
+        setRemoteStream(newStreamWrapper);
+      } else if (event.track) {
+        const newStream = new MediaStream([event.track]);
+        setRemoteStream(newStream);
       }
     };
 
@@ -276,7 +277,6 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
       
       if (peer.signalingState !== 'stable') {
           console.warn('[WebRTC] Peer not stable, resetting...');
-          // This ensures we can recover if the user mashed the accept button
           if (peer.signalingState !== 'closed') {
              // If we are 'have-remote-offer', we might be okay, but safe to proceed
           }

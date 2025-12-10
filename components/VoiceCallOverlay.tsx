@@ -26,21 +26,23 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
 
   useEffect(() => {
     if (audioRef.current && remoteStream) {
-      console.log("[VoiceCallOverlay] Attaching remote stream to audio element");
+      console.log("[VoiceCallOverlay] Attaching remote stream to audio element", remoteStream.getAudioTracks());
+      
+      // Explicitly set srcObject
       audioRef.current.srcObject = remoteStream;
       
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-                console.log("[VoiceCallOverlay] Audio playing successfully");
-                setAutoplayBlocked(false);
-            })
-            .catch(error => {
-                console.warn("[VoiceCallOverlay] Autoplay blocked:", error);
-                setAutoplayBlocked(true);
-            });
-      }
+      const playAudio = async () => {
+          try {
+              await audioRef.current?.play();
+              console.log("[VoiceCallOverlay] Audio playing successfully");
+              setAutoplayBlocked(false);
+          } catch (error) {
+              console.warn("[VoiceCallOverlay] Autoplay blocked or failed:", error);
+              setAutoplayBlocked(true);
+          }
+      };
+      
+      playAudio();
     }
   }, [remoteStream]);
 
@@ -138,8 +140,21 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                 </div>
             </div>
             
-            {/* Hidden Audio */}
-            <audio ref={audioRef} autoPlay playsInline className="hidden" />
+            {/* Audio Element with style hack to prevent display:none optimization issues */}
+            <audio 
+                ref={audioRef} 
+                autoPlay 
+                playsInline 
+                controls={false}
+                style={{ 
+                    position: 'absolute', 
+                    width: '1px', 
+                    height: '1px', 
+                    opacity: 0.01, 
+                    pointerEvents: 'none',
+                    zIndex: -1
+                }} 
+            />
         </div>
     );
   }
@@ -224,7 +239,20 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
         </div>
         
         {/* Hidden audio element for consistency in all states */}
-        <audio ref={audioRef} autoPlay playsInline className="hidden" />
+        <audio 
+            ref={audioRef} 
+            autoPlay 
+            playsInline 
+            controls={false}
+            style={{ 
+                position: 'absolute', 
+                width: '1px', 
+                height: '1px', 
+                opacity: 0.01, 
+                pointerEvents: 'none',
+                zIndex: -1
+            }} 
+        />
       </div>
     </div>
   );
