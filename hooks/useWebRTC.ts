@@ -103,7 +103,7 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
       } else {
         // fallback: construct a stream from tracks
         const s = new MediaStream();
-        event.track && s.addTrack(event.track);
+        if (event.track) s.addTrack(event.track);
         setRemoteStream(s);
       }
     };
@@ -120,14 +120,17 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
 
     newPc.oniceconnectionstatechange = () => {
       console.log('[WebRTC] ICE connection state:', newPc.iceConnectionState);
+      // Robustness fix: Sometimes connectionState lags behind ICE state.
+      // If ICE is connected, we can consider the call active.
+      if (newPc.iceConnectionState === 'connected' || newPc.iceConnectionState === 'completed') {
+          setCallState((prev) => (prev !== CallState.CONNECTED ? CallState.CONNECTED : prev));
+      }
+      
       // treat 'failed' as terminal, 'disconnected' as transient
       if (newPc.iceConnectionState === 'failed') {
         cleanup();
       }
     };
-
-    // Optional: small helper to log stats for debugging (can be removed in prod)
-    // setInterval(() => { if (pc.current) pc.current.getStats().then(s => {/* inspect if needed */}); }, 30000);
 
     pc.current = newPc;
     return newPc;
@@ -169,6 +172,7 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
           }
 
           // Only set remote description if we are waiting for an answer
+          // "have-local-offer" is the typical state for the Caller waiting for Answer
           if (pc.current.signalingState === 'have-local-offer' || pc.current.signalingState === 'have-remote-offer') {
             await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
 
@@ -273,7 +277,14 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
       const peer = createPeerConnection();
 
       // If peer is not stable, bail (prevents double-answer)
-      if (peer.signalingState !== 'stable') return;
+      // Note: If we are 'stable' but incomingOfferRef is set, we need to process it.
+      // However, usually we are 'stable' because we haven't setRemoteDesc yet.
+      if (peer.signalingState !== 'stable') {
+          console.warn('[WebRTC] Answer called but state is not stable:', peer.signalingState);
+          // If we are 'have-remote-offer', we might have already set it? 
+          // But here we want to ensure we don't double answer.
+          return; 
+      }
 
       await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
 
