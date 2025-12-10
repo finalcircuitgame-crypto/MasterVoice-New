@@ -1,3 +1,4 @@
+
 export interface UserProfile {
   id: string;
   email: string; // Using email as username for simplicity in this demo
@@ -8,7 +9,7 @@ export interface UserProfile {
 
 export interface Attachment {
   url: string;
-  type: 'image' | 'video' | 'file';
+  type: 'image' | 'video' | 'file' | 'audio';
   name: string;
   size: number;
   mimeType: string;
@@ -53,6 +54,7 @@ export interface SignalingPayload {
 // Changed from enum to const object to ensure runtime availability
 export const CallState = {
   IDLE: 'IDLE',
+  CONNECTING: 'CONNECTING',
   OFFERING: 'OFFERING',
   RECEIVING: 'RECEIVING',
   CONNECTED: 'CONNECTED',

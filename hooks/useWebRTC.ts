@@ -172,6 +172,9 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
       } else if (newPc.connectionState === 'failed' || newPc.connectionState === 'closed') {
         setConnectionError('Connection failed. Please try again.');
+        // Don't auto cleanup on failed immediately in grace period logic, 
+        // but traditionally failed means ICE gave up.
+        // For now we clean up on failed.
         cleanup('connection failed');
       }
     };
@@ -251,8 +254,19 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     console.log('[WebRTC] Received signal:', payload.type, payload);
 
     if (payload.type === 'hangup') {
-      console.log('[WebRTC] Remote hung up');
-      cleanup('remote hangup');
+      console.log('[WebRTC] Remote signal hangup received - entering grace period');
+      
+      // Instead of killing the call immediately, we enter RECONNECTING state.
+      // This allows the peer to "rejoin" if it was a mistake or they refresh, 
+      // or simply provides a softer exit UX.
+      setCallState(CallState.RECONNECTING);
+      
+      // We start a shorter timeout for explicit hangups than for network disconnects
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        cleanup('grace period expired (hangup)');
+      }, 5000); // 5 seconds grace for explicit hangup before actual close, just in case
+      
       return;
     }
 

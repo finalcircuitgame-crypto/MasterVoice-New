@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CallState, UserProfile } from '../types';
 
@@ -108,8 +109,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
         {/* Persistent Audio Element - outside conditional rendering to prevent unmounting */}
         <audio ref={audioRef} autoPlay playsInline controls={false} style={{ display: 'none' }} />
 
-        {/* --- INCOMING / OFFERING STATE (Full Screen Overlay) --- */}
-        {(callState === CallState.OFFERING || callState === CallState.RECEIVING) && (
+        {/* --- INCOMING / OFFERING / CONNECTING STATE (Full Screen Overlay) --- */}
+        {(callState === CallState.OFFERING || callState === CallState.RECEIVING || callState === CallState.CONNECTING) && (
             <div className="fixed inset-0 h-[100dvh] w-screen bg-black/90 flex flex-col items-center justify-center z-[9999] backdrop-blur-md animate-fade-in touch-action-none overflow-hidden">
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150vw] h-[150vw] bg-indigo-600/20 rounded-full blur-[100px] animate-pulse"></div>
@@ -127,12 +128,15 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                             <h3 className="text-3xl font-bold text-white mb-2 tracking-tight">
                             {callState === CallState.OFFERING && 'Calling...'}
                             {callState === CallState.RECEIVING && 'Incoming Call'}
+                            {callState === CallState.CONNECTING && 'Connecting...'}
                             </h3>
                             <p className="text-indigo-300 font-medium animate-pulse text-lg mb-2">
                                 {recipient ? recipient.email : 'Unknown User'}
                             </p>
                             <p className="text-gray-500 font-mono text-xs">
-                                {callState === CallState.OFFERING ? 'Establishing P2P Tunnel...' : 'Secure Audio Request'}
+                                {callState === CallState.OFFERING ? 'Establishing P2P Tunnel...' : 
+                                 callState === CallState.RECEIVING ? 'Secure Audio Request' : 
+                                 'Initializing Secure Channel...'}
                             </p>
                         </div>
                     </div>
@@ -162,7 +166,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                             </>
                         )}
 
-                        {callState === CallState.OFFERING && (
+                        {(callState === CallState.OFFERING || callState === CallState.CONNECTING) && (
                             <button
                                 onClick={onEndCall}
                                 className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
