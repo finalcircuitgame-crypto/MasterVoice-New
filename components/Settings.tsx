@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -8,8 +8,67 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
+  };
+
+  const calculateFileHash = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      
+      const file = e.target.files[0];
+      setUploading(true);
+
+      try {
+          // 1. Smart Detection: Calculate Hash
+          const fileHash = await calculateFileHash(file);
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${fileHash}.${fileExt}`;
+          const filePath = `avatars/${fileName}`;
+
+          // 2. Check if this exact file already exists in public storage
+          // We can try to get the public URL immediately. 
+          const { data: { publicUrl } } = supabase.storage
+              .from('avatars')
+              .getPublicUrl(filePath);
+
+          // We attempt to upload. If it already exists (based on hash), we can just overwrite 
+          // or ideally, if we had a "check exists" API without error, we'd use that.
+          // For now, we perform an upsert. If the content is the same, the hash is the same, so it's efficient.
+          const { error: uploadError } = await supabase.storage
+              .from('avatars')
+              .upload(filePath, file, {
+                  upsert: true 
+              });
+
+          if (uploadError) throw uploadError;
+
+          // 3. Update Profile
+          const { error: updateError } = await supabase
+              .from('profiles')
+              .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+              .eq('id', currentUser.id);
+
+          if (updateError) throw updateError;
+          
+          // Force page reload to reflect changes (simplest way to update App state in this architecture)
+          window.location.reload();
+
+      } catch (error: any) {
+          console.error('Error uploading avatar:', error.message);
+          alert('Failed to update avatar. Please try again.');
+      } finally {
+          setUploading(false);
+      }
   };
 
   return (
@@ -30,16 +89,38 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
          {/* Profile Card */}
          <div className="bg-[#13131a] border border-white/5 rounded-[2rem] p-6 flex flex-col items-center relative overflow-hidden shadow-2xl">
              <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 blur-xl"></div>
-             <div className="relative z-10 -mt-2 mb-4">
-                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative">
-                     {currentUser.email[0].toUpperCase()}
+             
+             {/* Avatar Circle */}
+             <div className="relative z-10 -mt-2 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden">
+                     {currentUser.avatar_url ? (
+                         <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                     ) : (
+                         <span>{currentUser.email[0].toUpperCase()}</span>
+                     )}
+                     
+                     {/* Overlay for upload */}
+                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                     </div>
+
                      {currentUser.is_family && (
-                        <div className="absolute bottom-0 right-0 bg-amber-500 text-white p-1.5 rounded-full border-4 border-[#13131a] shadow-lg">
+                        <div className="absolute bottom-0 right-0 bg-amber-500 text-white p-1.5 rounded-full border-4 border-[#13131a] shadow-lg z-20">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
                         </div>
                      )}
                  </div>
+                 {uploading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full z-30"><div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div></div>}
              </div>
+             
+             <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleAvatarUpload} 
+                accept="image/*" 
+                className="hidden" 
+             />
+
              <h2 className="text-xl font-bold text-white">{currentUser.email}</h2>
              <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.is_family ? 'Family Plan' : 'Free Plan'}</p>
          </div>

@@ -196,6 +196,23 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   const isPenguinUser = (email: string) => email === 'cindygaldamez@yahoo.com';
 
+  const renderAvatar = (user: UserProfile, sizeClasses: string = "w-10 h-10") => {
+      if (user.avatar_url) {
+          return (
+              <img 
+                src={user.avatar_url} 
+                alt={user.email} 
+                className={`${sizeClasses} rounded-full object-cover border border-white/10`} 
+              />
+          );
+      }
+      return (
+        <div className={`${sizeClasses} rounded-full bg-gray-800 flex items-center justify-center text-white text-sm font-bold border border-white/5`}>
+            {user.email[0].toUpperCase()}
+        </div>
+      );
+  };
+
   return (
     <div className="w-full md:w-80 bg-[#060609] md:bg-[#060609]/95 md:backdrop-blur-xl md:border-r border-white/5 flex flex-col h-full font-['Outfit'] relative z-20 shadow-2xl overflow-hidden">
       {/* Current User Header */}
@@ -210,10 +227,10 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         
         <button 
             onClick={onOpenSettings}
-            className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg"
+            className="rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg overflow-hidden"
             aria-label="Settings"
         >
-            {currentUser.email[0].toUpperCase()}
+            {renderAvatar(currentUser, "w-10 h-10")}
         </button>
       </div>
       
@@ -265,9 +282,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                         return (
                             <div key={user.id} className="w-full p-3 flex items-center justify-between rounded-2xl hover:bg-white/5 border border-transparent transition-all group animate-fade-in-up">
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white text-sm font-bold border border-white/5">
-                                        {user.email[0].toUpperCase()}
-                                    </div>
+                                    {renderAvatar(user, "w-10 h-10")}
                                     <div className="min-w-0">
                                         <p className="text-sm font-medium text-gray-200 truncate">{user.email}</p>
                                         <p className="text-[10px] text-gray-500 font-medium">
@@ -322,9 +337,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                     incomingRequests.map(req => (
                         <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 hover:bg-white/10 transition-colors">
                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-full bg-indigo-900/50 border border-indigo-500/30 flex items-center justify-center text-indigo-200 text-xs font-bold shadow-lg shadow-indigo-500/10">
-                                    {req.sender.email[0].toUpperCase()}
-                                </div>
+                                {renderAvatar(req.sender, "w-10 h-10")}
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-200 truncate">{req.sender.email}</p>
                                     <p className="text-[10px] text-gray-500">{new Date(req.created_at).toLocaleDateString()}</p>
@@ -382,11 +395,15 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                         {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
                         
                         <div className="relative shrink-0">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold transition-colors shadow-lg ${
-                                isActive ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/30' : 'bg-gray-800 group-hover:bg-gray-700'
-                            }`}>
-                            {user.email[0].toUpperCase()}
-                            </div>
+                            {user.avatar_url ? (
+                                <img src={user.avatar_url} alt={user.email} className="w-12 h-12 rounded-full object-cover shadow-lg border border-white/5 bg-gray-800" />
+                            ) : (
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold transition-colors shadow-lg ${
+                                    isActive ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/30' : 'bg-gray-800 group-hover:bg-gray-700'
+                                }`}>
+                                    {user.email[0].toUpperCase()}
+                                </div>
+                            )}
                             {isOnline && (
                                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-4 border-[#060609]"></div>
                             )}

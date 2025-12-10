@@ -39,7 +39,8 @@
 create table public.profiles (
   id uuid references auth.users not null primary key,
   email text,
-  updated_at timestamp with time zone
+  updated_at timestamp with time zone,
+  avatar_url text -- NEW: Added for profile pictures
 );
 
 -- Trigger to create profile on signup
@@ -62,7 +63,8 @@ create table public.messages (
   sender_id uuid references public.profiles(id) not null,
   receiver_id uuid references public.profiles(id) not null,
   content text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  attachment jsonb
 );
 
 -- Create friend_requests table
@@ -88,6 +90,10 @@ alter table public.friend_requests enable row level security;
 create policy "Public profiles are viewable by everyone."
   on profiles for select
   using ( true );
+  
+create policy "Users can update own profile."
+  on profiles for update
+  using ( auth.uid() = id );
 
 -- Policy: Users can insert their own messages
 create policy "Users can insert their own messages."
@@ -115,6 +121,36 @@ create policy "Users can update their own requests."
 create policy "Users can delete their own requests."
   on friend_requests for delete
   using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+
+-- ==========================================
+-- STORAGE & ATTACHMENTS SETUP
+-- ==========================================
+
+-- 1. Create the storage bucket 'attachments'
+insert into storage.buckets (id, name, public)
+values ('attachments', 'attachments', true);
+
+-- 2. Create the storage bucket 'avatars'
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true);
+
+-- 3. Policy: Allow authenticated users to upload files
+create policy "Authenticated users can upload attachments"
+on storage.objects for insert
+with check ( bucket_id = 'attachments' and auth.role() = 'authenticated' );
+
+create policy "Authenticated users can upload avatars"
+on storage.objects for insert
+with check ( bucket_id = 'avatars' and auth.role() = 'authenticated' );
+
+-- 4. Policy: Allow anyone to view files (since bucket is public)
+create policy "Public can view attachments"
+on storage.objects for select
+using ( bucket_id = 'attachments' );
+
+create policy "Public can view avatars"
+on storage.objects for select
+using ( bucket_id = 'avatars' );
 ```
 
 ---

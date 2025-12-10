@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { CallState } from '../types';
+import { CallState, UserProfile } from '../types';
 
 interface VoiceCallOverlayProps {
   callState: CallState;
@@ -9,6 +8,7 @@ interface VoiceCallOverlayProps {
   onAnswer?: () => void;
   toggleMute?: () => void;
   isMuted?: boolean;
+  recipient?: UserProfile;
 }
 
 export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
@@ -17,7 +17,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   onEndCall,
   onAnswer,
   toggleMute,
-  isMuted
+  isMuted,
+  recipient
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
@@ -97,12 +98,16 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                     <div className="flex items-center space-x-3 min-w-0">
                         <div className="relative shrink-0">
                             <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse absolute -top-0.5 -right-0.5 border-2 border-gray-800 z-10"></div>
-                            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                            </div>
+                            {recipient?.avatar_url ? (
+                                <img src={recipient.avatar_url} className="w-9 h-9 rounded-full object-cover shadow-lg border border-white/10" />
+                            ) : (
+                                <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                                </div>
+                            )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-white text-sm font-bold leading-none mb-0.5 truncate">Connected</span>
+                            <span className="text-white text-sm font-bold leading-none mb-0.5 truncate">{recipient ? recipient.email.split('@')[0] : 'Connected'}</span>
                             <div className="flex items-center gap-1.5">
                                 <span className="text-[10px] text-indigo-300 font-mono bg-indigo-500/10 px-1 rounded">{formatTime(duration)}</span>
                             </div>
@@ -154,10 +159,14 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             <div className="mb-8 relative">
                 <div className="absolute inset-0 rounded-full border-4 border-indigo-500 animate-ping opacity-30"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-indigo-500 animate-pulse delay-75"></div>
-                <div className="w-32 h-32 md:w-40 md:h-40 bg-gray-800 rounded-full flex items-center justify-center relative z-10 border-4 border-gray-700 shadow-2xl">
-                    <svg className="w-12 h-12 md:w-16 md:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                <div className="w-32 h-32 md:w-40 md:h-40 bg-gray-800 rounded-full flex items-center justify-center relative z-10 border-4 border-gray-700 shadow-2xl overflow-hidden">
+                    {recipient?.avatar_url ? (
+                        <img src={recipient.avatar_url} className="w-full h-full object-cover" />
+                    ) : (
+                        <svg className="w-12 h-12 md:w-16 md:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    )}
                 </div>
             </div>
             
@@ -166,8 +175,11 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                 {callState === CallState.OFFERING && 'Calling...'}
                 {callState === CallState.RECEIVING && 'Incoming Call'}
                 </h3>
-                <p className="text-indigo-300 font-medium animate-pulse text-lg">
-                    {callState === CallState.OFFERING ? 'Waiting for answer...' : 'Secure Audio Request'}
+                <p className="text-indigo-300 font-medium animate-pulse text-lg mb-2">
+                    {recipient ? recipient.email : 'Unknown User'}
+                </p>
+                <p className="text-gray-500 font-mono text-xs">
+                    {callState === CallState.OFFERING ? 'Establishing P2P Tunnel...' : 'Secure Audio Request'}
                 </p>
             </div>
         </div>

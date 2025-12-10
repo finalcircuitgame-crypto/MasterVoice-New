@@ -3,6 +3,15 @@ export interface UserProfile {
   email: string; // Using email as username for simplicity in this demo
   updated_at?: string;
   is_family?: boolean; // New feature flag
+  avatar_url?: string | null;
+}
+
+export interface Attachment {
+  url: string;
+  type: 'image' | 'video' | 'file';
+  name: string;
+  size: number;
+  mimeType: string;
 }
 
 export interface Message {
@@ -12,6 +21,7 @@ export interface Message {
   content: string;
   created_at: string;
   status?: 'sending' | 'sent' | 'error';
+  attachment?: Attachment | null;
 }
 
 export interface FriendRequest {
