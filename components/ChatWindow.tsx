@@ -8,7 +8,8 @@ interface ChatWindowProps {
     recipient: UserProfile;
     onlineUsers: Set<string>;
     // Props from App.tsx
-    channel: ReturnType<typeof supabase.channel> | null;
+    // channel prop removed as it is no longer used for signaling here
+    channel: any | null; // Kept as optional/any to prevent breaking if passed, but logic ignored
     callState: CallState;
     onStartCall: () => void;
     onAnswerCall: () => void;
@@ -270,7 +271,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     currentUser,
     recipient,
     onlineUsers,
-    channel,
     callState,
     onStartCall,
     onEndCall,
@@ -430,7 +430,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         setNewMessage(e.target.value);
-        channel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } });
+        // channel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } }); // Old channel removed
         chatChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } });
     };
 

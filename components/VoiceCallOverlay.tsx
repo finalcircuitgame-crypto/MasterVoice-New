@@ -9,6 +9,7 @@ interface VoiceCallOverlayProps {
   toggleMute?: () => void;
   isMuted?: boolean;
   recipient?: UserProfile;
+  rtcStats?: any;
 }
 
 export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
@@ -18,11 +19,14 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   onAnswer,
   toggleMute,
   isMuted,
-  recipient
+  recipient,
+  rtcStats
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (audioRef.current && remoteStream) {
@@ -55,6 +59,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
       }, 1000);
     } else {
       setDuration(0);
+      setIsMaximized(false);
+      setShowDebug(false);
     }
     return () => clearInterval(interval);
   }, [callState]);
@@ -73,19 +79,112 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const renderAvatar = (size: 'small' | 'large') => {
+      const sizeClasses = size === 'large' ? 'w-32 h-32 md:w-40 md:h-40' : 'w-9 h-9';
+      const iconSize = size === 'large' ? 'w-12 h-12 md:w-16 md:h-16' : 'w-4 h-4';
+      
+      if (recipient?.avatar_url) {
+          return <img src={recipient.avatar_url} className={`${sizeClasses} rounded-full object-cover shadow-lg border border-white/10`} />;
+      }
+      return (
+        <div className={`${sizeClasses} bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/10`}>
+            {size === 'large' ? (
+                <svg className={iconSize} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            ) : (
+                <svg className={iconSize} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+            )}
+        </div>
+      );
+  };
+
   if (callState === CallState.IDLE) return null;
 
-  // --- CONNECTED STATE (Compact/Floating Mode) ---
+  // --- CONNECTED STATE (Handling both Compact and Maximized) ---
   if (callState === CallState.CONNECTED) {
+    if (isMaximized) {
+        // FULLSCREEN CONNECTED VIEW
+        return (
+            <div className="fixed inset-0 h-[100dvh] w-screen bg-[#080808] flex flex-col items-center z-[9999] animate-fade-in overflow-hidden">
+                {/* Header */}
+                <div className="w-full flex justify-between items-center p-6 pt-safe-top z-20">
+                    <button onClick={() => setIsMaximized(false)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    <div className="flex flex-col items-center">
+                        <span className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div> 
+                             Encrypted P2P
+                        </span>
+                    </div>
+                    <button onClick={() => setShowDebug(!showDebug)} className={`p-2 rounded-full transition ${showDebug ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                    </button>
+                </div>
+
+                {/* Main Content */}
+                <div className="flex-1 w-full flex flex-col items-center justify-center relative">
+                    {/* Background Waves */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30">
+                         <div className="w-[300px] h-[300px] border border-indigo-500/30 rounded-full animate-ping" style={{ animationDuration: '3s' }}></div>
+                         <div className="absolute w-[400px] h-[400px] border border-indigo-500/20 rounded-full animate-ping" style={{ animationDuration: '3s', animationDelay: '1s' }}></div>
+                    </div>
+
+                    <div className="relative z-10 mb-8">
+                        {renderAvatar('large')}
+                    </div>
+                    <h2 className="text-3xl font-bold text-white mb-2">{recipient ? recipient.email.split('@')[0] : 'Unknown'}</h2>
+                    <p className="text-indigo-300 text-xl font-mono">{formatTime(duration)}</p>
+
+                    {/* Debug Stats Overlay */}
+                    {showDebug && rtcStats && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl p-4 w-64 text-xs font-mono text-green-400 shadow-2xl animate-fade-in-up z-30">
+                            <div className="flex justify-between mb-1"><span>RTT:</span> <span>{rtcStats.rtt} ms</span></div>
+                            <div className="flex justify-between mb-1"><span>Jitter:</span> <span>{rtcStats.jitter} ms</span></div>
+                            <div className="flex justify-between mb-1"><span>Loss:</span> <span>{rtcStats.packetsLost} pkts</span></div>
+                            <div className="flex justify-between mb-1"><span>Sent:</span> <span>{(rtcStats.bytesSent / 1024).toFixed(0)} KB</span></div>
+                            <div className="flex justify-between mb-1"><span>Recv:</span> <span>{(rtcStats.bytesReceived / 1024).toFixed(0)} KB</span></div>
+                            <div className="flex justify-between border-t border-white/10 pt-1 mt-1 text-gray-400"><span>Codec:</span> <span className="uppercase">{rtcStats.codec}</span></div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Bottom Controls (Mobile Optimized) */}
+                <div className="w-full bg-[#111] p-8 pb-safe-bottom rounded-t-[2.5rem] border-t border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex items-center justify-evenly">
+                    <button 
+                        onClick={toggleMute}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-2xl transition-all w-20 ${isMuted ? 'bg-white text-black' : 'bg-[#222] text-white hover:bg-[#333]'}`}
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMuted ? "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" : "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"} /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMuted ? "M3 3l18 18" : ""} /></svg>
+                        <span className="text-[10px] font-bold uppercase">{isMuted ? 'Unmute' : 'Mute'}</span>
+                    </button>
+
+                    <button 
+                        onClick={onEndCall}
+                        className="p-6 bg-red-500 hover:bg-red-600 rounded-full text-white shadow-xl shadow-red-500/20 active:scale-95 transition-transform"
+                    >
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+
+                    <button 
+                         onClick={() => setIsMaximized(false)}
+                         className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-[#222] text-white hover:bg-[#333] transition-all w-20"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        <span className="text-[10px] font-bold uppercase">Minimize</span>
+                    </button>
+                </div>
+
+                {/* Hidden Audio */}
+                <audio ref={audioRef} autoPlay playsInline controls={false} style={{ display: 'none' }} />
+            </div>
+        );
+    }
+
+    // COMPACT / FLOATING MODE
     return (
         <div className="fixed top-0 left-0 right-0 h-[100dvh] w-screen pointer-events-none z-[9999] flex flex-col items-center justify-start pt-safe-top">
-            {/* 
-                Mobile: mt-20 to clear the chat header.
-                Desktop: mt-6.
-            */}
             <div className="mt-20 md:mt-6 w-[95%] max-w-md pointer-events-auto animate-slide-up space-y-2">
                 
-                {/* Autoplay Blocker Warning */}
                 {autoplayBlocked && (
                     <button 
                         onClick={handleManualPlay}
@@ -96,17 +195,14 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                     </button>
                 )}
 
-                <div className="bg-gray-800/95 backdrop-blur-xl border border-gray-600 rounded-full shadow-2xl p-2 px-4 flex items-center justify-between">
+                <div 
+                    onClick={() => setIsMaximized(true)}
+                    className="bg-gray-800/95 backdrop-blur-xl border border-gray-600 rounded-full shadow-2xl p-2 px-4 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
+                >
                     <div className="flex items-center space-x-3 min-w-0">
                         <div className="relative shrink-0">
                             <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse absolute -top-0.5 -right-0.5 border-2 border-gray-800 z-10"></div>
-                            {recipient?.avatar_url ? (
-                                <img src={recipient.avatar_url} className="w-9 h-9 rounded-full object-cover shadow-lg border border-white/10" />
-                            ) : (
-                                <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                                </div>
-                            )}
+                            {renderAvatar('small')}
                         </div>
                         <div className="flex flex-col min-w-0">
                             <span className="text-white text-sm font-bold leading-none mb-0.5 truncate">{recipient ? recipient.email.split('@')[0] : 'Connected'}</span>
@@ -118,9 +214,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
 
                     <div className="flex items-center space-x-2 shrink-0">
                         <button
-                            onClick={toggleMute}
+                            onClick={(e) => { e.stopPropagation(); toggleMute && toggleMute(); }}
                             className={`p-2.5 rounded-full transition-all duration-200 ${isMuted ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600 hover:text-white'}`}
-                            title={isMuted ? "Unmute" : "Mute"}
                         >
                             {isMuted ? (
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" /></svg>
@@ -130,9 +225,8 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                         </button>
 
                         <button
-                            onClick={onEndCall}
+                            onClick={(e) => { e.stopPropagation(); onEndCall(); }}
                             className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all duration-200 shadow-lg shadow-red-500/20 active:scale-95"
-                            title="End Call"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
@@ -140,21 +234,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                 </div>
             </div>
             
-            {/* Audio Element with style hack to prevent display:none optimization issues */}
-            <audio 
-                ref={audioRef} 
-                autoPlay 
-                playsInline 
-                controls={false}
-                style={{ 
-                    position: 'absolute', 
-                    width: '1px', 
-                    height: '1px', 
-                    opacity: 0.01, 
-                    pointerEvents: 'none',
-                    zIndex: -1
-                }} 
-            />
+            <audio ref={audioRef} autoPlay playsInline controls={false} style={{ display: 'none' }} />
         </div>
     );
   }
@@ -174,15 +254,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             <div className="mb-8 relative">
                 <div className="absolute inset-0 rounded-full border-4 border-indigo-500 animate-ping opacity-30"></div>
                 <div className="absolute inset-0 rounded-full border-4 border-indigo-500 animate-pulse delay-75"></div>
-                <div className="w-32 h-32 md:w-40 md:h-40 bg-gray-800 rounded-full flex items-center justify-center relative z-10 border-4 border-gray-700 shadow-2xl overflow-hidden">
-                    {recipient?.avatar_url ? (
-                        <img src={recipient.avatar_url} className="w-full h-full object-cover" />
-                    ) : (
-                        <svg className="w-12 h-12 md:w-16 md:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                    )}
-                </div>
+                {renderAvatar('large')}
             </div>
             
             <div className="text-center mb-8">
@@ -238,21 +310,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             )}
         </div>
         
-        {/* Hidden audio element for consistency in all states */}
-        <audio 
-            ref={audioRef} 
-            autoPlay 
-            playsInline 
-            controls={false}
-            style={{ 
-                position: 'absolute', 
-                width: '1px', 
-                height: '1px', 
-                opacity: 0.01, 
-                pointerEvents: 'none',
-                zIndex: -1
-            }} 
-        />
+        <audio ref={audioRef} autoPlay playsInline controls={false} style={{ display: 'none' }} />
       </div>
     </div>
   );

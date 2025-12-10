@@ -20,10 +20,6 @@ const App: React.FC = () => {
   const [showFamilyNotification, setShowFamilyNotification] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
-  // Hoisted Channel State
-  const [channel, setChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
   // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
   
@@ -37,8 +33,11 @@ const App: React.FC = () => {
   }, []);
 
   // --- HOISTED WEBRTC LOGIC ---
-  // We initialize useWebRTC here so it persists when opening Settings (which is just an overlay)
-  // It effectively stays alive as long as App is mounted and we have a user.
+  // Calculate Room ID for P2P signaling
+  const roomId = (currentUser && selectedUser) 
+    ? [currentUser.id, selectedUser.id].sort().join('_') 
+    : null;
+
   const { 
     callState, 
     remoteStream, 
@@ -46,63 +45,18 @@ const App: React.FC = () => {
     endCall, 
     answerCall, 
     toggleMute, 
-    isMuted 
-  } = useWebRTC(channel, currentUser?.id || '');
+    isMuted,
+    rtcStats
+  } = useWebRTC(roomId, currentUser?.id || '');
 
   // Auto-End Call if leaving the authenticated app area (e.g. going to Landing Page)
   useEffect(() => {
     if (callState !== CallState.IDLE) {
-        // If path is public (landing, login, etc), kill the call
         if (['/', '/login', '/register'].includes(path)) {
             endCall();
         }
     }
   }, [path, callState, endCall]);
-
-  // --- CHANNEL MANAGEMENT ---
-  // We create the channel in App.tsx so it can be shared by ChatWindow (messages) and useWebRTC (calls)
-  useEffect(() => {
-    if (!currentUser || !selectedUser) {
-        if (channelRef.current) {
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
-            setChannel(null);
-        }
-        return;
-    }
-
-    const roomId = [currentUser.id, selectedUser.id].sort().join('_');
-    
-    // Only recreate if room changed
-    if (channelRef.current && channelRef.current.topic === `realtime:room:${roomId}`) {
-        return;
-    }
-
-    if (channelRef.current) supabase.removeChannel(channelRef.current);
-
-    console.log(`[App] Joining Room: ${roomId}`);
-    const newChannel = supabase.channel(`room:${roomId}`, {
-        config: { broadcast: { self: false } },
-    });
-    
-    // We subscribe here, but ChatWindow will attach its own listeners to this instance
-    newChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-            setChannel(newChannel);
-        }
-    });
-
-    channelRef.current = newChannel;
-
-    return () => {
-        // Cleanup on unmount or user switch
-        if (channelRef.current) {
-             // Don't remove immediately if just switching views, but here we switch users
-             supabase.removeChannel(channelRef.current);
-        }
-    };
-  }, [currentUser?.id, selectedUser?.id]);
-
 
   // Presence logic
   useEffect(() => {
@@ -202,7 +156,6 @@ const App: React.FC = () => {
           setSelectedUser(null);
           setOnlineUsers(new Set());
           hasWelcomedRef.current = false; // Reset welcome ref on logout
-          setChannel(null); // Clear channel
           
           // If on protected route, kick to login
           if (['/conversations', '/settings'].includes(window.location.pathname)) {
@@ -221,7 +174,6 @@ const App: React.FC = () => {
     const userIdParam = query.get('userId');
     
     if (userIdParam) {
-        // If the URL has a userId, and it's different from currently selected, fetch and select it
         if (!selectedUser || selectedUser.id !== userIdParam) {
             const fetchUser = async () => {
                 const { data, error } = await supabase.from('profiles').select('*').eq('id', userIdParam).single();
@@ -232,12 +184,11 @@ const App: React.FC = () => {
             fetchUser();
         }
     } else {
-        // If URL has no userId (e.g. user pressed Back), clear selection
         if (selectedUser) {
             setSelectedUser(null);
         }
     }
-  }, [query, currentUser, selectedUser]); // Re-run when URL changes
+  }, [query, currentUser, selectedUser]);
 
   // Check for trial params
   useEffect(() => {
@@ -257,12 +208,9 @@ const App: React.FC = () => {
       navigate('/settings');
   };
 
-  // Determine if we should show the main chat interface
-  // We show it for /conversations OR /settings (as background)
   const isSettingsOpen = path === '/settings';
   const showChatInterface = (path === '/conversations' || isSettingsOpen) && session && currentUser;
 
-  // Simple Router Switch for Non-Chat Pages
   const renderPublicView = () => {
       switch (path) {
           case '/login':
@@ -292,7 +240,7 @@ const App: React.FC = () => {
           case '/':
               return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;
           default:
-              if (showChatInterface) return null; // handled by main app render
+              if (showChatInterface) return null; 
               return <NotFoundPage onBack={() => navigate('/')} />;
       }
   };
@@ -301,11 +249,10 @@ const App: React.FC = () => {
       return renderPublicView();
   }
 
-  // --- Main App Render (Conversations + Settings Overlay) ---
   return (
     <div className="relative h-screen w-screen bg-[#030014] overflow-hidden">
         
-        {/* Main Chat Interface (Always mounted if authenticated) */}
+        {/* Main Chat Interface */}
         <div className={`absolute inset-0 flex transition-all duration-500 ease-in-out ${isSettingsOpen ? 'scale-[0.98] opacity-30 pointer-events-none blur-sm' : 'opacity-100 scale-100'}`}>
             
               {/* Notifications Layer */}
@@ -332,7 +279,7 @@ const App: React.FC = () => {
                   )}
               </div>
 
-              {/* Chat List Column - Explicitly Unmount on Mobile if Chat is Selected */}
+              {/* Chat List Column */}
               {(!isMobile || !selectedUser) && (
                   <div className={`flex-none w-full md:w-80 h-full ${selectedUser ? 'hidden md:block' : 'block'}`}>
                     <ChatList 
@@ -370,8 +317,8 @@ const App: React.FC = () => {
                             currentUser={currentUser!} 
                             recipient={selectedUser} 
                             onlineUsers={onlineUsers}
-                            // Pass hoisted channel and Call props
-                            channel={channel}
+                            // Call props hoisted from useWebRTC
+                            channel={null} // Signaling is now internal to App/useWebRTC, not passed down
                             callState={callState}
                             onStartCall={startCall}
                             onAnswerCall={answerCall}
@@ -381,10 +328,8 @@ const App: React.FC = () => {
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-[#030014] relative overflow-hidden">
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
-                        
                         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
                         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-[100px] pointer-events-none"></div>
-
                         <div className="w-24 h-24 bg-gradient-to-tr from-indigo-500/20 to-fuchsia-500/20 rounded-[2rem] flex items-center justify-center mb-6 animate-float relative z-10 border border-white/5 shadow-2xl backdrop-blur-sm">
                             <svg className="w-10 h-10 text-indigo-400 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -406,8 +351,7 @@ const App: React.FC = () => {
              </div>
         )}
 
-        {/* Voice Call Overlay - Rendered Globally at Root */}
-        {/* Pass props hoisted from useWebRTC */}
+        {/* Voice Call Overlay */}
         <VoiceCallOverlay 
             callState={callState} 
             remoteStream={remoteStream} 
@@ -416,6 +360,7 @@ const App: React.FC = () => {
             toggleMute={toggleMute}
             isMuted={isMuted}
             recipient={selectedUser || undefined}
+            rtcStats={rtcStats}
         />
     </div>
   );
