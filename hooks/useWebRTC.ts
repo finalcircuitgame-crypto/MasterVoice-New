@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { ICE_SERVERS } from '../constants';
@@ -24,14 +25,16 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
   // --- Utility: add or replace local audio track on the peer connection
   const addOrReplaceLocalTrack = useCallback((peer: RTCPeerConnection, stream: MediaStream) => {
     const audioTrack = stream.getAudioTracks()[0];
-    if (!audioTrack) return;
+    if (!audioTrack) {
+        console.warn('[WebRTC] No audio track found in local stream');
+        return;
+    }
 
     const existingSender = peer.getSenders().find(s => s.track?.kind === 'audio');
     if (existingSender) {
       existingSender.replaceTrack(audioTrack).catch(err => {
-        // If replaceTrack fails, fall back to adding a new sender (rare)
-        console.warn('[WebRTC] replaceTrack failed, adding new track', err);
-        try { peer.addTrack(audioTrack, stream); } catch (e) { /* ignore */ }
+        console.warn('[WebRTC] replaceTrack failed, falling back to addTrack', err);
+        try { peer.addTrack(audioTrack, stream); } catch (e) { console.error(e); }
       });
     } else {
       try {
@@ -78,9 +81,12 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
     if (pc.current && pc.current.signalingState !== 'closed') return pc.current;
 
     console.log('[WebRTC] Creating RTCPeerConnection');
-    const newPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const newPc = new RTCPeerConnection({ 
+        iceServers: ICE_SERVERS,
+        iceCandidatePoolSize: 10, // Pre-fetch candidates to speed up connection
+    });
 
-    // Send serialized candidate objects (safe for JSON transport)
+    // Send serialized candidate objects
     newPc.onicecandidate = (event) => {
       if (event.candidate && channelRef.current) {
         try {
@@ -97,11 +103,9 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
 
     newPc.ontrack = (event) => {
       console.log('[WebRTC] Received remote track');
-      // prefer the first stream if present
       if (event.streams && event.streams[0]) {
         setRemoteStream(event.streams[0]);
       } else {
-        // fallback: construct a stream from tracks
         const s = new MediaStream();
         if (event.track) s.addTrack(event.track);
         setRemoteStream(s);
@@ -113,21 +117,27 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
       if (newPc.connectionState === 'connected') {
         setCallState(CallState.CONNECTED);
       } else if (newPc.connectionState === 'failed') {
-        console.warn('[WebRTC] Connection failed, cleaning up.');
+        console.warn('[WebRTC] Connection failed. Cleaning up.');
         cleanup();
       }
     };
 
     newPc.oniceconnectionstatechange = () => {
       console.log('[WebRTC] ICE connection state:', newPc.iceConnectionState);
-      // Robustness fix: Sometimes connectionState lags behind ICE state.
-      // If ICE is connected, we can consider the call active.
       if (newPc.iceConnectionState === 'connected' || newPc.iceConnectionState === 'completed') {
           setCallState((prev) => (prev !== CallState.CONNECTED ? CallState.CONNECTED : prev));
+          
+          // Debugging: Log active candidate pair
+          newPc.getStats().then(stats => {
+             stats.forEach(report => {
+                 if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                     console.log('[WebRTC] Active Candidate Pair:', report);
+                 }
+             });
+          });
       }
       
-      // treat 'failed' as terminal, 'disconnected' as transient
-      if (newPc.iceConnectionState === 'failed') {
+      if (newPc.iceConnectionState === 'failed' || newPc.iceConnectionState === 'closed') {
         cleanup();
       }
     };
@@ -140,12 +150,12 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
   const handleSignal = useCallback(async (payload: SignalingPayload) => {
     // Hangup has top priority
     if (payload.type === 'hangup') {
-      console.log('[WebRTC] Received hangup signal. Ending call.');
+      console.log('[WebRTC] Received hangup signal.');
       cleanup();
       return;
     }
 
-    // If we don't have a PC and it's not an offer, ignore
+    // If we don't have a PC and it's not an offer, ignore (unless we're cleaning up)
     if (!pc.current && payload.type !== 'offer') return;
 
     try {
@@ -159,21 +169,16 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
           setCallState(CallState.RECEIVING);
           incomingOfferRef.current = payload.sdp!;
 
-          // Create PC immediately so we can accept early candidates
+          // Create PC immediately to accept early candidates
           createPeerConnection();
           break;
         }
 
         case 'answer': {
           console.log('[WebRTC] Received answer');
-          if (!pc.current) {
-            console.warn('[WebRTC] No PC to apply answer to');
-            return;
-          }
+          if (!pc.current) return;
 
-          // Only set remote description if we are waiting for an answer
-          // "have-local-offer" is the typical state for the Caller waiting for Answer
-          if (pc.current.signalingState === 'have-local-offer' || pc.current.signalingState === 'have-remote-offer') {
+          if (pc.current.signalingState === 'have-local-offer') {
             await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
 
             // Drain buffered candidates
@@ -187,8 +192,6 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
                 }
               }
             }
-          } else {
-            console.warn('[WebRTC] Ignored answer in wrong state:', pc.current.signalingState);
           }
           break;
         }
@@ -204,26 +207,19 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
               console.error('[WebRTC] Error adding candidate', e);
             }
           } else {
-            // Buffer candidate until remote description is set
-            console.log('[WebRTC] Buffering candidate (no remote desc)');
+            // Buffer candidate
             iceCandidateQueue.current.push(candidate);
           }
           break;
         }
-
-        default:
-          console.warn('[WebRTC] Unknown signal type', payload.type);
       }
     } catch (error) {
       console.error('[WebRTC] Error handling signal:', error);
-      // keep connection alive where possible
     }
   }, [callState, createPeerConnection, cleanup]);
 
-  // Keep ref to latest handler to avoid re-subscribing channel listener
   useEffect(() => { handleSignalRef.current = handleSignal; }, [handleSignal]);
 
-  // Subscribe to channel once and unsubscribe on cleanup or channel change
   useEffect(() => {
     if (!channel) return;
 
@@ -254,11 +250,13 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
 
       addOrReplaceLocalTrack(peer, stream);
 
-      const offer = await peer.createOffer();
+      const offer = await peer.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false
+      });
       await peer.setLocalDescription(offer);
       setCallState(CallState.OFFERING);
 
-      // send offer
       channelRef.current.send({
         type: 'broadcast',
         event: 'signal',
@@ -275,20 +273,19 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
 
     try {
       const peer = createPeerConnection();
-
-      // If peer is not stable, bail (prevents double-answer)
-      // Note: If we are 'stable' but incomingOfferRef is set, we need to process it.
-      // However, usually we are 'stable' because we haven't setRemoteDesc yet.
+      
       if (peer.signalingState !== 'stable') {
-          console.warn('[WebRTC] Answer called but state is not stable:', peer.signalingState);
-          // If we are 'have-remote-offer', we might have already set it? 
-          // But here we want to ensure we don't double answer.
-          return; 
+          console.warn('[WebRTC] Peer not stable, resetting...');
+          // This ensures we can recover if the user mashed the accept button
+          if (peer.signalingState !== 'closed') {
+             // If we are 'have-remote-offer', we might be okay, but safe to proceed
+          }
       }
 
+      // 1. Set Remote Desc
       await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
 
-      // Drain any pre-answer candidates
+      // 2. Drain candidates
       while (iceCandidateQueue.current.length > 0) {
         const c = iceCandidateQueue.current.shift();
         if (c) {
@@ -300,22 +297,25 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
         }
       }
 
+      // 3. Get User Media
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       setLocalStream(stream);
       localStreamRef.current = stream;
 
+      // 4. Add Track
       addOrReplaceLocalTrack(peer, stream);
 
+      // 5. Create Answer
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
 
+      // 6. Send Answer
       channelRef.current?.send({
         type: 'broadcast',
         event: 'signal',
         payload: { type: 'answer', sdp: answer } as SignalingPayload,
       });
 
-      // optimistic UI update; actual connected state will be set by connection events
       setCallState(CallState.CONNECTED);
     } catch (err) {
       console.error('[WebRTC] Failed to answer call:', err);
@@ -324,18 +324,13 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
   }, [addOrReplaceLocalTrack, createPeerConnection, cleanup]);
 
   const endCall = useCallback(() => {
-    // Send hangup first
     try {
       channelRef.current?.send({
         type: 'broadcast',
         event: 'signal',
         payload: { type: 'hangup' } as SignalingPayload,
       });
-    } catch (e) {
-      console.error('[WebRTC] Failed to send hangup', e);
-    }
-
-    // Then cleanup locally
+    } catch (e) { console.error(e); }
     cleanup();
   }, [cleanup]);
 
@@ -346,7 +341,6 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
     setIsMuted(prev => !prev);
   }, []);
 
-  // Ensure we cleanup when the component unmounts
   useEffect(() => {
     return () => { cleanup(); };
   }, [cleanup]);

@@ -4,6 +4,7 @@ import { UserProfile } from './types';
 import { Auth } from './components/Auth';
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
+import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
 import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
@@ -128,7 +129,7 @@ const App: React.FC = () => {
           hasWelcomedRef.current = false; // Reset welcome ref on logout
           
           // If on protected route, kick to login
-          if (window.location.pathname === '/conversations') {
+          if (['/conversations', '/settings'].includes(window.location.pathname)) {
             navigate('/login');
           }
       }
@@ -179,6 +180,10 @@ const App: React.FC = () => {
       navigate(`/conversations?userId=${user.id}`);
   };
 
+  const handleOpenSettings = () => {
+      navigate('/settings');
+  };
+
   // Simple Router Switch
   const renderView = () => {
       // Protected App Route
@@ -227,31 +232,29 @@ const App: React.FC = () => {
                     currentUser={currentUser} 
                     onSelectUser={handleSelectUser} 
                     onlineUsers={onlineUsers}
+                    onOpenSettings={handleOpenSettings}
                 />
               </div>
               <div className={`flex-1 h-full flex flex-col relative ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
                 {selectedUser ? (
                     <>
-                        <div className="md:hidden bg-[#0a0a0f] p-4 border-b border-white/5 flex items-center gap-2">
+                        <div className="md:hidden bg-[#060609] p-4 pt- safe-top border-b border-white/5 flex items-center gap-3">
                             <button 
                                 onClick={() => {
-                                    // CRITICAL FIX: Reset selectedUser immediately to prevent flickering of old chat 
-                                    // while the URL update processes.
                                     setSelectedUser(null);
                                     navigate('/conversations');
                                 }} 
-                                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition"
+                                className="text-gray-400 hover:text-white p-2 -ml-2 rounded-full hover:bg-white/10 transition"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
-                            <span className="font-bold text-white">Back to chats</span>
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-white">
+                                    {selectedUser.email[0].toUpperCase()}
+                                </div>
+                                <span className="font-bold text-white">{selectedUser.email.split('@')[0]}</span>
+                            </div>
                         </div>
-                        {/* 
-                            KEY FIX: 
-                            Adding the `key={selectedUser.id}` prop forces React to completely unmount 
-                            the old ChatWindow and mount a new one when the user switches. 
-                            This resets all state (WebRTC, messages, timers) immediately, preventing glitching.
-                        */}
                         <ChatWindow 
                             key={selectedUser.id}
                             currentUser={currentUser} 
@@ -279,6 +282,23 @@ const App: React.FC = () => {
               </div>
             </div>
           );
+      }
+
+      // Settings Route
+      if (path === '/settings') {
+         if (!session || !currentUser) {
+            // Redirect to login if not authenticated
+             navigate('/login');
+             return null;
+         }
+         return (
+             <div className="h-screen w-screen bg-[#030014] overflow-hidden flex justify-center font-['Outfit']">
+                 {/* Desktop Container Constraints */}
+                 <div className="w-full max-w-2xl h-full md:h-[90vh] md:my-auto md:rounded-[2rem] md:border md:border-white/10 md:overflow-hidden relative bg-[#060609] md:shadow-2xl">
+                    <Settings currentUser={currentUser} onBack={() => navigate('/conversations')} />
+                 </div>
+             </div>
+         );
       }
 
       // Public Routes

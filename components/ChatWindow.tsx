@@ -70,7 +70,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 )}
 
                 <div className="flex flex-col">
-                    <div className={`relative px-5 py-3 shadow-sm transition-all duration-300 backdrop-blur-md ${
+                    <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md ${
                         isMe 
                         ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10' 
                         : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
@@ -268,13 +268,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#030014] relative">
+    <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
       {/* Background & Effects */}
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
       
-      {/* Header */}
-      <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
+      {/* Header - Hidden on Mobile in favor of App wrapper header, shown on Desktop */}
+      <div className="hidden md:flex px-6 py-4 justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
         <div className="flex items-center space-x-4">
             <div className="relative">
                 <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
@@ -331,9 +331,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             </button>
         </div>
       </div>
+      
+      {/* Mobile Only Header Actions (If needed, typically inside App.tsx wrapper for mobile) */}
+      <div className="md:hidden absolute top-4 right-4 z-30">
+           <button
+              onClick={startCall}
+              disabled={callState !== CallState.IDLE}
+              className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${
+                  callState === CallState.IDLE 
+                  ? 'bg-white/10 text-white border border-white/10 backdrop-blur-md' 
+                  : 'bg-gray-800/80 text-gray-500'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </button>
+      </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 relative z-10 scroll-smooth space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 relative z-10 scroll-smooth space-y-2 no-scrollbar">
         {loading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
                 <div className="relative w-10 h-10">
@@ -345,7 +362,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         ) : (
             <>
                 <div className="flex justify-center mb-8 mt-4">
-                    <span className="text-[10px] text-gray-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/5 tracking-wider uppercase">
+                    <span className="text-[10px] text-gray-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/5 tracking-wider uppercase backdrop-blur-md">
                         End-to-End Encrypted Conversation
                     </span>
                 </div>
@@ -378,7 +395,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       </div>
 
       {/* Floating Input Area */}
-      <div className="p-4 md:p-6 pt-2 relative z-20">
+      <div className="p-4 md:p-6 pt-2 relative z-20 pb-safe">
         <div className="max-w-4xl mx-auto relative">
             {editingId && (
                 <div className="absolute bottom-full left-0 right-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
@@ -390,7 +407,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                 </div>
             )}
             
-            <form onSubmit={(e) => handleSendMessage(e)} className="group flex items-center gap-3 bg-[#13131a]/80 backdrop-blur-md border border-white/10 p-2 pr-3 pl-4 rounded-[1.8rem] shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20">
+            <form onSubmit={(e) => handleSendMessage(e)} className="group flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20">
               <button type="button" className="text-gray-500 hover:text-indigo-400 transition p-1">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
               </button>
@@ -408,7 +425,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
               <button
                 type="submit"
                 disabled={!newMessage.trim()}
-                className={`p-2.5 rounded-full text-white font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center ${
+                className={`p-2.5 rounded-full text-white font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0 ${
                     newMessage.trim() 
                     ? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:shadow-indigo-500/25 transform hover:-translate-y-0.5' 
                     : 'bg-gray-800 text-gray-500 cursor-not-allowed'
