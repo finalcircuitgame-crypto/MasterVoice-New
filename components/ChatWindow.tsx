@@ -109,6 +109,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<any>(null);
 
+  // Call Terms State
+  const [showCallTerms, setShowCallTerms] = useState(false);
+  const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
+
   const roomId = [currentUser.id, recipient.id].sort().join('_');
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [channel, setChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
@@ -199,6 +203,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   }, [messages, isTyping]);
 
   const { callState, remoteStream, startCall, endCall, answerCall, toggleMute, isMuted } = useWebRTC(channel, currentUser.id);
+
+  const handleStartCallClick = () => {
+      if (hasAcceptedTerms.current) {
+          startCall();
+      } else {
+          setShowCallTerms(true);
+      }
+  };
+
+  const handleAcceptTerms = () => {
+      localStorage.setItem('mv_call_terms_accepted', 'true');
+      hasAcceptedTerms.current = true;
+      setShowCallTerms(false);
+      startCall();
+  };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
       setNewMessage(e.target.value);
@@ -316,7 +335,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             )}
             
             <button
-              onClick={startCall}
+              onClick={handleStartCallClick}
               disabled={callState !== CallState.IDLE}
               className={`p-2.5 rounded-full transition-all duration-300 shadow-lg group ${
                   callState === CallState.IDLE 
@@ -335,7 +354,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       {/* Mobile Only Header Actions (If needed, typically inside App.tsx wrapper for mobile) */}
       <div className="md:hidden absolute top-4 right-4 z-30">
            <button
-              onClick={startCall}
+              onClick={handleStartCallClick}
               disabled={callState !== CallState.IDLE}
               className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${
                   callState === CallState.IDLE 
@@ -449,6 +468,55 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         toggleMute={toggleMute}
         isMuted={isMuted}
       />
+
+        {/* Call Terms Modal */}
+        {showCallTerms && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+                <div className="bg-[#13131a] border border-white/10 rounded-[2rem] p-8 max-w-sm w-full shadow-2xl relative overflow-hidden animate-slide-up">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-fuchsia-500"></div>
+                    
+                    <div className="mb-6 flex flex-col items-center text-center">
+                        <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4 border border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                            <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-2">Voice Call Terms</h3>
+                        <p className="text-gray-400 text-sm leading-relaxed">
+                            MasterVoice uses direct <span className="text-white font-medium">Peer-to-Peer</span> technology for encryption and speed. 
+                        </p>
+                    </div>
+
+                    <div className="space-y-4 mb-8">
+                         <div className="flex gap-3 items-start">
+                             <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-0.5">
+                                 <span className="text-xs text-indigo-400 font-bold">1</span>
+                             </div>
+                             <p className="text-xs text-gray-300 leading-snug"><strong className="text-white">IP Exposure:</strong> To connect directly, your IP address is visible to the recipient. No central server sits in the middle.</p>
+                         </div>
+                         <div className="flex gap-3 items-start">
+                             <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-0.5">
+                                 <span className="text-xs text-fuchsia-400 font-bold">2</span>
+                             </div>
+                             <p className="text-xs text-gray-300 leading-snug"><strong className="text-white">Permissions:</strong> Microphone access is required. We do not record or store your audio.</p>
+                         </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={handleAcceptTerms}
+                            className="w-full py-3.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg active:scale-95"
+                        >
+                            Accept & Start Call
+                        </button>
+                        <button 
+                            onClick={() => setShowCallTerms(false)}
+                            className="w-full py-3.5 text-gray-500 font-medium hover:text-white transition-colors text-sm"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
