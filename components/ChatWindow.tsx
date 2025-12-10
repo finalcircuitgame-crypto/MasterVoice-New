@@ -54,6 +54,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showReactions, setShowReactions] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const actionsMenuRef = useRef<HTMLDivElement>(null);
     
     // Check if message was recently edited
     const isRecentlyEdited = msg.updated_at && msg.created_at && 
@@ -69,7 +70,13 @@ const MessageItem: React.FC<MessageItemProps> = ({
     // Click Outside Handler
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            // Close if clicking outside container AND outside the popup menu itself
+            // (Though menu is usually inside container, we check strictly)
+            if (
+                containerRef.current && 
+                !containerRef.current.contains(event.target as Node) &&
+                (!actionsMenuRef.current || !actionsMenuRef.current.contains(event.target as Node))
+            ) {
                 setShowActions(false);
                 setShowReactions(false);
             }
@@ -81,6 +88,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
     const handleToggleActions = (e: React.MouseEvent) => {
         e.preventDefault(); 
+        e.stopPropagation();
         setShowActions(!showActions);
     };
 
@@ -122,71 +130,9 @@ const MessageItem: React.FC<MessageItemProps> = ({
     return (
         <div 
             ref={containerRef}
-            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter group relative px-2`}
+            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2`}
         >
-             {/* Action Menu (Popped out) */}
-             {showActions && !isSending && !isError && (
-                <div 
-                    className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in top-1/2 -translate-y-1/2 ${isMe ? 'right-full mr-2' : 'left-full ml-2'}`}
-                    onClick={(e) => e.stopPropagation()} // Prevent bubble toggle
-                >
-                    {/* Reaction Button */}
-                    <div className="relative">
-                        <button 
-                            onClick={() => setShowReactions(!showReactions)}
-                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-indigo-400 transition"
-                            title="React"
-                        >
-                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </button>
-                        {showReactions && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex bg-[#2a2a30] border border-white/20 rounded-full p-1 shadow-xl z-50 min-w-max">
-                                {COMMON_REACTIONS.map(emoji => (
-                                    <button 
-                                        key={emoji}
-                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
-                                        className={`p-2 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <button 
-                        onClick={() => { onReply(msg); setShowActions(false); }}
-                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
-                        title="Reply"
-                    >
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                    </button>
-
-                    {isMe && !msg.attachment && (
-                        <button 
-                            onClick={() => { onEdit(msg); setShowActions(false); }}
-                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
-                            title="Edit"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                        </button>
-                    )}
-
-                    {isMe && (
-                        <button 
-                            onClick={() => { onDelete(msg.id); setShowActions(false); }}
-                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-red-500 transition"
-                            title="Delete"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                    )}
-                </div>
-            )}
-
-            <div 
-                className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}
-            >
+            <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     {/* Avatar for Recipient */}
                     {!isMe && (
@@ -199,10 +145,73 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         </div>
                     )}
 
+                    {/* Message Bubble Wrapper - Relative for Action Menu Positioning */}
                     <div 
-                        className="flex flex-col min-w-0 cursor-pointer"
+                        className="flex flex-col min-w-0 cursor-pointer relative group"
                         onClick={handleToggleActions} 
                     >
+                         {/* Action Menu (Positioned Relative to Bubble) */}
+                         {showActions && !isSending && !isError && (
+                            <div 
+                                ref={actionsMenuRef}
+                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in top-0 ${isMe ? 'right-full mr-3' : 'left-full ml-3'}`}
+                                onClick={(e) => e.stopPropagation()} // Prevent bubble toggle
+                                style={{ minWidth: 'max-content' }}
+                            >
+                                {/* Reaction Button */}
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setShowReactions(!showReactions)}
+                                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-indigo-400 transition"
+                                        title="React"
+                                    >
+                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </button>
+                                    {showReactions && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex bg-[#2a2a30] border border-white/20 rounded-full p-1 shadow-xl z-50 min-w-max">
+                                            {COMMON_REACTIONS.map(emoji => (
+                                                <button 
+                                                    key={emoji}
+                                                    onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
+                                                    className={`p-2 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button 
+                                    onClick={() => { onReply(msg); setShowActions(false); }}
+                                    className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
+                                    title="Reply"
+                                >
+                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                </button>
+
+                                {isMe && !msg.attachment && (
+                                    <button 
+                                        onClick={() => { onEdit(msg); setShowActions(false); }}
+                                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
+                                        title="Edit"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                    </button>
+                                )}
+
+                                {isMe && (
+                                    <button 
+                                        onClick={() => { onDelete(msg.id); setShowActions(false); }}
+                                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-red-500 transition"
+                                        title="Delete"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         {/* Reply Context */}
                         {msg.reply_to && (
                             <div className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 ${isMe ? 'ml-auto' : ''}`}>
@@ -220,8 +229,6 @@ const MessageItem: React.FC<MessageItemProps> = ({
                             {renderAttachment()}
                             
                             {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px] select-text pointer-events-none">{msg.content}</p>}
-                            {/* NOTE: select-text combined with pointer-events-none on paragraph allows tap on container to fire, but selection is harder on mobile. 
-                                Trade-off for reliable interaction menu. */}
                             
                             <div className={`flex items-center justify-between mt-1.5 gap-3 select-none ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
                                 <div className="flex items-center gap-1.5">
