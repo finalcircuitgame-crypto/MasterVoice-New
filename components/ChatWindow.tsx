@@ -15,11 +15,16 @@ interface MessageItemProps {
     msg: Message;
     isMe: boolean;
     recipient: UserProfile;
+    currentUser: UserProfile;
     onEdit: (msg: Message) => void;
     onDelete: (id: string) => void;
     onRetry: (msg: Message) => void;
+    onReply: (msg: Message) => void;
+    onReaction: (msg: Message, emoji: string) => void;
     isFamily?: boolean;
 }
+
+const COMMON_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 
 const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -33,18 +38,29 @@ const MessageItem: React.FC<MessageItemProps> = ({
     msg, 
     isMe, 
     recipient,
+    currentUser,
     onEdit, 
     onDelete,
     onRetry,
+    onReply,
+    onReaction,
     isFamily
 }) => {
     const [isHovered, setIsHovered] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [showReactions, setShowReactions] = useState(false);
     
-    // Check if message was recently edited
-    const isRecentlyEdited = msg.created_at !== (msg as any).updated_at && (msg as any).updated_at;
+    // Check if message was recently edited (compare string timestamps safely)
+    const isRecentlyEdited = msg.updated_at && msg.created_at && 
+        new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000; // 1s buffer
+        
     const isSending = msg.status === 'sending';
     const isError = msg.status === 'error';
+
+    // Helper to check if current user reacted
+    const hasReacted = (emoji: string) => {
+        return msg.reactions?.[emoji]?.includes(currentUser.id);
+    };
 
     const renderAttachment = () => {
         if (!msg.attachment) return null;
@@ -100,65 +116,130 @@ const MessageItem: React.FC<MessageItemProps> = ({
         <div 
             className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter group relative px-2`}
             onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            onMouseLeave={() => { setIsHovered(false); setShowReactions(false); }}
         >
              {/* Action Buttons */}
-             {isMe && isHovered && !isSending && !isError && (
-                <div className="flex items-center space-x-1 mr-2 animate-fade-in absolute right-full top-1/2 -translate-y-1/2 px-2 z-10">
-                    {!msg.attachment && (
+             {isHovered && !isSending && !isError && (
+                <div className={`flex items-center space-x-1 animate-fade-in absolute top-1/2 -translate-y-1/2 px-2 z-20 ${isMe ? 'right-full mr-2' : 'left-full ml-2'}`}>
+                    
+                    {/* Reaction Trigger */}
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowReactions(!showReactions)}
+                            className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                        >
+                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </button>
+                        {showReactions && (
+                            <div className={`absolute bottom-full mb-2 ${isMe ? 'right-0' : 'left-0'} flex bg-[#1a1a20] border border-white/10 rounded-full p-1 shadow-xl z-30 animate-scale-in`}>
+                                {COMMON_REACTIONS.map(emoji => (
+                                    <button 
+                                        key={emoji}
+                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); }}
+                                        className={`p-1.5 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <button 
+                        onClick={() => onReply(msg)}
+                        className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                    >
+                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                    </button>
+
+                    {isMe && !msg.attachment && (
                         <button 
                             onClick={() => onEdit(msg)}
                             className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </button>
                     )}
-                    <button 
-                        onClick={() => onDelete(msg.id)}
-                        className="p-1.5 bg-gray-800/80 hover:bg-red-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
-                    >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    {isMe && (
+                        <button 
+                            onClick={() => onDelete(msg.id)}
+                            className="p-1.5 bg-gray-800/80 hover:bg-red-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    )}
                 </div>
             )}
 
-            <div className={`flex items-end gap-3 max-w-[85%] md:max-w-[70%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 
-                {/* Avatar for Recipient */}
-                {!isMe && (
-                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden">
-                        {recipient.avatar_url ? (
-                            <img src={recipient.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                            recipient.email[0].toUpperCase()
-                        )}
-                    </div>
-                )}
-
-                <div className="flex flex-col min-w-0">
-                    <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md ${
-                        isMe 
-                        ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10' 
-                        : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
-                    } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-red-500/50 bg-red-900/10' : ''}`}>
-                        
-                        {renderAttachment()}
-                        
-                        {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
-                        
-                        <div className={`flex items-center justify-between mt-1.5 gap-3 select-none ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
-                            <div className="flex items-center gap-1.5">
-                                <p className="text-[10px] font-medium">
-                                    {isSending ? 'Sending...' : isError ? 'Failed' : new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </p>
-                            </div>
-                            {isRecentlyEdited && <span className="text-[9px] opacity-70 italic">edited</span>}
+                <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {/* Avatar for Recipient */}
+                    {!isMe && (
+                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden">
+                            {recipient.avatar_url ? (
+                                <img src={recipient.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : (
+                                recipient.email[0].toUpperCase()
+                            )}
                         </div>
+                    )}
+
+                    <div className="flex flex-col min-w-0">
+                        {/* Reply Context */}
+                        {msg.reply_to && (
+                            <div className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 ${isMe ? 'ml-auto' : ''}`}>
+                                <span className="font-bold text-indigo-400">{msg.reply_to.sender_id === currentUser.id ? 'You' : (recipient.id === msg.reply_to.sender_id ? recipient.email : 'Unknown')}</span>
+                                <span className="truncate max-w-[150px]">{msg.reply_to.attachment ? '[Attachment]' : msg.reply_to.content}</span>
+                            </div>
+                        )}
+
+                        <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md ${
+                            isMe 
+                            ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10' 
+                            : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
+                        } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-red-500/50 bg-red-900/10' : ''}`}>
+                            
+                            {renderAttachment()}
+                            
+                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
+                            
+                            <div className={`flex items-center justify-between mt-1.5 gap-3 select-none ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
+                                <div className="flex items-center gap-1.5">
+                                    <p className="text-[10px] font-medium">
+                                        {isSending ? 'Sending...' : isError ? 'Failed' : new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </p>
+                                </div>
+                                {isRecentlyEdited && <span className="text-[9px] opacity-70 italic">edited</span>}
+                            </div>
+                        </div>
+                        
+                        {/* Reactions Display */}
+                        {msg.reactions && Object.keys(msg.reactions).some(k => msg.reactions![k].length > 0) && (
+                            <div className={`flex gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                {Object.entries(msg.reactions).map(([emoji, users]) => (
+                                    users.length > 0 && (
+                                        <button 
+                                            key={emoji}
+                                            onClick={() => onReaction(msg, emoji)}
+                                            className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 transition ${
+                                                hasReacted(emoji) 
+                                                ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' 
+                                                : 'bg-gray-800/50 border-white/5 text-gray-400 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            <span>{emoji}</span>
+                                            <span className="font-bold">{users.length}</span>
+                                        </button>
+                                    )
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {isError && (
-                    <button onClick={() => onRetry(msg)} className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0" title="Retry">
+                    <button onClick={() => onRetry(msg)} className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0 self-end" title="Retry">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
                 )}
@@ -171,6 +252,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [familyModeEnabled, setFamilyModeEnabled] = useState(true); 
@@ -207,9 +289,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         { event: '*', schema: 'public', table: 'messages' },
         (payload) => {
             const { eventType, new: newRecord, old: oldRecord } = payload;
+            
+            // Check relevance
             const record = (newRecord || oldRecord) as any;
             if (!record) return;
-            
             const isRelevant = 
                 (record.sender_id === currentUser.id && record.receiver_id === recipient.id) ||
                 (record.sender_id === recipient.id && record.receiver_id === currentUser.id);
@@ -218,6 +301,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             if (eventType === 'INSERT') {
                 setMessages((prev) => {
                     if (prev.find(m => m.id === newRecord.id)) return prev;
+                    // Note: Realtime doesn't fetch relation data, so reply_to will be null initially unless we refetch or patch it.
+                    // For now, we render without the reply snippet for incoming real-time messages to keep it simple,
+                    // or we could fetch the reply parent if needed.
                     return [...prev, { ...newRecord, status: 'sent' } as Message];
                 });
                 if (record.sender_id === recipient.id) {
@@ -225,7 +311,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
                 }
             } else if (eventType === 'UPDATE') {
-                setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...(newRecord as Message), status: 'sent' } : m));
+                setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...m, ...newRecord, status: 'sent', reply_to: m.reply_to } : m));
             } else if (eventType === 'DELETE') {
                 setMessages((prev) => prev.filter(m => m.id !== oldRecord.id));
             }
@@ -252,16 +338,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   useEffect(() => {
     const fetchMessages = async () => {
       setLoading(true);
+      // Fetch messages AND joined reply_to parent message
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+            *,
+            reply_to:reply_to_id(id, content, sender_id, attachment)
+        `)
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
         .or(`sender_id.eq.${recipient.id},receiver_id.eq.${recipient.id}`)
         .order('created_at', { ascending: true });
 
       if (!error && data) {
+        // Double check filtering (RLS handles this but good for safety if RLS is open)
         const conversation = data.filter(
-            (m: Message) => 
+            (m: any) => 
             (m.sender_id === currentUser.id && m.receiver_id === recipient.id) ||
             (m.sender_id === recipient.id && m.receiver_id === currentUser.id)
         );
@@ -274,7 +365,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, replyingTo]);
 
   const { callState, remoteStream, startCall, endCall, answerCall, toggleMute, isMuted } = useWebRTC(channel, currentUser.id);
 
@@ -331,17 +422,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   const handleSendMessage = async (e?: React.FormEvent, retryMsg?: Message) => {
     if (e) e.preventDefault();
     const content = retryMsg ? retryMsg.content : newMessage;
-    const fileToSend = selectedFile; // Capture in closure
+    const fileToSend = selectedFile;
     
     // Allow sending if there is text OR a file
     if (!content.trim() && !fileToSend && !retryMsg) return;
 
     if (editingId && !retryMsg) {
-        // Edit flow (no file upload support in edit mode for this demo)
+        // Edit flow
         const idToUpdate = editingId;
-        setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, content, status: 'sending' } : m));
+        setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, content, status: 'sending', updated_at: new Date().toISOString() } : m));
         setNewMessage('');
         setEditingId(null);
+        setReplyingTo(null);
 
         const { error } = await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', idToUpdate);
         if (error) setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, status: 'error' } : m));
@@ -355,7 +447,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         const optimisticMsg: any = { 
             sender_id: currentUser.id, 
             receiver_id: recipient.id, 
-            content: content 
+            content: content,
+            reply_to_id: replyingTo ? replyingTo.id : null,
+            reply_to: replyingTo // Optimistic UI only
         };
 
         if (fileToSend) {
@@ -374,6 +468,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             setMessages((prev) => [...prev, { ...optimisticMsg, id: tempId, created_at: new Date().toISOString(), status: 'sending' }]);
             setNewMessage('');
             setSelectedFile(null);
+            setReplyingTo(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
         } else {
              setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m));
@@ -414,13 +509,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
         // Insert into DB
         const finalMsg = { ...optimisticMsg, attachment: attachmentData };
-        // Fallback for content if only sending file (assuming DB permits empty string, otherwise use a placeholder)
+        // Remove virtual props before insert
+        delete finalMsg.reply_to; 
+        
         if (!finalMsg.content) finalMsg.content = ""; 
 
         const { data, error } = await supabase.from('messages').insert(finalMsg).select().single();
         if (error) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
-        else if (data) setMessages((prev) => prev.map(m => m.id === tempId ? { ...data, status: 'sent' } : m));
+        else if (data) setMessages((prev) => prev.map(m => m.id === tempId ? { ...data, status: 'sent', reply_to: optimisticMsg.reply_to } : m));
     }
+  };
+
+  const handleReaction = async (msg: Message, emoji: string) => {
+      const currentReactions = msg.reactions || {};
+      const userIds = currentReactions[emoji] || [];
+      const hasReacted = userIds.includes(currentUser.id);
+      
+      let newReactions = { ...currentReactions };
+      if (hasReacted) {
+          newReactions[emoji] = userIds.filter(id => id !== currentUser.id);
+          if (newReactions[emoji].length === 0) delete newReactions[emoji];
+      } else {
+          newReactions[emoji] = [...userIds, currentUser.id];
+      }
+
+      // Optimistic Update
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, reactions: newReactions } : m));
+
+      const { error } = await supabase
+        .from('messages')
+        .update({ reactions: newReactions })
+        .eq('id', msg.id);
+        
+      if (error) {
+          console.error("Failed to add reaction", error);
+          // Revert if needed (omitted for brevity)
+      }
   };
 
   const handleEdit = (msg: Message) => {
@@ -430,6 +554,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       }
       setNewMessage(msg.content);
       setEditingId(msg.id);
+      setReplyingTo(null); // Cancel reply if editing
+      document.getElementById('chat-input')?.focus();
+  };
+
+  const handleReply = (msg: Message) => {
+      setReplyingTo(msg);
+      setEditingId(null); // Cancel edit if replying
       document.getElementById('chat-input')?.focus();
   };
 
@@ -549,9 +680,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                         msg={msg} 
                         isMe={Boolean(currentUser && currentUser.id && msg.sender_id === currentUser.id)}
                         recipient={recipient}
+                        currentUser={currentUser}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onRetry={(m) => handleSendMessage(undefined, m)}
+                        onReply={handleReply}
+                        onReaction={handleReaction}
                         isFamily={currentUser.is_family}
                     />
                 ))}
@@ -596,6 +730,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                 </div>
             )}
 
+            {/* Editing Indicator */}
             {editingId && (
                 <div className="absolute bottom-full left-0 right-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
                     <div className="flex items-center gap-2">
@@ -603,6 +738,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                         <span className="font-semibold">Editing message</span>
                     </div>
                     <button onClick={() => { setNewMessage(''); setEditingId(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition">Cancel</button>
+                </div>
+            )}
+
+            {/* Replying Indicator */}
+            {replyingTo && (
+                <div className="absolute bottom-full left-0 right-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
+                    <div className="flex items-center gap-2 max-w-[80%]">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                        <span className="font-semibold shrink-0">Replying to:</span>
+                        <span className="truncate text-gray-400">{replyingTo.content || '[Attachment]'}</span>
+                    </div>
+                    <button onClick={() => { setReplyingTo(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition shrink-0">Cancel</button>
                 </div>
             )}
             
@@ -626,7 +773,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                 id="chat-input"
                 type="text"
                 className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 font-medium text-[15px]"
-                placeholder={editingId ? "Update your message..." : "Message..."}
+                placeholder={editingId ? "Update your message..." : replyingTo ? "Type your reply..." : "Message..."}
                 value={newMessage}
                 onChange={handleInput}
                 autoComplete="off"

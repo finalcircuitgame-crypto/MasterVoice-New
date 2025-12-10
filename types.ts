@@ -20,8 +20,17 @@ export interface Message {
   receiver_id: string;
   content: string;
   created_at: string;
+  updated_at?: string; // Important for edit detection
   status?: 'sending' | 'sent' | 'error';
   attachment?: Attachment | null;
+  reactions?: Record<string, string[]>; // { "👍": ["userId1", "userId2"] }
+  reply_to_id?: string | null;
+  reply_to?: {
+    id: string;
+    content: string;
+    sender_id: string;
+    attachment?: Attachment | null;
+  } | null;
 }
 
 export interface FriendRequest {

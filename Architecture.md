@@ -34,13 +34,47 @@
 
 ## 2. SQL Schema (Run in Supabase SQL Editor)
 
+**CRITICAL: Run these commands to fix errors and enable new features:**
+
+```sql
+-- 1. Add missing columns for Avatars, Reactions, and Replies
+alter table public.profiles 
+add column if not exists avatar_url text;
+
+alter table public.messages 
+add column if not exists reactions jsonb default '{}'::jsonb;
+
+alter table public.messages 
+add column if not exists reply_to_id uuid references public.messages(id);
+
+-- 2. Add Updated_At trigger for messages (for edit detection)
+alter table public.messages 
+add column if not exists updated_at timestamp with time zone default timezone('utc'::text, now());
+
+-- (Optional) Create function to auto-update updated_at
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+    new.updated_at = now();
+    return new;
+end;
+$$ language 'plpgsql';
+
+create trigger update_messages_updated_at
+    before update on public.messages
+    for each row
+    execute procedure update_updated_at_column();
+```
+
+### Full Schema (Reference)
+
 ```sql
 -- Create a table for public profiles (linked to auth.users)
 create table public.profiles (
   id uuid references auth.users not null primary key,
   email text,
   updated_at timestamp with time zone,
-  avatar_url text -- NEW: Added for profile pictures
+  avatar_url text
 );
 
 -- Trigger to create profile on signup
@@ -64,7 +98,10 @@ create table public.messages (
   receiver_id uuid references public.profiles(id) not null,
   content text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  attachment jsonb
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  attachment jsonb,
+  reactions jsonb default '{}'::jsonb,
+  reply_to_id uuid references public.messages(id)
 );
 
 -- Create friend_requests table
@@ -104,6 +141,16 @@ create policy "Users can insert their own messages."
 create policy "Users can view their own messages."
   on messages for select
   using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+
+-- Policy: Users can update their own messages (for edits/reactions)
+create policy "Users can update their own messages or reaction targets."
+  on messages for update
+  using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+  
+-- Policy: Users can delete their own messages
+create policy "Users can delete their own messages."
+  on messages for delete
+  using ( auth.uid() = sender_id );
 
 -- Policy: Friend Requests
 create policy "Users can view their own requests."
@@ -152,40 +199,3 @@ create policy "Public can view avatars"
 on storage.objects for select
 using ( bucket_id = 'avatars' );
 ```
-
----
-
-## 3. Environment Variables
-
-Create a `.env` file in your root (or configure in your deployment platform):
-
-```env
-# Get these from Supabase Dashboard -> Project Settings -> API
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-**Deployment Notes:**
-1.  **Vercel/Netlify**: Add the Env Vars in the project settings.
-2.  **Build Command**: `npm run build`
-3.  **Output Dir**: `dist` or `build`
-
----
-
-## 4. Debugging & Testing
-
-**Manual Repro Steps:**
-1.  Open the app in **Incognito Window A** (User 1) and **Incognito Window B** (User 2).
-2.  Sign up both users.
-3.  User 1 selects User 2 from the Sidebar.
-4.  Send a text message. Verify it appears instantly on both screens.
-5.  User 1 clicks the **Phone Icon** (Top Right).
-6.  **Check Console**: Look for `[WebRTC] Creating RTCPeerConnection`, `[WebRTC] Sending ICE candidate`.
-7.  User 2 (needs to be in the chat with User 1 currently) should see "Incoming Call..." overlay (technically auto-answers in this simplified demo code, or shows "Receiving" then connects).
-8.  Verify audio is flowing (feedback loop if on same machine).
-
-**Debugging Checklist:**
-*   **Signaling fails?** Check Supabase Realtime inspector in dashboard. Ensure `room:ID` matches on both clients.
-*   **ICE connection fails?** Check `chrome://webrtc-internals`. Ensure `turn:openrelay.metered.ca` is being used in the candidate pairs.
-*   **Audio missing?** Ensure browser permissions were granted. Check `audioRef.current.srcObject` is set.
-*   **"Auth session missing"?** Check if `SUPABASE_URL` is set correctly.
