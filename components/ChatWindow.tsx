@@ -150,11 +150,11 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         className="flex flex-col min-w-0 cursor-pointer relative group"
                         onClick={handleToggleActions} 
                     >
-                         {/* Action Menu (Positioned Relative to Bubble) */}
+                         {/* Action Menu (Positioned ABOVE Bubble) */}
                          {showActions && !isSending && !isError && (
                             <div 
                                 ref={actionsMenuRef}
-                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in top-0 ${isMe ? 'right-full mr-3' : 'left-full ml-3'}`}
+                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in -top-12 ${isMe ? 'right-0' : 'left-0'}`}
                                 onClick={(e) => e.stopPropagation()} // Prevent bubble toggle
                                 style={{ minWidth: 'max-content' }}
                             >
