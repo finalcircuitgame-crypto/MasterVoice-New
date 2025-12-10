@@ -36,23 +36,33 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
           const filePath = `avatars/${fileName}`;
 
           // 2. Check if this exact file already exists in public storage
-          // We can try to get the public URL immediately. 
           const { data: { publicUrl } } = supabase.storage
               .from('avatars')
               .getPublicUrl(filePath);
 
-          // We attempt to upload. If it already exists (based on hash), we can just overwrite 
-          // or ideally, if we had a "check exists" API without error, we'd use that.
-          // For now, we perform an upsert. If the content is the same, the hash is the same, so it's efficient.
+          // 3. Attempt Upload with upsert: FALSE
+          // We do NOT want to overwrite if it exists (deduplication).
+          // If it exists, Supabase throws an error. We catch it and ignore it if it's a duplicate.
           const { error: uploadError } = await supabase.storage
               .from('avatars')
               .upload(filePath, file, {
-                  upsert: true 
+                  upsert: false // CRITICAL: Do not try to overwrite files owned by others
               });
 
-          if (uploadError) throw uploadError;
+          if (uploadError) {
+              // If the error is because it exists, that's GOOD! We use the existing one.
+              // Error message varies, usually "The resource already exists" or RLS violation if owned by someone else.
+              const isExisting = uploadError.message.includes('already exists') || 
+                                 uploadError.message.includes('violates row-level security') ||
+                                 (uploadError as any).statusCode === '409'; // Conflict
 
-          // 3. Update Profile
+              if (!isExisting) {
+                  throw uploadError;
+              }
+              console.log("Smart Upload: Image hash exists, linking to existing file.");
+          }
+
+          // 4. Update Profile with the URL (whether we just uploaded it or it was already there)
           const { error: updateError } = await supabase
               .from('profiles')
               .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
@@ -60,12 +70,12 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
 
           if (updateError) throw updateError;
           
-          // Force page reload to reflect changes (simplest way to update App state in this architecture)
+          // Force page reload to reflect changes
           window.location.reload();
 
       } catch (error: any) {
           console.error('Error uploading avatar:', error.message);
-          alert('Failed to update avatar. Please try again.');
+          alert('Failed to update avatar. ' + error.message);
       } finally {
           setUploading(false);
       }

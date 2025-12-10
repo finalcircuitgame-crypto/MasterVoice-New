@@ -46,10 +46,23 @@ const MessageItem: React.FC<MessageItemProps> = ({
     onReaction,
     isFamily
 }) => {
-    const [isHovered, setIsHovered] = useState(false);
+    const [showActions, setShowActions] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showReactions, setShowReactions] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
     
+    // Close actions when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setShowActions(false);
+                setShowReactions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     // Check if message was recently edited (compare string timestamps safely)
     const isRecentlyEdited = msg.updated_at && msg.created_at && 
         new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000; // 1s buffer
@@ -84,6 +97,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="absolute inset-0 bg-black/50 opacity-0 group-hover/image:opacity-100 transition-opacity flex items-center justify-center text-white"
+                        onClick={(e) => e.stopPropagation()} // Prevent bubble click
                     >
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     </a>
@@ -97,6 +111,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 target="_blank" 
                 rel="noopener noreferrer"
                 className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors ${isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-black/20 hover:bg-black/30'} border border-white/10`}
+                onClick={(e) => e.stopPropagation()}
             >
                 <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-indigo-400 shrink-0">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -114,29 +129,30 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
     return (
         <div 
+            ref={containerRef}
             className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter group relative px-2`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => { setIsHovered(false); setShowReactions(false); }}
+            onMouseEnter={() => setShowActions(true)}
+            onMouseLeave={() => { if (!showReactions) setShowActions(false); }}
         >
              {/* Action Buttons */}
-             {isHovered && !isSending && !isError && (
+             {showActions && !isSending && !isError && (
                 <div className={`flex items-center space-x-1 animate-fade-in absolute top-1/2 -translate-y-1/2 px-2 z-20 ${isMe ? 'right-full mr-2' : 'left-full ml-2'}`}>
                     
                     {/* Reaction Trigger */}
                     <div className="relative">
                         <button 
-                            onClick={() => setShowReactions(!showReactions)}
-                            className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                            onClick={(e) => { e.stopPropagation(); setShowReactions(!showReactions); }}
+                            className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
                         >
                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </button>
                         {showReactions && (
-                            <div className={`absolute bottom-full mb-2 ${isMe ? 'right-0' : 'left-0'} flex bg-[#1a1a20] border border-white/10 rounded-full p-1 shadow-xl z-30 animate-scale-in`}>
+                            <div className={`absolute bottom-full mb-2 ${isMe ? 'right-0' : 'left-0'} flex bg-[#1a1a20] border border-white/10 rounded-full p-1 shadow-xl z-30 animate-scale-in min-w-max`}>
                                 {COMMON_REACTIONS.map(emoji => (
                                     <button 
                                         key={emoji}
-                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); }}
-                                        className={`p-1.5 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
+                                        onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); }}
+                                        className={`p-2 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
                                     >
                                         {emoji}
                                     </button>
@@ -146,24 +162,28 @@ const MessageItem: React.FC<MessageItemProps> = ({
                     </div>
 
                     <button 
-                        onClick={() => onReply(msg)}
-                        className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                        onClick={(e) => { e.stopPropagation(); onReply(msg); }}
+                        className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                        title="Reply"
                     >
                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                     </button>
 
+                    {/* Only show Edit/Delete if it's MY message */}
                     {isMe && !msg.attachment && (
                         <button 
-                            onClick={() => onEdit(msg)}
-                            className="p-1.5 bg-gray-800/80 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                            onClick={(e) => { e.stopPropagation(); onEdit(msg); }}
+                            className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                            title="Edit"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </button>
                     )}
                     {isMe && (
                         <button 
-                            onClick={() => onDelete(msg.id)}
-                            className="p-1.5 bg-gray-800/80 hover:bg-red-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/5"
+                            onClick={(e) => { e.stopPropagation(); onDelete(msg.id); }}
+                            className="p-1.5 bg-gray-800/90 hover:bg-red-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                            title="Delete"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
@@ -171,8 +191,10 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
             )}
 
-            <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                
+            <div 
+                className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}
+                onClick={() => setShowActions(!showActions)} // Tap message to toggle menu
+            >
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     {/* Avatar for Recipient */}
                     {!isMe && (
@@ -185,7 +207,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         </div>
                     )}
 
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 cursor-pointer">
                         {/* Reply Context */}
                         {msg.reply_to && (
                             <div className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 ${isMe ? 'ml-auto' : ''}`}>
@@ -221,7 +243,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                                     users.length > 0 && (
                                         <button 
                                             key={emoji}
-                                            onClick={() => onReaction(msg, emoji)}
+                                            onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); }}
                                             className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 transition ${
                                                 hasReacted(emoji) 
                                                 ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' 
@@ -301,9 +323,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             if (eventType === 'INSERT') {
                 setMessages((prev) => {
                     if (prev.find(m => m.id === newRecord.id)) return prev;
-                    // Note: Realtime doesn't fetch relation data, so reply_to will be null initially unless we refetch or patch it.
-                    // For now, we render without the reply snippet for incoming real-time messages to keep it simple,
-                    // or we could fetch the reply parent if needed.
                     return [...prev, { ...newRecord, status: 'sent' } as Message];
                 });
                 if (record.sender_id === recipient.id) {
