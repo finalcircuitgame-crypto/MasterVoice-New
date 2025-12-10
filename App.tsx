@@ -233,7 +233,15 @@ const App: React.FC = () => {
                 {selectedUser ? (
                     <>
                         <div className="md:hidden bg-[#0a0a0f] p-4 border-b border-white/5 flex items-center gap-2">
-                            <button onClick={() => navigate('/conversations')} className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition">
+                            <button 
+                                onClick={() => {
+                                    // CRITICAL FIX: Reset selectedUser immediately to prevent flickering of old chat 
+                                    // while the URL update processes.
+                                    setSelectedUser(null);
+                                    navigate('/conversations');
+                                }} 
+                                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition"
+                            >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             </button>
                             <span className="font-bold text-white">Back to chats</span>
