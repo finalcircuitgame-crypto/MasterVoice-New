@@ -111,6 +111,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   // Call Terms State
   const [showCallTerms, setShowCallTerms] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'start' | 'answer' | null>(null);
   const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
 
   const roomId = [currentUser.id, recipient.id].sort().join('_');
@@ -204,10 +205,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   const { callState, remoteStream, startCall, endCall, answerCall, toggleMute, isMuted } = useWebRTC(channel, currentUser.id);
 
+  // If call disconnects while terms modal is open for answering, close it
+  useEffect(() => {
+      if (pendingAction === 'answer' && callState === CallState.IDLE) {
+          setShowCallTerms(false);
+          setPendingAction(null);
+      }
+  }, [callState, pendingAction]);
+
   const handleStartCallClick = () => {
       if (hasAcceptedTerms.current) {
           startCall();
       } else {
+          setPendingAction('start');
+          setShowCallTerms(true);
+      }
+  };
+
+  const handleAnswerCallClick = () => {
+      if (hasAcceptedTerms.current) {
+          answerCall();
+      } else {
+          setPendingAction('answer');
           setShowCallTerms(true);
       }
   };
@@ -216,7 +235,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       localStorage.setItem('mv_call_terms_accepted', 'true');
       hasAcceptedTerms.current = true;
       setShowCallTerms(false);
-      startCall();
+      
+      if (pendingAction === 'start') {
+          startCall();
+      } else if (pendingAction === 'answer') {
+          answerCall();
+      }
+      setPendingAction(null);
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -464,7 +489,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         callState={callState} 
         remoteStream={remoteStream} 
         onEndCall={endCall} 
-        onAnswer={answerCall}
+        onAnswer={handleAnswerCallClick}
         toggleMute={toggleMute}
         isMuted={isMuted}
       />
@@ -505,10 +530,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                             onClick={handleAcceptTerms}
                             className="w-full py-3.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg active:scale-95"
                         >
-                            Accept & Start Call
+                            {pendingAction === 'answer' ? 'Accept & Join Call' : 'Accept & Start Call'}
                         </button>
                         <button 
-                            onClick={() => setShowCallTerms(false)}
+                            onClick={() => { setShowCallTerms(false); setPendingAction(null); }}
                             className="w-full py-3.5 text-gray-500 font-medium hover:text-white transition-colors text-sm"
                         >
                             Cancel
