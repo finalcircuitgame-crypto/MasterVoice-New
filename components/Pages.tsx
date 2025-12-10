@@ -49,7 +49,13 @@ export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
                 <PricingCard 
                     title="Personal"
                     price="Free"
-                    features={["Unlimited Text Messages", "1-on-1 P2P Voice Calls", "30-Day Message History", "1 Active Device", "Community Support"]}
+                    features={[
+                        "Unlimited Text Messages", 
+                        "Unlimited P2P Voice Calls", 
+                        "Unlimited Message History", 
+                        "3 Active Devices", 
+                        "Community Support"
+                    ]}
                     cta="Get Started Free"
                     onAction={onBack} // Redirects to login/register logic via router usually, simplified here
                 />
@@ -57,14 +63,21 @@ export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
                     title="Pro"
                     price="$8"
                     recommended={true}
-                    features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
+                    features={[
+                        "Everything in Personal", 
+                        "Group Voice Calls (Unlimited)", 
+                        "Ultra HD Lossless Audio", 
+                        "Unlimited Active Devices", 
+                        "Priority Relay Network", 
+                        "Custom Themes"
+                    ]}
                     cta="Start Pro Trial"
                     onAction={() => window.location.href = '/conversations?trial=true&plan=pro'} // Direct nav for now as PlansPage might be accessed directly
                 />
                 <PricingCard 
                     title="Team"
                     price="$20"
-                    features={["Everything in Pro", "Unlimited Group Size", "Admin Dashboard", "Team Analytics", "Custom Retention Policy", "24/7 Dedicated Support"]}
+                    features={["Everything in Pro", "Admin Dashboard", "Team Analytics", "SSO Integration", "Data Export API", "24/7 Dedicated Support"]}
                     cta="Contact Sales"
                     onAction={() => window.location.href = 'mailto:sales@mastervoice.com'}
                 />
@@ -84,26 +97,26 @@ export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
                       <tbody className="divide-y divide-white/5 text-sm">
                           <tr>
                               <td className="p-6 font-medium text-gray-300">Message History</td>
-                              <td className="p-6 text-gray-400">30 Days</td>
+                              <td className="p-6 text-white font-bold">Unlimited</td>
                               <td className="p-6 text-white">Unlimited</td>
                               <td className="p-6 text-white">Unlimited / Custom</td>
                           </tr>
                           <tr>
                               <td className="p-6 font-medium text-gray-300">Voice Quality</td>
                               <td className="p-6 text-gray-400">Standard (32kHz)</td>
-                              <td className="p-6 text-white">HD (48kHz Opus)</td>
+                              <td className="p-6 text-white">Ultra HD (96kHz)</td>
                               <td className="p-6 text-white">Ultra HD / Lossless</td>
                           </tr>
                           <tr>
                               <td className="p-6 font-medium text-gray-300">Group Calls</td>
                               <td className="p-6 text-gray-400">1-on-1 Only</td>
-                              <td className="p-6 text-white">Up to 5 Users</td>
+                              <td className="p-6 text-white">Unlimited Size</td>
                               <td className="p-6 text-white">Unlimited</td>
                           </tr>
                           <tr>
                               <td className="p-6 font-medium text-gray-300">Active Devices</td>
-                              <td className="p-6 text-gray-400">1</td>
-                              <td className="p-6 text-white">3</td>
+                              <td className="p-6 text-white font-bold">3 Devices</td>
+                              <td className="p-6 text-white">Unlimited</td>
                               <td className="p-6 text-white">Unlimited</td>
                           </tr>
                           <tr>

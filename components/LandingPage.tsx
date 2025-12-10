@@ -283,17 +283,124 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
           </div>
       </div>
 
-      {/* Trusted By Strip */}
-      <div className="w-full border-y border-white/5 bg-white/[0.02] py-10">
-          <div className="max-w-[1400px] mx-auto px-8 flex flex-col md:flex-row items-center justify-between gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-              <span className="text-sm font-bold tracking-widest uppercase text-gray-500">Trusted by teams at</span>
-              <div className="flex gap-12 items-center flex-wrap justify-center">
-                  {/* Fake Logos using simple text for demo */}
-                  <span className="text-xl font-bold font-mono">ACME Corp</span>
-                  <span className="text-xl font-bold italic">GlobalTech</span>
-                  <span className="text-xl font-bold tracking-tighter">Nebula</span>
-                  <span className="text-xl font-bold font-serif">Vertex</span>
-                  <span className="text-xl font-bold">Starlight</span>
+      {/* How It Works Section */}
+      <div className="py-32 bg-[#02000f] relative overflow-hidden border-y border-white/5">
+         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
+         <div className="max-w-[1400px] mx-auto px-8 relative z-10">
+            <SectionHeading title="Zero Setup. Instant Connection." subtitle="We stripped away the complexity. You just click and talk." />
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
+                {/* Connecting Line */}
+                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-indigo-500/0 via-indigo-500/50 to-indigo-500/0 z-0"></div>
+
+                {/* Step 1 */}
+                <div className="relative z-10 flex flex-col items-center text-center group">
+                    <div className="w-24 h-24 rounded-3xl bg-[#0a0a0f] border border-white/10 flex items-center justify-center mb-8 shadow-xl group-hover:scale-110 transition-transform duration-500 group-hover:border-indigo-500/50">
+                        <span className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 to-fuchsia-400">1</span>
+                    </div>
+                    <h3 className="text-xl font-bold mb-3">Create Identity</h3>
+                    <p className="text-gray-400 leading-relaxed">Sign up in seconds using just an email. No phone numbers, no contacts upload required.</p>
+                </div>
+
+                {/* Step 2 */}
+                <div className="relative z-10 flex flex-col items-center text-center group">
+                    <div className="w-24 h-24 rounded-3xl bg-[#0a0a0f] border border-white/10 flex items-center justify-center mb-8 shadow-xl group-hover:scale-110 transition-transform duration-500 group-hover:border-indigo-500/50">
+                        <svg className="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    </div>
+                    <h3 className="text-xl font-bold mb-3">Connect Peers</h3>
+                    <p className="text-gray-400 leading-relaxed">Search for your friends by their username. Start a secure thread instantly.</p>
+                </div>
+
+                {/* Step 3 */}
+                <div className="relative z-10 flex flex-col items-center text-center group">
+                    <div className="w-24 h-24 rounded-3xl bg-[#0a0a0f] border border-white/10 flex items-center justify-center mb-8 shadow-xl group-hover:scale-110 transition-transform duration-500 group-hover:border-indigo-500/50">
+                        <svg className="w-10 h-10 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                    </div>
+                    <h3 className="text-xl font-bold mb-3">Talk Encrypted</h3>
+                    <p className="text-gray-400 leading-relaxed">Voice calls are routed directly between devices (P2P). No central server listens in.</p>
+                </div>
+            </div>
+         </div>
+      </div>
+
+      {/* Privacy Deep Dive Section */}
+      <div className="py-32 bg-[#050510] relative">
+          <div className="max-w-[1200px] mx-auto px-8">
+              <div className="flex flex-col md:flex-row items-center gap-20">
+                  <div className="flex-1 space-y-8">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-900/30 text-indigo-300 text-xs font-bold uppercase tracking-widest border border-indigo-500/20">
+                          Architecture
+                      </div>
+                      <h2 className="text-4xl md:text-5xl font-bold leading-tight">Privacy isn't a setting.<br/> It's the architecture.</h2>
+                      <p className="text-xl text-gray-400 leading-relaxed">
+                          Traditional apps route your audio through their servers to process, record, or analyze it. MasterVoice is different.
+                      </p>
+                      
+                      <div className="space-y-6 pt-4">
+                          <div className="flex gap-4">
+                              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center shrink-0 text-green-400">
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-lg mb-1">End-to-End Encrypted</h4>
+                                  <p className="text-gray-400">Your messages are encrypted before they leave your device. Only the recipient has the key.</p>
+                              </div>
+                          </div>
+                          
+                          <div className="flex gap-4">
+                              <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-400">
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-lg mb-1">Peer-to-Peer Voice</h4>
+                                  <p className="text-gray-400">WebRTC technology connects your IP directly to your friend's IP. No middleman server.</p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Visual Representation of P2P */}
+                  <div className="flex-1 relative">
+                      <div className="absolute inset-0 bg-indigo-600/20 blur-[100px] rounded-full"></div>
+                      <div className="relative z-10 bg-[#0a0a0f] border border-white/10 rounded-3xl p-8 shadow-2xl">
+                          <div className="flex justify-between items-center mb-12">
+                              <div className="flex flex-col items-center gap-2">
+                                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center border-2 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+                                      <span className="font-bold text-white">You</span>
+                                  </div>
+                              </div>
+                              
+                              {/* Connection Line */}
+                              <div className="flex-1 mx-4 h-1 bg-gray-800 relative rounded-full">
+                                  <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-indigo-500 opacity-50 blur-[2px]"></div>
+                                  <div className="absolute top-1/2 left-0 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-[0_0_10px_white] animate-float-delayed" style={{ animationDuration: '3s' }}></div>
+                                  <div className="absolute top-1/2 right-0 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-[0_0_10px_white] animate-float-delayed" style={{ animationDuration: '3s', animationDirection: 'reverse' }}></div>
+                                  
+                                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-xs font-mono text-indigo-300 bg-indigo-900/50 px-2 py-1 rounded border border-indigo-500/30">
+                                      DIRECT TUNNEL
+                                  </div>
+                              </div>
+
+                              <div className="flex flex-col items-center gap-2">
+                                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center border-2 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]">
+                                      <span className="font-bold text-white">Them</span>
+                                  </div>
+                              </div>
+                          </div>
+                          
+                          {/* Blocked Server */}
+                          <div className="border-t border-dashed border-gray-700 pt-6 text-center opacity-50">
+                              <div className="inline-flex flex-col items-center">
+                                  <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center mb-2 border border-gray-700 relative">
+                                      <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>
+                                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white">X</div>
+                                  </div>
+                                  <span className="text-xs text-gray-500">Traditional Server</span>
+                                  <span className="text-[10px] text-red-500 font-bold mt-1">BYPASSED</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
               </div>
           </div>
       </div>
@@ -337,12 +444,19 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
       <div className="py-32 relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-indigo-900/5 blur-3xl pointer-events-none"></div>
         <div className="max-w-[1200px] mx-auto px-8 relative z-10">
-            <SectionHeading title="Simple Pricing" subtitle="Start for free, upgrade when you need more power." />
+            <SectionHeading title="Fair Pricing" subtitle="A truly generous free plan for everyone. Upgrade for power features." />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <PricingCard 
                     title="Personal"
                     price="Free"
-                    features={["Unlimited Text Messages", "1-on-1 P2P Voice Calls", "30-Day Message History", "1 Active Device", "Community Support"]}
+                    features={[
+                        "Unlimited Text Messages", 
+                        "Unlimited P2P Voice Calls", 
+                        "Unlimited Message History", 
+                        "3 Active Devices", 
+                        "256-bit Encryption",
+                        "Community Support"
+                    ]}
                     cta={isAuthenticated ? "Your Current Plan" : "Get Started Free"}
                     onAction={() => isAuthenticated ? onNavigate('/conversations') : onNavigate('/register')}
                 />
@@ -350,14 +464,21 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                     title="Pro"
                     price="$8"
                     recommended={true}
-                    features={["Everything in Free", "Unlimited Message History", "Group Voice Calls (5 Users)", "HD Audio Quality", "3 Active Devices", "Priority Relay Servers"]}
+                    features={[
+                        "Everything in Personal", 
+                        "Group Voice Calls (Unlimited)", 
+                        "Ultra HD Lossless Audio", 
+                        "Unlimited Active Devices", 
+                        "Priority Relay Network", 
+                        "Custom Themes"
+                    ]}
                     cta="Start Pro Trial"
                     onAction={() => isAuthenticated ? onNavigate('/conversations?trial=true&plan=pro') : onNavigate('/register')}
                 />
                 <PricingCard 
                     title="Team"
                     price="$20"
-                    features={["Everything in Pro", "Unlimited Group Size", "Admin Dashboard", "Team Analytics", "Custom Retention Policy", "24/7 Dedicated Support"]}
+                    features={["Everything in Pro", "Admin Dashboard", "Team Analytics", "SSO Integration", "Data Export API", "24/7 Dedicated Support"]}
                     cta="Contact Sales"
                     onAction={() => onNavigate('/contact')}
                 />
@@ -461,7 +582,7 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated
                  <PricingCard 
                     title="Personal"
                     price="Free"
-                    features={["Unlimited Chats", "P2P Voice", "30-Day History"]}
+                    features={["Unlimited Chats", "Unlimited P2P Voice", "Unlimited History", "3 Devices"]}
                     cta={isAuthenticated ? "Current Plan" : "Sign Up Free"}
                     onAction={() => isAuthenticated ? onNavigate('/conversations') : onNavigate('/register')}
                 />
@@ -469,7 +590,7 @@ const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated
                     title="Pro"
                     price="$8"
                     recommended={true}
-                    features={["Unlimited History", "Group Calls", "HD Audio"]}
+                    features={["Group Calls", "Ultra HD Audio", "Unlimited Devices"]}
                     cta="Try Pro"
                     onAction={() => isAuthenticated ? onNavigate('/conversations?trial=true&plan=pro') : onNavigate('/register')}
                 />
