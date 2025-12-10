@@ -111,6 +111,10 @@ create policy "Users can insert requests."
 create policy "Users can update their own requests."
   on friend_requests for update
   using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+  
+create policy "Users can delete their own requests."
+  on friend_requests for delete
+  using ( auth.uid() = sender_id or auth.uid() = receiver_id );
 ```
 
 ---

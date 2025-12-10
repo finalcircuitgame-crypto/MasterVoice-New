@@ -72,74 +72,107 @@ export const PricingCard = ({
   </div>
 );
 
-const CHAT_SCRIPT = [
-    { id: 1, text: "Hey! Did you check out MasterVoice yet?", isMe: false },
-    { id: 2, text: "Yeah, just signed up. The UI is sick! 🎨", isMe: true },
-    { id: 3, text: "Right? And the voice quality is crystal clear.", isMe: false },
-    { id: 4, text: "Is it really P2P? No server lag?", isMe: true },
-    { id: 5, text: "Zero latency. Direct connection. 🚀", isMe: false },
-    { id: 6, text: "That's a game changer for privacy.", isMe: true },
-    { id: 7, text: "Exactly. No one listening in.", isMe: false },
-    { id: 8, text: "I'm migrating the team over today.", isMe: true },
-];
-
+// --- SIMULATED APP COMPONENT ---
 const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
-  const [messages, setMessages] = useState<any[]>([CHAT_SCRIPT[0]]);
+  const [screen, setScreen] = useState<'list' | 'chat' | 'call' | 'settings'>('chat');
+  const [messages, setMessages] = useState<any[]>([
+    { id: 1, text: "Hey! Did you check out MasterVoice yet?", isMe: false, time: "10:23 AM" },
+    { id: 2, text: "Yeah, just signed up. The UI is sick! 🎨", isMe: true, time: "10:24 AM" },
+    { id: 3, text: "Right? And the voice quality is crystal clear.", isMe: false, time: "10:25 AM" },
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [activeContact, setActiveContact] = useState({ name: "Jane Smith", initial: "JS", color: "from-indigo-500 to-fuchsia-500", status: "Online" });
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Call State
+  const [callStatus, setCallStatus] = useState<'dialing' | 'connected'>('dialing');
+  const [callTimer, setCallTimer] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-
-    const advanceChat = () => {
-      setMessages((prev) => {
-        if (prev.length < CHAT_SCRIPT.length) {
-          // Add next message
-          timeout = setTimeout(advanceChat, 2000 + Math.random() * 1000); // Random delay 2-3s
-          return [...prev, CHAT_SCRIPT[prev.length]];
-        } else {
-          // Reset after long pause
-          timeout = setTimeout(() => {
-            setMessages([CHAT_SCRIPT[0]]);
-            timeout = setTimeout(advanceChat, 2500);
-          }, 8000); // Pause 8s at end before restart
-          return prev;
-        }
-      });
-    };
-
-    timeout = setTimeout(advanceChat, 2500);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  // Auto-scroll
+  // Auto-scroll chat
   useEffect(() => {
     if (scrollRef.current) {
-        scrollRef.current.scrollTo({
-            top: scrollRef.current.scrollHeight,
-            behavior: 'smooth'
-        });
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, isTyping, screen]);
 
-  return (
-    <div className={`relative w-full ${mobile ? 'h-[400px]' : 'h-[500px]'} overflow-hidden`}>
-       <div className={`glass-panel w-full h-full rounded-[2.5rem] p-4 flex flex-col bg-black/60 backdrop-blur-xl ${mobile ? 'border-none shadow-none' : 'border border-white/10 shadow-2xl'}`}>
-           {/* Fake Header */}
-           <div className="flex items-center gap-3 px-2 pb-4 border-b border-white/5 mb-2">
-               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold shadow-lg">JS</div>
+  // Call Timer
+  useEffect(() => {
+      let interval: any;
+      if (screen === 'call') {
+          if (callStatus === 'dialing') {
+              setTimeout(() => setCallStatus('connected'), 2000);
+          } else {
+              interval = setInterval(() => setCallTimer(t => t + 1), 1000);
+          }
+      } else {
+          setCallStatus('dialing');
+          setCallTimer(0);
+      }
+      return () => clearInterval(interval);
+  }, [screen, callStatus]);
+
+  const handleSendMessage = (e?: React.FormEvent) => {
+      e?.preventDefault();
+      if (!inputValue.trim()) return;
+      
+      const newMsg = { id: Date.now(), text: inputValue, isMe: true, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+      setMessages(prev => [...prev, newMsg]);
+      setInputValue("");
+      
+      // Simulate reply
+      setIsTyping(true);
+      setTimeout(() => {
+          setIsTyping(false);
+          setMessages(prev => [...prev, { 
+              id: Date.now() + 1, 
+              text: "That's awesome! Let's verify the P2P connection.", 
+              isMe: false, 
+              time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+          }]);
+      }, 2000);
+  };
+
+  const contacts = [
+      { name: "Jane Smith", initial: "JS", color: "from-indigo-500 to-fuchsia-500", status: "Online", lastMsg: "See you later!" },
+      { name: "Alex Dev", initial: "AD", color: "from-blue-500 to-cyan-500", status: "Offline", lastMsg: "Pull request approved." },
+      { name: "Team Lead", initial: "TL", color: "from-orange-500 to-red-500", status: "Online", lastMsg: "Meeting in 5 mins." },
+      { name: "Mom", initial: "M", color: "from-green-500 to-emerald-500", status: "Online", lastMsg: "Call me when you can." },
+  ].filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const formatTime = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // --- RENDER SCREENS ---
+
+  const renderChat = () => (
+      <div className="flex flex-col h-full animate-fade-in-up">
+           {/* Header */}
+           <div className="flex items-center gap-3 px-2 pb-4 border-b border-white/5 mb-2 shrink-0">
+               <button onClick={() => setScreen('list')} className="p-1 hover:bg-white/10 rounded-full transition text-gray-400">
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+               </button>
+               <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${activeContact.color} flex items-center justify-center text-xs font-bold shadow-lg text-white`}>{activeContact.initial}</div>
                <div className="flex flex-col">
-                   <span className="text-sm font-bold text-white">Jane Smith</span>
+                   <span className="text-sm font-bold text-white leading-none mb-0.5">{activeContact.name}</span>
                    <span className="text-[10px] text-green-400 font-medium flex items-center gap-1">
                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                       Online
+                       {activeContact.status}
                    </span>
                </div>
                <div className="ml-auto flex gap-2 text-gray-400">
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                   <button onClick={() => setScreen('call')} className="p-2 hover:bg-white/10 rounded-full transition hover:text-white">
+                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                   </button>
                </div>
            </div>
 
+           {/* Messages */}
            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-2 no-scrollbar">
                {messages.map((m) => (
                    <div key={m.id} className={`flex ${m.isMe ? 'justify-end' : 'justify-start'} animate-message-enter`}>
@@ -152,7 +185,7 @@ const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
                        </div>
                    </div>
                ))}
-               {messages.length < CHAT_SCRIPT.length && (
+               {isTyping && (
                    <div className="flex justify-start animate-fade-in-up">
                        <div className="bg-white/5 rounded-2xl rounded-bl-sm px-4 py-3 flex space-x-1 items-center border border-white/5">
                             <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-typing-bounce"></div>
@@ -163,18 +196,152 @@ const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
                )}
            </div>
 
-           {/* Fake Input */}
-           <div className="mt-3 bg-white/5 rounded-full p-1.5 pr-2 flex items-center border border-white/5">
-               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 mr-2">
+           {/* Input */}
+           <form onSubmit={handleSendMessage} className="mt-3 bg-white/5 rounded-full p-1.5 pr-2 flex items-center border border-white/5 shrink-0">
+               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 mr-2 cursor-pointer hover:bg-white/20 transition">
                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                </div>
-               <div className="flex-1 h-2 bg-transparent">
-                    {/* Placeholder line */}
-               </div>
-               <div className="p-2 bg-indigo-600 rounded-full text-white">
+               <input 
+                  type="text" 
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 h-8" 
+                  placeholder="Message..." 
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+               />
+               <button type="submit" disabled={!inputValue.trim()} className={`p-2 rounded-full text-white transition ${inputValue.trim() ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 cursor-not-allowed'}`}>
                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-               </div>
-           </div>
+               </button>
+           </form>
+      </div>
+  );
+
+  const renderList = () => (
+      <div className="flex flex-col h-full animate-fade-in-up">
+          <div className="px-2 pb-4 mb-2">
+              <h2 className="text-xl font-bold text-white mb-4">Chats</h2>
+              <div className="bg-white/5 rounded-xl px-3 py-2 flex items-center gap-2 border border-white/5">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input 
+                    className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 w-full" 
+                    placeholder="Search users..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+              </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto space-y-1">
+              {contacts.map((c, i) => (
+                  <div key={i} onClick={() => { setActiveContact(c); setScreen('chat'); }} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition">
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${c.color} flex items-center justify-center text-sm font-bold text-white`}>
+                          {c.initial}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-center mb-0.5">
+                              <span className="font-bold text-sm text-white truncate">{c.name}</span>
+                              <span className="text-[10px] text-gray-500">10:2{i} AM</span>
+                          </div>
+                          <p className="text-xs text-gray-400 truncate">{c.lastMsg}</p>
+                      </div>
+                  </div>
+              ))}
+          </div>
+
+          <div className="mt-auto border-t border-white/5 pt-2 flex justify-around">
+              <button onClick={() => setScreen('list')} className="flex flex-col items-center gap-1 p-2 text-indigo-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                  <span className="text-[10px] font-bold">Chats</span>
+              </button>
+              <button onClick={() => setScreen('settings')} className="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-white transition">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="text-[10px] font-bold">Settings</span>
+              </button>
+          </div>
+      </div>
+  );
+
+  const renderSettings = () => (
+      <div className="flex flex-col h-full animate-fade-in-up">
+           <div className="px-2 pb-4 mb-2">
+              <h2 className="text-xl font-bold text-white mb-4">Settings</h2>
+          </div>
+          <div className="flex-1 space-y-4">
+              <div className="bg-white/5 rounded-xl p-4 flex items-center justify-between border border-white/5">
+                  <span className="text-sm font-medium text-gray-200">Notifications</span>
+                  <div className="w-10 h-5 bg-green-500 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full shadow"></div></div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-4 flex items-center justify-between border border-white/5">
+                  <span className="text-sm font-medium text-gray-200">Dark Mode</span>
+                  <div className="w-10 h-5 bg-green-500 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full shadow"></div></div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-4 flex items-center justify-between border border-white/5">
+                  <span className="text-sm font-medium text-gray-200">P2P Encryption</span>
+                  <div className="w-10 h-5 bg-indigo-500 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full shadow"></div></div>
+              </div>
+          </div>
+          <div className="mt-auto border-t border-white/5 pt-2 flex justify-around">
+              <button onClick={() => setScreen('list')} className="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-white transition">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                  <span className="text-[10px] font-bold">Chats</span>
+              </button>
+              <button onClick={() => setScreen('settings')} className="flex flex-col items-center gap-1 p-2 text-indigo-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="text-[10px] font-bold">Settings</span>
+              </button>
+          </div>
+      </div>
+  );
+
+  const renderCall = () => (
+      <div className="flex flex-col h-full items-center justify-between py-8 animate-fade-in text-white relative z-20">
+          <div className="flex flex-col items-center gap-4 mt-8">
+              <div className="relative">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-2xl font-bold shadow-2xl relative z-10">
+                      {activeContact.initial}
+                  </div>
+                  {callStatus === 'dialing' && (
+                      <div className="absolute inset-0 rounded-full border-2 border-indigo-500 animate-ping opacity-50"></div>
+                  )}
+                  {callStatus === 'connected' && (
+                      <div className="absolute -inset-4 rounded-full bg-indigo-500/20 blur-xl animate-pulse"></div>
+                  )}
+              </div>
+              <div className="text-center">
+                  <h3 className="text-2xl font-bold">{activeContact.name}</h3>
+                  <p className="text-indigo-300 font-medium tracking-wide">
+                      {callStatus === 'dialing' ? 'Calling...' : formatTime(callTimer)}
+                  </p>
+              </div>
+          </div>
+
+          <div className="w-full px-8">
+              {callStatus === 'connected' && (
+                  <div className="flex justify-center items-center gap-1 h-12 mb-8">
+                       {[...Array(8)].map((_, i) => (
+                           <div key={i} className="w-1.5 bg-white/50 rounded-full animate-music" style={{ height: Math.random() * 30 + 10 + 'px', animationDuration: '0.8s' }}></div>
+                       ))}
+                  </div>
+              )}
+          </div>
+
+          <div className="flex items-center gap-6">
+              <button className="p-4 bg-white/10 rounded-full backdrop-blur-md hover:bg-white/20 transition">
+                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+              </button>
+              <button onClick={() => setScreen('chat')} className="p-4 bg-red-500 rounded-full shadow-lg shadow-red-500/30 hover:bg-red-600 transition hover:scale-105 active:scale-95">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+          </div>
+      </div>
+  );
+
+  return (
+    <div className={`relative w-full ${mobile ? 'h-[400px]' : 'h-[500px]'} overflow-hidden`}>
+       <div className={`glass-panel w-full h-full rounded-[2.5rem] p-4 flex flex-col bg-black/80 backdrop-blur-xl ${mobile ? 'border-none shadow-none' : 'border border-white/10 shadow-2xl'}`}>
+           {screen === 'chat' && renderChat()}
+           {screen === 'list' && renderList()}
+           {screen === 'call' && renderCall()}
+           {screen === 'settings' && renderSettings()}
        </div>
     </div>
   );
@@ -269,8 +436,6 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                       </div>
                       <div className="flex-1 relative bg-[#0c0c0c]">
                            <InteractiveChat mobile={true} />
-                           {/* Gradient fade at bottom */}
-                           <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-[#0c0c0c] to-transparent pointer-events-none z-20"></div>
                       </div>
                       <div className="h-20 bg-[#0c0c0c] border-t border-white/5 flex items-center justify-around px-6 relative z-30">
                            <div className="w-6 h-6 text-indigo-500"><svg fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" /><path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 012-2V9a2 2 0 01-2-2h-1z" /></svg></div>

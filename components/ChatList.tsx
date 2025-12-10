@@ -128,24 +128,53 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   // --- Actions ---
 
+  const acceptRequest = async (requestId: string) => {
+      const { error } = await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
+      if (!error) {
+          fetchData(); // Force refresh UI immediately
+      }
+  };
+
+  const cancelOrRejectRequest = async (requestId: string) => {
+      const { error } = await supabase.from('friend_requests').delete().eq('id', requestId);
+      if (!error) {
+          fetchData(); // Force refresh UI immediately
+      }
+  };
+
   const sendRequest = async (targetUserId: string) => {
+      // 1. Check local state to see if a relationship already exists
+      // This prevents 409 Conflicts and handles the UX gracefully
+      const isFriend = friends.some(f => f.id === targetUserId);
+      const isOutgoing = outgoingRequests.some(r => r.receiver_id === targetUserId);
+      const incomingReq = incomingRequests.find(r => r.sender_id === targetUserId);
+
+      if (isFriend) {
+          // Already friends, just select them or do nothing
+          return;
+      }
+
+      if (isOutgoing) {
+          // Already sent a request, do nothing
+          return;
+      }
+
+      if (incomingReq) {
+          // They already sent me a request, just accept it!
+          await acceptRequest(incomingReq.id);
+          return;
+      }
+
+      // 2. If no existing relationship, create new request
       const { error } = await supabase.from('friend_requests').insert({
           sender_id: currentUser.id,
           receiver_id: targetUserId,
           status: 'pending'
       });
+      
       if (!error) {
-          // Optimistic update handled by realtime sub, or we can force fetch
-          // fetchData(); 
+          fetchData(); // Force refresh
       }
-  };
-
-  const acceptRequest = async (requestId: string) => {
-      await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
-  };
-
-  const cancelOrRejectRequest = async (requestId: string) => {
-      await supabase.from('friend_requests').delete().eq('id', requestId);
   };
 
   const handleLogout = async () => {
