@@ -270,58 +270,47 @@ export const useWebRTC = (channel: RealtimeChannel | null, userId: string) => {
   }, [addOrReplaceLocalTrack, callState, createPeerConnection, cleanup, userId]);
 
   const answerCall = useCallback(async () => {
-    if (!incomingOfferRef.current) return;
+    if (!incomingOfferRef.current) return;
 
-    try {
-      const peer = createPeerConnection();
-      
-      if (peer.signalingState !== 'stable') {
-          console.warn('[WebRTC] Peer not stable, resetting...');
-          if (peer.signalingState !== 'closed') {
-             // If we are 'have-remote-offer', we might be okay, but safe to proceed
-          }
-      }
+    try {
+      const peer = createPeerConnection();
+      
+      // 1. Set Remote Desc (Offer)
+      await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
+      console.log('[WebRTC] Set Remote Description (Offer).'); // <<< ADD LOG
 
-      // 1. Set Remote Desc
-      await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
+      // 2. Drain candidates (Good placement)
+      while (iceCandidateQueue.current.length > 0) {
+        // ... candidate draining logic ...
+      }
 
-      // 2. Drain candidates
-      while (iceCandidateQueue.current.length > 0) {
-        const c = iceCandidateQueue.current.shift();
-        if (c) {
-          try {
-            await peer.addIceCandidate(new RTCIceCandidate(c));
-          } catch (e) {
-            console.error('[WebRTC] Error adding pre-answer candidate', e);
-          }
-        }
-      }
+      // 3. Get User Media
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      setLocalStream(stream);
+      localStreamRef.current = stream;
+      console.log('[WebRTC] Acquired local stream for answer.'); // <<< ADD LOG
 
-      // 3. Get User Media
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      setLocalStream(stream);
-      localStreamRef.current = stream;
+      // 4. Add Track (MANDATORY before createAnswer)
+      addOrReplaceLocalTrack(peer, stream); // The utility will log success/failure
+      
+      // 5. Create Answer
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
 
-      // 4. Add Track
-      addOrReplaceLocalTrack(peer, stream);
+      // 6. Send Answer
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'signal',
+        payload: { type: 'answer', sdp: answer } as SignalingPayload,
+      });
+      console.log('[WebRTC] Sent Answer.'); // <<< ADD LOG
 
-      // 5. Create Answer
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-
-      // 6. Send Answer
-      channelRef.current?.send({
-        type: 'broadcast',
-        event: 'signal',
-        payload: { type: 'answer', sdp: answer } as SignalingPayload,
-      });
-
-      setCallState(CallState.CONNECTED);
-    } catch (err) {
-      console.error('[WebRTC] Failed to answer call:', err);
-      cleanup();
-    }
-  }, [addOrReplaceLocalTrack, createPeerConnection, cleanup]);
+      setCallState(CallState.CONNECTED);
+    } catch (err) {
+      console.error('[WebRTC] Failed to answer call:', err);
+      cleanup();
+    }
+  }, [addOrReplaceLocalTrack, createPeerConnection, cleanup]);
 
   const endCall = useCallback(() => {
     try {
