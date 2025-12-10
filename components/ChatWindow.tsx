@@ -401,8 +401,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }, [currentUser.id, recipient.id]);
 
     useEffect(() => {
+        // Only scroll if we added a message or typing changed or initial load
+        // This avoids scrolling when just reacting (updating existing msg)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isTyping, replyingTo]);
+    }, [messages.length, messages.length > 0 ? messages[messages.length - 1].id : null, isTyping, replyingTo]);
 
     // If call disconnects while terms modal is open for answering, close it
     useEffect(() => {

@@ -17,6 +17,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   const handleSignalRef = useRef<((payload: SignalingPayload) => Promise<void>) | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const isProcessingOfferRef = useRef<boolean>(false);
 
   // Keep ref for local stream for cleanup
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -56,6 +57,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     iceCandidateQueue.current = [];
     incomingOfferRef.current = null;
     setIsMuted(false);
+    isProcessingOfferRef.current = false;
   }, []);
 
   // --- Signaling Channel Management ---
@@ -116,13 +118,22 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
     newPc.ontrack = (event) => {
       console.log('[WebRTC] Received remote track:', event.track.kind);
-      // Ensure we catch the stream properly
-      const stream = event.streams[0] || new MediaStream([event.track]);
-      setRemoteStream(stream);
+      // Create or update remote stream
+      if (!remoteStream) {
+        const stream = new MediaStream();
+        stream.addTrack(event.track);
+        setRemoteStream(stream);
+      } else {
+        // If stream already exists, add the track to it
+        const stream = remoteStream;
+        stream.addTrack(event.track);
+        setRemoteStream(stream.clone()); // Trigger re-render
+      }
       
-      // CRITICAL FIX: Explicitly set CONNECTED when media starts flowing
-      // This prevents the UI from getting stuck in "Connecting..." if connectionState lags
-      setCallState(CallState.CONNECTED); 
+      // Set connected state when we receive tracks
+      if (callState !== CallState.CONNECTED) {
+        setCallState(CallState.CONNECTED);
+      }
     };
 
     newPc.onconnectionstatechange = () => {
@@ -151,23 +162,30 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     };
 
     newPc.oniceconnectionstatechange = () => {
+        console.log('[WebRTC] ICE connection state:', newPc.iceConnectionState);
         if (newPc.iceConnectionState === 'failed') {
+            console.log('[WebRTC] ICE failed, restarting ICE');
             newPc.restartIce();
         }
     };
 
+    // Add negotiationneeded handler
+    newPc.onnegotiationneeded = async () => {
+      console.log('[WebRTC] Negotiation needed');
+      // This is mainly for renegotiation scenarios
+    };
+
     pc.current = newPc;
     return newPc;
-  }, [cleanup]);
+  }, [cleanup, remoteStream, callState]);
 
   // --- Stats Collection ---
   useEffect(() => {
     let interval: number;
-    if (callState === CallState.CONNECTED) {
+    if (callState === CallState.CONNECTED && pc.current) {
         interval = window.setInterval(async () => {
-            if (!pc.current) return;
             try {
-                const stats = await pc.current.getStats();
+                const stats = await pc.current!.getStats();
                 let activeCandidatePair: any = null;
                 let inboundAudio: any = null;
                 let outboundAudio: any = null;
@@ -202,67 +220,87 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
   // --- Signaling Logic ---
   const handleSignal = useCallback(async (payload: SignalingPayload) => {
+    console.log('[WebRTC] Received signal:', payload.type, payload);
+
     if (payload.type === 'hangup') {
       console.log('[WebRTC] Remote hung up');
       cleanup();
       return;
     }
 
-    // If we are IDLE and get an offer, we can accept it
-    // ALSO: If we are RECONNECTING, we accept an offer (Rejoin scenario)
-    if ((callState === CallState.IDLE || callState === CallState.RECONNECTING) && payload.type === 'offer') {
-        
-        // If rejoining, clean up old PC first implicitly or reuse? 
-        // Better to reuse cleanup() to reset PC but keep UI/User context if needed.
-        
-        if (callState === CallState.RECONNECTING) {
-             console.log('[WebRTC] Rejoin Offer Received');
-             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-             // We need to reset PC to accept new offer cleanly
-             if (pc.current) pc.current.close();
-             pc.current = null;
-        }
-
-        console.log('[WebRTC] Received Offer');
-        setCallState(CallState.RECEIVING);
-        incomingOfferRef.current = payload.sdp!;
+    // Handle offer - both for initial call and reconnection
+    if (payload.type === 'offer') {
+      // Prevent processing the same offer multiple times
+      if (isProcessingOfferRef.current) {
+        console.log('[WebRTC] Already processing an offer, ignoring');
         return;
+      }
+
+      isProcessingOfferRef.current = true;
+      
+      // If we're already in a call and receive a new offer, it's likely a reconnection attempt
+      if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
+        console.log('[WebRTC] Reconnection offer received');
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+        // Clean up old connection
+        if (pc.current) {
+          pc.current.close();
+          pc.current = null;
+        }
+        iceCandidateQueue.current = [];
+      }
+
+      console.log('[WebRTC] Received Offer');
+      setCallState(CallState.RECEIVING);
+      incomingOfferRef.current = payload.sdp!;
+      isProcessingOfferRef.current = false;
+      return;
     }
 
-    if (!pc.current) return;
+    // For answer and candidate, we need an active peer connection
+    if (!pc.current) {
+      console.log('[WebRTC] No peer connection for signal:', payload.type);
+      return;
+    }
 
     try {
       if (payload.type === 'answer') {
-          console.log('[WebRTC] Received Answer');
-          if (pc.current.signalingState === 'have-local-offer') {
-            await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
-            
-            // Process queued candidates for Caller
-            // This is critical if candidates arrived before the answer
-            while (iceCandidateQueue.current.length > 0) {
-                const c = iceCandidateQueue.current.shift();
-                if (c) {
-                    try {
-                        await pc.current.addIceCandidate(new RTCIceCandidate(c));
-                    } catch (e) {
-                        console.warn("Error adding queued candidate", e);
-                    }
-                }
+        console.log('[WebRTC] Received Answer');
+        if (pc.current.signalingState === 'have-local-offer') {
+          await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
+          
+          // Process queued candidates for Caller
+          while (iceCandidateQueue.current.length > 0) {
+            const c = iceCandidateQueue.current.shift();
+            if (c) {
+              try {
+                await pc.current.addIceCandidate(new RTCIceCandidate(c));
+              } catch (e) {
+                console.warn("Error adding queued candidate", e);
+              }
             }
           }
+        }
       } else if (payload.type === 'candidate' && payload.candidate) {
-          try {
-              if (pc.current.remoteDescription && pc.current.remoteDescription.type) {
-                  await pc.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-              } else {
-                  iceCandidateQueue.current.push(payload.candidate);
-              }
-          } catch (e) {
-              console.warn("Error adding candidate", e);
+        try {
+          // Only add candidates if we have a remote description
+          if (pc.current.remoteDescription && pc.current.remoteDescription.type) {
+            await pc.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } else {
+            // Queue candidates if remote description isn't set yet
+            console.log('[WebRTC] Queueing candidate, no remote description yet');
+            iceCandidateQueue.current.push(payload.candidate);
           }
+        } catch (e) {
+          console.warn("Error adding candidate", e);
+        }
       }
     } catch (err) {
-        console.error("Signaling error", err);
+      console.error("Signaling error", err);
+      isProcessingOfferRef.current = false;
     }
   }, [callState, cleanup]);
 
@@ -273,31 +311,56 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   // --- User Actions ---
 
   const startCall = useCallback(async () => {
-    if (!channelRef.current) return;
+    if (!channelRef.current) {
+      console.error('[WebRTC] No signaling channel');
+      return;
+    }
+    
     cleanup(); // Reset any old state
 
     try {
       console.log('[WebRTC] Starting Call (Caller)...');
-      const peer = createPeerConnection();
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      
+      // Get local media first
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }, 
+        video: false 
+      });
       setLocalStream(stream);
       localStreamRef.current = stream;
 
-      // Add transceiver to ensure audio direction is sendrecv
+      // Create peer connection after we have media
+      const peer = createPeerConnection();
+      
+      // Add all tracks to the connection
       stream.getTracks().forEach(track => {
-          peer.addTransceiver(track, { direction: 'sendrecv', streams: [stream] });
+        peer.addTrack(track, stream);
       });
 
-      const offer = await peer.createOffer();
+      // Create and send offer
+      const offer = await peer.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
+      
       await peer.setLocalDescription(offer);
       setCallState(CallState.OFFERING);
 
       await channelRef.current.send({
         type: 'broadcast',
         event: 'signal',
-        payload: { type: 'offer', sdp: offer, callerId: userId } as SignalingPayload,
+        payload: { 
+          type: 'offer', 
+          sdp: offer, 
+          callerId: userId 
+        } as SignalingPayload,
       });
+
+      console.log('[WebRTC] Offer sent');
 
     } catch (err) {
       console.error('[WebRTC] Start call failed', err);
@@ -306,38 +369,55 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   }, [createPeerConnection, cleanup, userId]);
 
   const answerCall = useCallback(async () => {
-    if (!incomingOfferRef.current || !channelRef.current) return;
+    if (!incomingOfferRef.current || !channelRef.current) {
+      console.error('[WebRTC] No offer to answer or no channel');
+      return;
+    }
 
     try {
       console.log('[WebRTC] Answering Call (Callee)...');
-      const peer = createPeerConnection();
-
-      // 1. Set Remote Description (Offer)
-      await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
-
-      // 2. Process queued candidates (For Callee)
-      while (iceCandidateQueue.current.length > 0) {
-          const c = iceCandidateQueue.current.shift();
-          if (c) await peer.addIceCandidate(new RTCIceCandidate(c));
-      }
-
-      // 3. Get Local Stream
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      
+      // Get local media first
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }, 
+        video: false 
+      });
       setLocalStream(stream);
       localStreamRef.current = stream;
 
-      // 4. Attach to Transceiver
-      // Find the audio transceiver created by setRemoteDescription
-      const audioTransceiver = peer.getTransceivers().find(t => t.receiver.track.kind === 'audio');
-      if (audioTransceiver) {
-          audioTransceiver.direction = 'sendrecv';
-          await audioTransceiver.sender.replaceTrack(stream.getAudioTracks()[0]);
-      } else {
-          // Fallback
-          stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      // Create peer connection
+      const peer = createPeerConnection();
+      
+      // Add local tracks
+      stream.getTracks().forEach(track => {
+        peer.addTrack(track, stream);
+      });
+
+      // Set remote description (the offer)
+      await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
+
+      // Process any queued candidates
+      while (iceCandidateQueue.current.length > 0) {
+        const c = iceCandidateQueue.current.shift();
+        if (c) {
+          try {
+            await peer.addIceCandidate(new RTCIceCandidate(c));
+          } catch (e) {
+            console.warn("Error adding queued candidate", e);
+          }
+        }
       }
 
-      const answer = await peer.createAnswer();
+      // Create and send answer
+      const answer = await peer.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
+      
       await peer.setLocalDescription(answer);
 
       await channelRef.current.send({
@@ -346,6 +426,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         payload: { type: 'answer', sdp: answer } as SignalingPayload,
       });
 
+      console.log('[WebRTC] Answer sent');
       setCallState(CallState.CONNECTED);
 
     } catch (err) {
@@ -355,6 +436,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   }, [createPeerConnection, cleanup]);
 
   const endCall = useCallback(() => {
+    console.log('[WebRTC] Ending call');
     channelRef.current?.send({
         type: 'broadcast',
         event: 'signal',
@@ -365,9 +447,11 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
-        const enabled = !localStreamRef.current.getAudioTracks()[0].enabled;
-        localStreamRef.current.getAudioTracks().forEach(t => t.enabled = !t.enabled);
-        setIsMuted(!enabled);
+        const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            setIsMuted(!audioTrack.enabled);
+        }
     }
   }, []);
 
