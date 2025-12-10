@@ -90,7 +90,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
 
                 {isError && (
-                    <button onClick={() => onRetry(msg)} className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0">
+                    <button onClick={() => onRetry(msg)} className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0" title="Retry">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
                 )}
@@ -209,6 +209,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
     if (e) e.preventDefault();
     const content = retryMsg ? retryMsg.content : newMessage;
     if (!content.trim()) return;
+
+    // --- DEBUG TRIGGER: SIMULATE ERROR ---
+    // Type "/fail" to test the error UI
+    if (content === '/fail' && !retryMsg) {
+        const tempId = Math.random().toString();
+        // Use a dummy message for the visual simulation
+        const msg: any = { sender_id: currentUser.id, receiver_id: recipient.id, content: "Simulated sending failure..." };
+        
+        // Optimistic update: Sending
+        setMessages((prev) => [...prev, { ...msg, id: tempId, created_at: new Date().toISOString(), status: 'sending' }]);
+        setNewMessage('');
+
+        // Fail after 1.5s
+        setTimeout(() => {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+        }, 1500);
+        return;
+    }
+    // -------------------------------------
 
     if (editingId && !retryMsg) {
         const idToUpdate = editingId;
