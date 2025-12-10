@@ -373,7 +373,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                             setActiveId(user.id);
                             onSelectUser(user);
                         }}
-                        className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden animate-fade-in-up ${
+                        className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${
                             isActive 
                             ? 'bg-indigo-600/10 border border-indigo-500/30' 
                             : 'hover:bg-white/5 border border-transparent'

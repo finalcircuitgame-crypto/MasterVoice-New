@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CallState } from '../types';
 
@@ -20,12 +21,25 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   useEffect(() => {
     if (audioRef.current && remoteStream) {
+      console.log("[VoiceCallOverlay] Attaching remote stream to audio element");
       audioRef.current.srcObject = remoteStream;
-      // Force play for mobile browsers which might block autoplay
-      audioRef.current.play().catch(e => console.error("Auto-play failed", e));
+      
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+                console.log("[VoiceCallOverlay] Audio playing successfully");
+                setAutoplayBlocked(false);
+            })
+            .catch(error => {
+                console.warn("[VoiceCallOverlay] Autoplay blocked:", error);
+                setAutoplayBlocked(true);
+            });
+      }
     }
   }, [remoteStream]);
 
@@ -42,6 +56,14 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
     return () => clearInterval(interval);
   }, [callState]);
 
+  const handleManualPlay = () => {
+      if (audioRef.current) {
+          audioRef.current.play()
+            .then(() => setAutoplayBlocked(false))
+            .catch(e => console.error("Manual play failed", e));
+      }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -54,7 +76,23 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   if (callState === CallState.CONNECTED) {
     return (
         <div className="fixed top-0 left-0 right-0 h-[100dvh] w-screen pointer-events-none z-[9999] flex flex-col items-center justify-start pt-safe-top">
-            <div className="mt-4 md:mt-6 w-[95%] max-w-md pointer-events-auto animate-slide-up">
+            {/* 
+                Mobile: mt-20 to clear the chat header.
+                Desktop: mt-6.
+            */}
+            <div className="mt-20 md:mt-6 w-[95%] max-w-md pointer-events-auto animate-slide-up space-y-2">
+                
+                {/* Autoplay Blocker Warning */}
+                {autoplayBlocked && (
+                    <button 
+                        onClick={handleManualPlay}
+                        className="w-full bg-amber-500 text-black text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center justify-center gap-2 animate-bounce"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                        Tap to Hear Audio
+                    </button>
+                )}
+
                 <div className="bg-gray-800/95 backdrop-blur-xl border border-gray-600 rounded-full shadow-2xl p-2 px-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3 min-w-0">
                         <div className="relative shrink-0">
