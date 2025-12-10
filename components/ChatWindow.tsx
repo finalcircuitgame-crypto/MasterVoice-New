@@ -26,6 +26,8 @@ interface MessageItemProps {
     onRetry: (msg: Message) => void;
     onReply: (msg: Message) => void;
     onReaction: (msg: Message, emoji: string) => void;
+    onJumpTo: (messageId: string) => void;
+    isHighlighted: boolean;
     isFamily?: boolean;
 }
 
@@ -49,6 +51,8 @@ const MessageItem: React.FC<MessageItemProps> = ({
     onRetry,
     onReply,
     onReaction,
+    onJumpTo,
+    isHighlighted,
     isFamily
 }) => {
     const [showActions, setShowActions] = useState(false);
@@ -130,8 +134,9 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
     return (
         <div
+            id={`msg-${msg.id}`}
             ref={containerRef}
-            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2`}
+            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 transition-all duration-500 ${isHighlighted ? 'scale-105' : ''}`}
         >
             <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -215,16 +220,22 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
                         {/* Reply Context */}
                         {msg.reply_to && (
-                            <div className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 ${isMe ? 'ml-auto' : ''}`}>
-                                <span className="font-bold text-indigo-400">{msg.reply_to.sender_id === currentUser.id ? 'You' : (recipient.id === msg.reply_to.sender_id ? recipient.email : 'Unknown')}</span>
-                                <span className="truncate max-w-[150px]">{msg.reply_to.attachment ? '[Attachment]' : msg.reply_to.content}</span>
+                            <div 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onJumpTo(msg.reply_to!.id);
+                                }}
+                                className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-colors ${isMe ? 'ml-auto' : ''}`}
+                            >
+                                <span className="font-bold text-indigo-400 shrink-0">{msg.reply_to.sender_id === currentUser.id ? 'You' : (recipient.id === msg.reply_to.sender_id ? recipient.email.split('@')[0] : 'Unknown')}</span>
+                                <span className="truncate max-w-[150px]">{msg.reply_to.attachment ? '📷 [Attachment]' : msg.reply_to.content}</span>
                             </div>
                         )}
 
                         <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md hover:brightness-110 ${isMe
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10'
                                 : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
-                            } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-red-500/50 bg-red-900/10' : ''}`}>
+                            } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isHighlighted ? 'ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)] bg-indigo-500/40' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-red-500/50 bg-red-900/10' : ''}`}>
 
                             {renderAttachment()}
 
@@ -282,6 +293,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [loading, setLoading] = useState(true);
     const [isTyping, setIsTyping] = useState(false);
+    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<any>(null);
 
@@ -608,6 +620,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         setMessageToDelete(null);
     };
 
+    const handleJumpToMessage = (messageId: string) => {
+        const el = document.getElementById(`msg-${messageId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setHighlightedMessageId(messageId);
+            setTimeout(() => setHighlightedMessageId(null), 2000);
+        } else {
+            // If virtualized, we would need to load the message. 
+            // Since we load all, it might not be rendered or doesn't exist.
+            console.warn("Message not found in DOM");
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
             {/* Background & Effects */}
@@ -727,6 +752,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 onRetry={(m) => handleSendMessage(undefined, m)}
                                 onReply={handleReply}
                                 onReaction={handleReaction}
+                                onJumpTo={handleJumpToMessage}
+                                isHighlighted={msg.id === highlightedMessageId}
                                 isFamily={currentUser.is_family}
                             />
                         ))}
@@ -747,48 +774,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             {/* Floating Input Area */}
             <div className="p-4 md:p-6 pt-2 relative z-20 pb-safe">
-                <div className="max-w-4xl mx-auto relative">
-                    {/* File Preview */}
-                    {selectedFile && (
-                        <div className="absolute bottom-full left-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-3 flex items-center gap-3 animate-slide-up shadow-2xl z-30 max-w-[80%]">
-                            <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-indigo-400">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <div className="max-w-4xl mx-auto flex flex-col gap-2">
+                    {/* Indicators Container (Stacks upwards) */}
+                    <div className="flex flex-col gap-2">
+                        {/* File Preview */}
+                        {selectedFile && (
+                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-3 flex items-center gap-3 animate-slide-up shadow-2xl max-w-[80%] self-start">
+                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-indigo-400">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                                    <p className="text-xs text-gray-400">{formatFileSize(selectedFile.size)}</p>
+                                </div>
+                                <button
+                                    onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                    className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
                             </div>
-                            <div className="min-w-0">
-                                <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
-                                <p className="text-xs text-gray-400">{formatFileSize(selectedFile.size)}</p>
-                            </div>
-                            <button
-                                onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Editing Indicator */}
-                    {editingId && (
-                        <div className="absolute bottom-full left-0 right-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
-                            <div className="flex items-center gap-2">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                <span className="font-semibold">Editing message</span>
+                        {/* Editing Indicator */}
+                        {editingId && (
+                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    <span className="font-semibold">Editing message</span>
+                                </div>
+                                <button onClick={() => { setNewMessage(''); setEditingId(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition">Cancel</button>
                             </div>
-                            <button onClick={() => { setNewMessage(''); setEditingId(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition">Cancel</button>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Replying Indicator */}
-                    {replyingTo && (
-                        <div className="absolute bottom-full left-0 right-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
-                            <div className="flex items-center gap-2 max-w-[80%]">
-                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                                <span className="font-semibold shrink-0">Replying to:</span>
-                                <span className="truncate text-gray-400">{replyingTo.content || '[Attachment]'}</span>
+                        {/* Replying Indicator */}
+                        {replyingTo && (
+                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
+                                <div className="flex items-center gap-2 max-w-[80%]">
+                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                    <span className="font-semibold shrink-0">Replying to:</span>
+                                    <span className="truncate text-gray-400">{replyingTo.content || '[Attachment]'}</span>
+                                </div>
+                                <button onClick={() => { setReplyingTo(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition shrink-0">Cancel</button>
                             </div>
-                            <button onClick={() => { setReplyingTo(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition shrink-0">Cancel</button>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     <form onSubmit={(e) => handleSendMessage(e)} className="group flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20">
                         <input
