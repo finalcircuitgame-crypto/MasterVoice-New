@@ -241,4 +241,41 @@ export const useWebRTC = (
          // Optimistically update state to update UI immediately
          setCallState(CallState.CONNECTED);
          
-     } catch (err)
+     } catch (err) {
+         console.error('[WebRTC] Failed to answer call:', err);
+         cleanup();
+     }
+  };
+
+  const endCall = () => {
+    // Send hangup first
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'signal',
+      payload: { type: 'hangup' } as SignalingPayload,
+    }).catch(e => console.error("Failed to send hangup", e));
+    
+    // Then cleanup locally
+    cleanup();
+  };
+  
+  const toggleMute = () => {
+      if (localStream) {
+          localStream.getAudioTracks().forEach(track => {
+              track.enabled = !track.enabled;
+          });
+          setIsMuted(!localStream.getAudioTracks()[0]?.enabled);
+      }
+  };
+
+  return {
+    callState,
+    localStream,
+    remoteStream,
+    startCall,
+    endCall,
+    answerCall,
+    toggleMute,
+    isMuted
+  };
+};
