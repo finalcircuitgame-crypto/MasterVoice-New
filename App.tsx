@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { UserProfile } from './types';
+import { UserProfile, CallState } from './types';
 import { Auth } from './components/Auth';
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
@@ -8,6 +8,8 @@ import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
 import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
+import { useWebRTC } from './hooks/useWebRTC';
+import { VoiceCallOverlay } from './components/VoiceCallOverlay';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -18,6 +20,10 @@ const App: React.FC = () => {
   const [showFamilyNotification, setShowFamilyNotification] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
+  // Hoisted Channel State
+  const [channel, setChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
   
@@ -30,21 +36,85 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- HOISTED WEBRTC LOGIC ---
+  // We initialize useWebRTC here so it persists when opening Settings (which is just an overlay)
+  // It effectively stays alive as long as App is mounted and we have a user.
+  const { 
+    callState, 
+    remoteStream, 
+    startCall, 
+    endCall, 
+    answerCall, 
+    toggleMute, 
+    isMuted 
+  } = useWebRTC(channel, currentUser?.id || '');
+
+  // Auto-End Call if leaving the authenticated app area (e.g. going to Landing Page)
+  useEffect(() => {
+    if (callState !== CallState.IDLE) {
+        // If path is public (landing, login, etc), kill the call
+        if (['/', '/login', '/register'].includes(path)) {
+            endCall();
+        }
+    }
+  }, [path, callState, endCall]);
+
+  // --- CHANNEL MANAGEMENT ---
+  // We create the channel in App.tsx so it can be shared by ChatWindow (messages) and useWebRTC (calls)
+  useEffect(() => {
+    if (!currentUser || !selectedUser) {
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+            channelRef.current = null;
+            setChannel(null);
+        }
+        return;
+    }
+
+    const roomId = [currentUser.id, selectedUser.id].sort().join('_');
+    
+    // Only recreate if room changed
+    if (channelRef.current && channelRef.current.topic === `realtime:room:${roomId}`) {
+        return;
+    }
+
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
+
+    console.log(`[App] Joining Room: ${roomId}`);
+    const newChannel = supabase.channel(`room:${roomId}`, {
+        config: { broadcast: { self: false } },
+    });
+    
+    // We subscribe here, but ChatWindow will attach its own listeners to this instance
+    newChannel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+            setChannel(newChannel);
+        }
+    });
+
+    channelRef.current = newChannel;
+
+    return () => {
+        // Cleanup on unmount or user switch
+        if (channelRef.current) {
+             // Don't remove immediately if just switching views, but here we switch users
+             supabase.removeChannel(channelRef.current);
+        }
+    };
+  }, [currentUser?.id, selectedUser?.id]);
+
+
   // Presence logic
   useEffect(() => {
     if (!currentUser) return;
 
-    const channel = supabase.channel('global_presence', {
-      config: {
-        presence: {
-          key: currentUser.id,
-        },
-      },
+    const presenceChannel = supabase.channel('global_presence', {
+      config: { presence: { key: currentUser.id } },
     });
 
-    channel
+    presenceChannel
       .on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState();
+        const newState = presenceChannel.presenceState();
         const onlineIds = new Set<string>();
         Object.keys(newState).forEach(id => onlineIds.add(id));
         setOnlineUsers(onlineIds);
@@ -61,14 +131,14 @@ const App: React.FC = () => {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track({
+          await presenceChannel.track({
             online_at: new Date().toISOString(),
           });
         }
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
     };
   }, [currentUser?.id]);
 
@@ -78,9 +148,6 @@ const App: React.FC = () => {
         const userProfile: UserProfile = {
             id: sessionUser.id,
             email: sessionUser.email || 'No Email',
-            // FAMILY FEATURE LOGIC:
-            // Since the user is signing up/logging in "today" (during this promo),
-            // we grant them family status automatically.
             is_family: true, 
         };
         setCurrentUser(userProfile);
@@ -135,6 +202,7 @@ const App: React.FC = () => {
           setSelectedUser(null);
           setOnlineUsers(new Set());
           hasWelcomedRef.current = false; // Reset welcome ref on logout
+          setChannel(null); // Clear channel
           
           // If on protected route, kick to login
           if (['/conversations', '/settings'].includes(window.location.pathname)) {
@@ -176,15 +244,12 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (path === '/conversations' && params.get('trial') === 'true' && params.get('plan') === 'pro') {
         setShowTrialNotification(true);
-        // Clear params after 5 seconds or immediately to clean URL? 
-        // For now just auto-hide notification
         const timer = setTimeout(() => setShowTrialNotification(false), 5000);
         return () => clearTimeout(timer);
     }
   }, [path]);
 
   const handleSelectUser = (user: UserProfile) => {
-      // Update URL instead of just state, this keeps browser history in sync
       navigate(`/conversations?userId=${user.id}`);
   };
 
@@ -305,13 +370,18 @@ const App: React.FC = () => {
                             currentUser={currentUser!} 
                             recipient={selectedUser} 
                             onlineUsers={onlineUsers}
+                            // Pass hoisted channel and Call props
+                            channel={channel}
+                            callState={callState}
+                            onStartCall={startCall}
+                            onAnswerCall={answerCall}
+                            onEndCall={endCall}
                         />
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-[#030014] relative overflow-hidden">
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
                         
-                        {/* Decorative background blobs */}
                         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
                         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -335,6 +405,18 @@ const App: React.FC = () => {
                  </div>
              </div>
         )}
+
+        {/* Voice Call Overlay - Rendered Globally at Root */}
+        {/* Pass props hoisted from useWebRTC */}
+        <VoiceCallOverlay 
+            callState={callState} 
+            remoteStream={remoteStream} 
+            onEndCall={endCall} 
+            onAnswer={answerCall} 
+            toggleMute={toggleMute}
+            isMuted={isMuted}
+            recipient={selectedUser || undefined}
+        />
     </div>
   );
 };

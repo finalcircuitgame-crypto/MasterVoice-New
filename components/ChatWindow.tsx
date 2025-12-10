@@ -1,14 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Message, UserProfile, CallState, Attachment } from '../types';
-import { useWebRTC } from '../hooks/useWebRTC';
-import { VoiceCallOverlay } from './VoiceCallOverlay';
 import { ICE_SERVERS } from '../constants';
 
 interface ChatWindowProps {
   currentUser: UserProfile;
   recipient: UserProfile;
   onlineUsers: Set<string>;
+  // Props from App.tsx
+  channel: ReturnType<typeof supabase.channel> | null;
+  callState: CallState;
+  onStartCall: () => void;
+  onAnswerCall: () => void;
+  onEndCall: () => void;
 }
 
 interface MessageItemProps {
@@ -51,7 +55,18 @@ const MessageItem: React.FC<MessageItemProps> = ({
     const [showReactions, setShowReactions] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     
-    // Close actions when clicking outside
+    // Check if message was recently edited
+    const isRecentlyEdited = msg.updated_at && msg.created_at && 
+        new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
+        
+    const isSending = msg.status === 'sending';
+    const isError = msg.status === 'error';
+
+    const hasReacted = (emoji: string) => {
+        return msg.reactions?.[emoji]?.includes(currentUser.id);
+    };
+
+    // Click Outside Handler
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -59,20 +74,14 @@ const MessageItem: React.FC<MessageItemProps> = ({
                 setShowReactions(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        // Use capture to catch events early
+        document.addEventListener('mousedown', handleClickOutside, true);
+        return () => document.removeEventListener('mousedown', handleClickOutside, true);
     }, []);
 
-    // Check if message was recently edited (compare string timestamps safely)
-    const isRecentlyEdited = msg.updated_at && msg.created_at && 
-        new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000; // 1s buffer
-        
-    const isSending = msg.status === 'sending';
-    const isError = msg.status === 'error';
-
-    // Helper to check if current user reacted
-    const hasReacted = (emoji: string) => {
-        return msg.reactions?.[emoji]?.includes(currentUser.id);
+    const handleToggleActions = (e: React.MouseEvent) => {
+        e.preventDefault(); 
+        setShowActions(!showActions);
     };
 
     const renderAttachment = () => {
@@ -80,7 +89,8 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
         if (msg.attachment.type === 'image') {
             return (
-                <div className="mb-2 relative rounded-lg overflow-hidden group/image">
+                <div className="mb-2 relative rounded-lg overflow-hidden group/image pointer-events-none">
+                     {/* pointer-events-none ensures tap goes to bubble handler, not image */}
                     {!imageLoaded && (
                         <div className="w-full h-48 bg-gray-800/50 animate-pulse flex items-center justify-center">
                             <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -92,27 +102,12 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         className={`max-w-full rounded-lg max-h-80 object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute top-0 left-0'}`}
                         onLoad={() => setImageLoaded(true)}
                     />
-                    <a 
-                        href={msg.attachment.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="absolute inset-0 bg-black/50 opacity-0 group-hover/image:opacity-100 transition-opacity flex items-center justify-center text-white"
-                        onClick={(e) => e.stopPropagation()} // Prevent bubble click
-                    >
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    </a>
                 </div>
             );
         }
 
         return (
-            <a 
-                href={msg.attachment.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors ${isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-black/20 hover:bg-black/30'} border border-white/10`}
-                onClick={(e) => e.stopPropagation()}
-            >
+            <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors ${isMe ? 'bg-white/10' : 'bg-black/20'} border border-white/10`}>
                 <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-indigo-400 shrink-0">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </div>
@@ -120,10 +115,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                     <p className="text-sm font-bold truncate text-white">{msg.attachment.name}</p>
                     <p className="text-xs text-gray-400">{formatFileSize(msg.attachment.size)}</p>
                 </div>
-                <div className="ml-auto">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                </div>
-            </a>
+            </div>
         );
     };
 
@@ -131,27 +123,28 @@ const MessageItem: React.FC<MessageItemProps> = ({
         <div 
             ref={containerRef}
             className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter group relative px-2`}
-            onMouseEnter={() => setShowActions(true)}
-            onMouseLeave={() => { if (!showReactions) setShowActions(false); }}
         >
-             {/* Action Buttons */}
+             {/* Action Menu (Popped out) */}
              {showActions && !isSending && !isError && (
-                <div className={`flex items-center space-x-1 animate-fade-in absolute top-1/2 -translate-y-1/2 px-2 z-20 ${isMe ? 'right-full mr-2' : 'left-full ml-2'}`}>
-                    
-                    {/* Reaction Trigger */}
+                <div 
+                    className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in top-1/2 -translate-y-1/2 ${isMe ? 'right-full mr-2' : 'left-full ml-2'}`}
+                    onClick={(e) => e.stopPropagation()} // Prevent bubble toggle
+                >
+                    {/* Reaction Button */}
                     <div className="relative">
                         <button 
-                            onClick={(e) => { e.stopPropagation(); setShowReactions(!showReactions); }}
-                            className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                            onClick={() => setShowReactions(!showReactions)}
+                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-indigo-400 transition"
+                            title="React"
                         >
-                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </button>
                         {showReactions && (
-                            <div className={`absolute bottom-full mb-2 ${isMe ? 'right-0' : 'left-0'} flex bg-[#1a1a20] border border-white/10 rounded-full p-1 shadow-xl z-30 animate-scale-in min-w-max`}>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex bg-[#2a2a30] border border-white/20 rounded-full p-1 shadow-xl z-50 min-w-max">
                                 {COMMON_REACTIONS.map(emoji => (
                                     <button 
                                         key={emoji}
-                                        onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); }}
+                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
                                         className={`p-2 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
                                     >
                                         {emoji}
@@ -162,30 +155,30 @@ const MessageItem: React.FC<MessageItemProps> = ({
                     </div>
 
                     <button 
-                        onClick={(e) => { e.stopPropagation(); onReply(msg); }}
-                        className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                        onClick={() => { onReply(msg); setShowActions(false); }}
+                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
                         title="Reply"
                     >
-                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                     </button>
 
-                    {/* Only show Edit/Delete if it's MY message */}
                     {isMe && !msg.attachment && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onEdit(msg); }}
-                            className="p-1.5 bg-gray-800/90 hover:bg-indigo-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                            onClick={() => { onEdit(msg); setShowActions(false); }}
+                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition"
                             title="Edit"
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                         </button>
                     )}
+
                     {isMe && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onDelete(msg.id); }}
-                            className="p-1.5 bg-gray-800/90 hover:bg-red-600 backdrop-blur-md rounded-full text-gray-400 hover:text-white transition border border-white/10 shadow-lg"
+                            onClick={() => { onDelete(msg.id); setShowActions(false); }}
+                            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-red-500 transition"
                             title="Delete"
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     )}
                 </div>
@@ -193,7 +186,6 @@ const MessageItem: React.FC<MessageItemProps> = ({
 
             <div 
                 className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}
-                onClick={() => setShowActions(!showActions)} // Tap message to toggle menu
             >
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     {/* Avatar for Recipient */}
@@ -207,7 +199,10 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         </div>
                     )}
 
-                    <div className="flex flex-col min-w-0 cursor-pointer">
+                    <div 
+                        className="flex flex-col min-w-0 cursor-pointer"
+                        onClick={handleToggleActions} 
+                    >
                         {/* Reply Context */}
                         {msg.reply_to && (
                             <div className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 ${isMe ? 'ml-auto' : ''}`}>
@@ -216,7 +211,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
                             </div>
                         )}
 
-                        <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md ${
+                        <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md hover:brightness-110 ${
                             isMe 
                             ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10' 
                             : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
@@ -224,7 +219,9 @@ const MessageItem: React.FC<MessageItemProps> = ({
                             
                             {renderAttachment()}
                             
-                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
+                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px] select-text pointer-events-none">{msg.content}</p>}
+                            {/* NOTE: select-text combined with pointer-events-none on paragraph allows tap on container to fire, but selection is harder on mobile. 
+                                Trade-off for reliable interaction menu. */}
                             
                             <div className={`flex items-center justify-between mt-1.5 gap-3 select-none ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
                                 <div className="flex items-center gap-1.5">
@@ -259,18 +256,21 @@ const MessageItem: React.FC<MessageItemProps> = ({
                         )}
                     </div>
                 </div>
-
-                {isError && (
-                    <button onClick={() => onRetry(msg)} className="mb-2 p-2 bg-red-600 rounded-full hover:bg-red-500 text-white transition shadow-lg shrink-0 self-end" title="Retry">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    </button>
-                )}
             </div>
         </div>
     );
 };
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, onlineUsers }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ 
+    currentUser, 
+    recipient, 
+    onlineUsers,
+    channel, // Received from App
+    callState,
+    onStartCall,
+    onEndCall,
+    onAnswerCall
+}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -290,29 +290,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
   const [showCallTerms, setShowCallTerms] = useState(false);
   const [pendingAction, setPendingAction] = useState<'start' | 'answer' | null>(null);
   const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
-
-  const roomId = [currentUser.id, recipient.id].sort().join('_');
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const [channel, setChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const isRecipientOnline = onlineUsers.has(recipient.id);
   const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
+  const roomId = [currentUser.id, recipient.id].sort().join('_');
 
   useEffect(() => {
-    if (channelRef.current) supabase.removeChannel(channelRef.current);
+    // If channel provided by App, use it for messaging
+    if (!channel) return;
 
-    const newChannel = supabase.channel(`room:${roomId}`, {
-        config: { broadcast: { self: false } },
-    });
-
-    newChannel
+    const subscription = channel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages' },
         (payload) => {
             const { eventType, new: newRecord, old: oldRecord } = payload;
             
-            // Check relevance
+            // Relevance check
             const record = (newRecord || oldRecord) as any;
             if (!record) return;
             const isRelevant = 
@@ -330,6 +325,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
                 }
             } else if (eventType === 'UPDATE') {
+                // Preserve reply info if it was loaded
                 setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...m, ...newRecord, status: 'sent', reply_to: m.reply_to } : m));
             } else if (eventType === 'DELETE') {
                 setMessages((prev) => prev.filter(m => m.id !== oldRecord.id));
@@ -343,16 +339,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
               typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
           }
       })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setChannel(newChannel);
-      });
+      .subscribe();
 
-    channelRef.current = newChannel;
     return () => {
-        if (channelRef.current) supabase.removeChannel(channelRef.current);
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+       // Cleanup handled by App.tsx logic largely, but we unsubscribe specific listeners if needed
+       // Supabase client handles duplicates well.
     };
-  }, [roomId, currentUser.id, recipient.id]);
+  }, [channel, currentUser.id, recipient.id]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -386,8 +379,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping, replyingTo]);
 
-  const { callState, remoteStream, startCall, endCall, answerCall, toggleMute, isMuted } = useWebRTC(channel, currentUser.id);
-
   // If call disconnects while terms modal is open for answering, close it
   useEffect(() => {
       if (pendingAction === 'answer' && callState === CallState.IDLE) {
@@ -398,7 +389,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   const handleStartCallClick = () => {
       if (hasAcceptedTerms.current) {
-          startCall();
+          onStartCall();
       } else {
           setPendingAction('start');
           setShowCallTerms(true);
@@ -407,7 +398,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
   const handleAnswerCallClick = () => {
       if (hasAcceptedTerms.current) {
-          answerCall();
+          onAnswerCall();
       } else {
           setPendingAction('answer');
           setShowCallTerms(true);
@@ -420,9 +411,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       setShowCallTerms(false);
       
       if (pendingAction === 'start') {
-          startCall();
+          onStartCall();
       } else if (pendingAction === 'answer') {
-          answerCall();
+          onAnswerCall();
       }
       setPendingAction(null);
   };
@@ -562,7 +553,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         
       if (error) {
           console.error("Failed to add reaction", error);
-          // Revert if needed (omitted for brevity)
       }
   };
 
@@ -573,14 +563,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       }
       setNewMessage(msg.content);
       setEditingId(msg.id);
-      setReplyingTo(null); // Cancel reply if editing
-      document.getElementById('chat-input')?.focus();
+      setReplyingTo(null);
+      inputRef.current?.focus();
   };
 
   const handleReply = (msg: Message) => {
       setReplyingTo(msg);
-      setEditingId(null); // Cancel edit if replying
-      document.getElementById('chat-input')?.focus();
+      setEditingId(null);
+      inputRef.current?.focus();
   };
 
   const handleDelete = async (id: string) => {
@@ -595,7 +585,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
       
-      {/* Header - Hidden on Mobile in favor of App wrapper header, shown on Desktop */}
+      {/* Header */}
       <div className="hidden md:flex px-6 py-4 justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
         <div className="flex items-center space-x-4">
             <div className="relative">
@@ -629,18 +619,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         </div>
 
         <div className="flex items-center gap-3">
-            {currentUser.is_family && (
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/5 mr-2">
-                    <button 
-                        onClick={() => setFamilyModeEnabled(!familyModeEnabled)}
-                        className={`w-7 h-3.5 rounded-full relative transition-colors duration-300 ${familyModeEnabled ? 'bg-amber-500' : 'bg-gray-600'}`}
-                    >
-                        <div className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform duration-300 ${familyModeEnabled ? 'translate-x-3.5' : 'translate-x-0'}`}></div>
-                    </button>
-                    <span className={`text-[9px] font-bold ${familyModeEnabled ? 'text-amber-400' : 'text-gray-500'}`}>PRIORITY</span>
-                </div>
-            )}
-            
             <button
               onClick={handleStartCallClick}
               disabled={callState !== CallState.IDLE}
@@ -658,7 +636,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
         </div>
       </div>
       
-      {/* Mobile Only Header Actions (If needed, typically inside App.tsx wrapper for mobile) */}
+      {/* Mobile Only Header Actions */}
       <div className="md:hidden absolute top-4 right-4 z-30">
            <button
               onClick={handleStartCallClick}
@@ -730,11 +708,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             {selectedFile && (
                 <div className="absolute bottom-full left-0 mb-3 mx-4 bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-3 flex items-center gap-3 animate-slide-up shadow-2xl z-30 max-w-[80%]">
                     <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-indigo-400">
-                        {selectedFile.type.startsWith('image/') ? (
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        ) : (
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        )}
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
@@ -790,6 +764,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
               
               <input
                 id="chat-input"
+                ref={inputRef}
                 type="text"
                 className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 font-medium text-[15px]"
                 placeholder={editingId ? "Update your message..." : replyingTo ? "Type your reply..." : "Message..."}
@@ -818,16 +793,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             </form>
         </div>
       </div>
-
-      <VoiceCallOverlay 
-        callState={callState} 
-        remoteStream={remoteStream} 
-        onEndCall={endCall} 
-        onAnswer={handleAnswerCallClick}
-        toggleMute={toggleMute}
-        isMuted={isMuted}
-        recipient={recipient}
-      />
 
         {/* Call Terms Modal */}
         {showCallTerms && (
