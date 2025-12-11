@@ -67,7 +67,8 @@ interface MessageItemProps {
     availableEmojis: string[];
 }
 
-const EMOJI_SOURCE_URL = 'https://raw.githubusercontent.com/hassankhan/emojis/master/lib/data/emojis.json';
+// Updated Emoji URL to a reliable CDN
+const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 
 // Default Fallback List
 const DEFAULT_EMOJI_LIST = [
@@ -340,10 +341,7 @@ const MessageItem = React.memo<MessageItemProps>(({
         </div>
     );
 }, (prev, next) => {
-    // Custom Comparator to ignore constant function prop recreation on parent re-render
-    // Note: We deliberately exclude 'availableEmojis' from shallow comparison here assuming the list
-    // settles quickly after mount. If we compare full array, every fetch update re-renders all messages.
-    // The list ref changes only once usually.
+    // Custom Comparator
     return (
         prev.msg === next.msg && 
         prev.isMe === next.isMe && 
@@ -377,7 +375,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [loading, setLoading] = useState(true);
     const [remoteDrafts, setRemoteDrafts] = useState<Record<string, { content: string, email: string }>>({});
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-    const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST); // Emoji State
+    const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
+    
+    // Add Member State
+    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+    const [friends, setFriends] = useState<UserProfile[]>([]);
+    const [addingMember, setAddingMember] = useState(false);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const lastTypingBroadcast = useRef<number>(0);
@@ -402,7 +405,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
 
-    const { showAlert } = useModal(); // Use Modal Hook
+    const { showAlert } = useModal(); 
 
     const isGroup = !!selectedGroup;
     const isRecipientOnline = recipient ? onlineUsers.has(recipient.id) : false;
@@ -416,9 +419,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 const response = await fetch(EMOJI_SOURCE_URL);
                 if (response.ok) {
                     const data = await response.json();
-                    // The data is object { "name": "emoji_char" }
-                    const emojis = Array.from(new Set(Object.values(data) as string[]));
-                    setEmojiList(emojis);
+                    // Apple dataset structure is typically array of objects { unified: '1F600', ... }
+                    // Or simpler JSON. Let's handle generic array of objects with 'unified' or direct strings
+                    let emojis: string[] = [];
+                    if (Array.isArray(data)) {
+                        emojis = data.map((item: any) => {
+                            if (typeof item === 'string') return item;
+                            if (item.unified) return String.fromCodePoint(...item.unified.split('-').map((u: string) => parseInt(u, 16)));
+                            if (item.char) return item.char;
+                            return null;
+                        }).filter(Boolean);
+                    }
+                    
+                    if (emojis.length > 0) {
+                        setEmojiList(Array.from(new Set(emojis)).slice(0, 300)); // Limit to 300 for performance
+                    }
                 }
             } catch (error) {
                 console.error("Failed to load emojis, using defaults.", error);
@@ -426,6 +441,60 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         };
         fetchEmojis();
     }, []);
+
+    // Fetch Friends for Group Adding
+    const fetchFriends = async () => {
+        if (!isGroup) return;
+        
+        // 1. Get user's friends
+        const { data: requests } = await supabase
+            .from('friend_requests')
+            .select('sender_id, receiver_id')
+            .eq('status', 'accepted')
+            .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
+            
+        const friendIds = new Set<string>();
+        requests?.forEach(req => {
+            friendIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
+        });
+
+        if (friendIds.size === 0) return;
+
+        // 2. Get current group members to exclude them
+        const { data: currentMembers } = await supabase
+            .from('group_members')
+            .select('user_id')
+            .eq('group_id', selectedGroup!.id);
+            
+        const currentMemberIds = new Set(currentMembers?.map(m => m.user_id));
+
+        const availableFriendIds = Array.from(friendIds).filter(id => !currentMemberIds.has(id));
+
+        if (availableFriendIds.length > 0) {
+            const { data: profiles } = await supabase.from('profiles').select('*').in('id', availableFriendIds);
+            setFriends(profiles || []);
+        } else {
+            setFriends([]);
+        }
+    };
+
+    const handleAddMember = async (userId: string) => {
+        if (!selectedGroup) return;
+        setAddingMember(true);
+        try {
+            await supabase.from('group_members').insert({
+                group_id: selectedGroup.id,
+                user_id: userId
+            });
+            // Remove from local list
+            setFriends(prev => prev.filter(f => f.id !== userId));
+            showAlert("Success", "Member added to group!");
+        } catch (e: any) {
+            showAlert("Error", "Failed to add member: " + e.message);
+        } finally {
+            setAddingMember(false);
+        }
+    };
 
     // ... subscriptions ...
     useEffect(() => {
@@ -885,7 +954,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             {!isGroup && isPenguin && <span className="text-xl animate-wobble">🐧</span>}
                         </div>
                         {isGroup ? (
-                            <span className="text-xs font-medium text-indigo-400">Group Chat</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-indigo-400">Group Chat</span>
+                                <button 
+                                    onClick={() => { setShowAddMemberModal(true); fetchFriends(); }}
+                                    className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded transition"
+                                >
+                                    + Add Member
+                                </button>
+                            </div>
                         ) : (
                             <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-500'}`}>{isRecipientOnline ? 'Active Now' : 'Offline'}</span>
                         )}
@@ -916,6 +993,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
 
             <div className="md:hidden absolute top-4 right-4 z-30">
+                {isGroup && (
+                    <button 
+                        onClick={() => { setShowAddMemberModal(true); fetchFriends(); }}
+                        className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-md"
+                    >
+                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                )}
                 {!isGroup && (
                     isReturnToCall ? (
                         <button 
@@ -1067,6 +1152,46 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                 </div>
             </div>
+
+            {/* Add Member Modal */}
+            {showAddMemberModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-white">Add Members</h3>
+                            <button onClick={() => setShowAddMemberModal(false)} className="text-gray-400 hover:text-white transition">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        
+                        <div className="max-h-64 overflow-y-auto space-y-2 mb-4 pr-1 custom-scrollbar">
+                            {friends.length === 0 ? (
+                                <p className="text-center text-gray-500 text-sm py-4">No available friends to add.</p>
+                            ) : (
+                                friends.map(friend => (
+                                    <div key={friend.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition">
+                                        <div className="flex items-center gap-3">
+                                            {friend.avatar_url ? (
+                                                <img src={friend.avatar_url} className="w-8 h-8 rounded-full object-cover" />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{friend.email[0]}</div>
+                                            )}
+                                            <span className="text-sm font-medium">{friend.email.split('@')[0]}</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleAddMember(friend.id)}
+                                            disabled={addingMember}
+                                            className="p-1.5 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500 hover:text-white transition"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showCallTerms && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">

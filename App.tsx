@@ -62,6 +62,7 @@ const App: React.FC = () => {
     toggleMute, 
     toggleVideo, 
     toggleScreenShare,
+    toggleRemoteAudio, // New function for muting remote peer
     isMuted,
     isVideoEnabled,
     isScreenSharing,
@@ -299,12 +300,14 @@ const App: React.FC = () => {
     const groupIdParam = query.get('groupId');
     
     if (userIdParam) {
+        // Atomic switch: Check if we need to switch
         if (!selectedUser || selectedUser.id !== userIdParam) {
             const fetchUser = async () => {
                 const { data, error } = await supabase.from('profiles').select('*').eq('id', userIdParam).single();
                 if (data && !error) {
-                    setSelectedUser(data);
+                    // Force mutual exclusivity
                     setSelectedGroup(null);
+                    setSelectedUser(data);
                 }
             };
             fetchUser();
@@ -314,17 +317,19 @@ const App: React.FC = () => {
             const fetchGroup = async () => {
                 const { data, error } = await supabase.from('groups').select('*').eq('id', groupIdParam).single();
                 if (data && !error) {
-                    setSelectedGroup(data);
+                    // Force mutual exclusivity
                     setSelectedUser(null);
+                    setSelectedGroup(data);
                 }
             };
             fetchGroup();
         }
     } else {
+        // If no params, only clear if we have selections (prevents flicker on initial load if something is setting state)
         if (selectedUser) setSelectedUser(null);
         if (selectedGroup) setSelectedGroup(null);
     }
-  }, [query, currentUser, selectedUser, selectedGroup]);
+  }, [query, currentUser]); // Removed selectedUser/selectedGroup from deps to prevent loops
 
   // Check for trial params
   useEffect(() => {
@@ -337,12 +342,16 @@ const App: React.FC = () => {
   }, [path]);
 
   const handleSelectUser = (user: UserProfile) => {
+      // Set state locally first for instant feedback, then navigate
       setSelectedGroup(null);
+      setSelectedUser(user);
       navigate(`/conversations?userId=${user.id}`);
   };
 
   const handleSelectGroup = (group: Group) => {
+      // Set state locally first for instant feedback, then navigate
       setSelectedUser(null);
+      setSelectedGroup(group);
       navigate(`/conversations?groupId=${group.id}`);
   };
 
@@ -435,6 +444,7 @@ const App: React.FC = () => {
                 toggleMute={toggleMute}
                 toggleVideo={toggleVideo}
                 toggleScreenShare={toggleScreenShare}
+                toggleRemoteAudio={toggleRemoteAudio} // Pass to Overlay
                 isMuted={isMuted}
                 isVideoEnabled={isVideoEnabled}
                 isScreenSharing={isScreenSharing}
@@ -566,6 +576,7 @@ const App: React.FC = () => {
             toggleMute={toggleMute}
             toggleVideo={toggleVideo}
             toggleScreenShare={toggleScreenShare}
+            toggleRemoteAudio={toggleRemoteAudio} // Passed here
             isMuted={isMuted}
             isVideoEnabled={isVideoEnabled}
             isScreenSharing={isScreenSharing}

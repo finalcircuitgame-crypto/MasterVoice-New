@@ -403,6 +403,13 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   // --- Negotiate Helper ---
   const renegotiate = useCallback(async () => {
       if (!pc.current || !channelRef.current) return;
+      
+      // Safety: Don't renegotiate if not stable
+      if (pc.current.signalingState !== 'stable') {
+          console.warn("[WebRTC] Skipping renegotiation, state is not stable:", pc.current.signalingState);
+          return;
+      }
+
       try {
           console.log('[WebRTC] Negotiating new tracks...');
           const offer = await pc.current.createOffer();
@@ -417,23 +424,24 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       }
   }, [userId]);
 
-  // --- Toggle Video ---
+  // --- Toggle Video (Uses replaceTrack to avoid crash) ---
   const toggleVideo = useCallback(async () => {
       if (!pc.current) return;
 
       if (isVideoEnabled) {
           // STOP VIDEO
           if (videoSenderRef.current) {
-              pc.current.removeTrack(videoSenderRef.current);
-              videoSenderRef.current = null;
+              // Instead of removing track (which changes SDP structure), just replace with null
+              // This keeps the "slot" open but sends blackness
+              videoSenderRef.current.replaceTrack(null); 
           }
           if (localVideoStream) {
               localVideoStream.getTracks().forEach(t => t.stop());
               setLocalVideoStream(null);
           }
           setIsVideoEnabled(false);
-          setIsScreenSharing(false); // Reset screen share too if implicit
-          renegotiate();
+          setIsScreenSharing(false);
+          // No need to renegotiate if we just replaceTrack to null
       } else {
           // START VIDEO
           try {
@@ -444,16 +452,32 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
               // Handle track ending (user closes permission/hardware issue)
               videoTrack.onended = () => {
                   setIsVideoEnabled(false);
-                  videoSenderRef.current = null;
+                  if (videoSenderRef.current) videoSenderRef.current.replaceTrack(null);
                   setLocalVideoStream(null);
-                  renegotiate();
               };
 
-              const sender = pc.current.addTrack(videoTrack, videoStream);
-              videoSenderRef.current = sender;
+              // Check if we already have a sender from initial negotiation or previous toggle
+              let sender = videoSenderRef.current;
+              
+              // If we don't have a sender reference, try to find one in the PC
+              if (!sender) {
+                  const senders = pc.current.getSenders();
+                  sender = senders.find(s => s.track && s.track.kind === 'video') || null;
+              }
+
+              if (sender) {
+                  // Seamless switch
+                  await sender.replaceTrack(videoTrack);
+                  videoSenderRef.current = sender;
+              } else {
+                  // Must add new track and renegotiate
+                  const newSender = pc.current.addTrack(videoTrack, videoStream);
+                  videoSenderRef.current = newSender;
+                  renegotiate();
+              }
+              
               setIsVideoEnabled(true);
-              setIsScreenSharing(false); // Can't do both simply in this version
-              renegotiate();
+              setIsScreenSharing(false);
           } catch (e) {
               console.error("Failed to start video", e);
               setConnectionError("Could not access camera");
@@ -461,32 +485,26 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       }
   }, [isVideoEnabled, localVideoStream, renegotiate]);
 
-  // --- Toggle Screen Share ---
+  // --- Toggle Screen Share (Uses replaceTrack) ---
   const toggleScreenShare = useCallback(async () => {
       if (!pc.current) return;
 
       if (isScreenSharing) {
-          // STOP SHARE -> Revert to camera if was enabled, or nothing
+          // STOP SHARE -> Revert to nothing (video off)
           if (videoSenderRef.current) {
-              pc.current.removeTrack(videoSenderRef.current);
-              videoSenderRef.current = null;
+              videoSenderRef.current.replaceTrack(null);
           }
           if (localVideoStream) {
               localVideoStream.getTracks().forEach(t => t.stop());
               setLocalVideoStream(null);
           }
           setIsScreenSharing(false);
-          setIsVideoEnabled(false); // Assume stop means stop video too for simplicity
-          renegotiate();
+          setIsVideoEnabled(false);
       } else {
           // START SHARE
           try {
-              // Stop existing video if any
               if (localVideoStream) {
                   localVideoStream.getTracks().forEach(t => t.stop());
-              }
-              if (videoSenderRef.current) {
-                  pc.current.removeTrack(videoSenderRef.current);
               }
 
               const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -496,16 +514,27 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
               screenTrack.onended = () => {
                   setIsScreenSharing(false);
                   setIsVideoEnabled(false);
-                  videoSenderRef.current = null;
+                  if (videoSenderRef.current) videoSenderRef.current.replaceTrack(null);
                   setLocalVideoStream(null);
-                  renegotiate();
               };
 
-              const sender = pc.current.addTrack(screenTrack, screenStream);
-              videoSenderRef.current = sender;
+              let sender = videoSenderRef.current;
+              if (!sender) {
+                  const senders = pc.current.getSenders();
+                  sender = senders.find(s => s.track && s.track.kind === 'video') || null;
+              }
+
+              if (sender) {
+                  await sender.replaceTrack(screenTrack);
+                  videoSenderRef.current = sender;
+              } else {
+                  const newSender = pc.current.addTrack(screenTrack, screenStream);
+                  videoSenderRef.current = newSender;
+                  renegotiate();
+              }
+
               setIsScreenSharing(true);
-              setIsVideoEnabled(true); // Technically video is enabled, just source is screen
-              renegotiate();
+              setIsVideoEnabled(true);
           } catch (e) {
               console.error("Failed to share screen", e);
           }
@@ -664,6 +693,17 @@ const toggleMute = useCallback(() => {
   }
 }, []);
 
+const toggleRemoteAudio = useCallback(() => {
+    if (remoteStream) {
+        remoteStream.getAudioTracks().forEach(track => {
+            track.enabled = !track.enabled;
+        });
+        // Force re-render if needed via state in parent, 
+        // but simple toggle works on stream level usually.
+        // We will return the status for UI.
+    }
+}, [remoteStream]);
+
 return {
   callState,
   localStream,
@@ -675,6 +715,7 @@ return {
   toggleMute,
   toggleVideo, // Export video toggle
   toggleScreenShare, // Export screen share
+  toggleRemoteAudio, // Export remote mute
   isMuted,
   isVideoEnabled,
   isScreenSharing,
