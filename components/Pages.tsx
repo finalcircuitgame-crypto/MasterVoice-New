@@ -21,7 +21,7 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
         <div className="p-2 rounded-full bg-white/5 group-hover:bg-white/10 mr-3 transition">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </div>
-        <span className="text-sm font-semibold tracking-wide">BACK TO HOME</span>
+        <span className="text-sm font-semibold tracking-wide">BACK</span>
       </button>
 
       <div className={`glass-panel p-8 md:p-12 rounded-3xl border border-white/10 ${wide ? 'bg-[#050510]/80' : ''}`}>
@@ -32,6 +32,77 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
       </div>
     </div>
   </div>
+);
+
+export const Documentation: React.FC<PageProps> = ({ onBack }) => (
+    <PageLayout title="Documentation" onBack={onBack} wide={true}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="col-span-1 border-r border-white/10 pr-6 hidden md:block">
+                <h4 className="font-bold text-white mb-4 uppercase text-xs tracking-wider">Contents</h4>
+                <ul className="space-y-3 text-sm">
+                    <li className="text-indigo-400 cursor-pointer">1. Architecture Overview</li>
+                    <li className="text-gray-400 hover:text-white cursor-pointer">2. Authentication</li>
+                    <li className="text-gray-400 hover:text-white cursor-pointer">3. Database Schema</li>
+                    <li className="text-gray-400 hover:text-white cursor-pointer">4. WebRTC Signaling</li>
+                    <li className="text-gray-400 hover:text-white cursor-pointer">5. Security (RLS)</li>
+                </ul>
+            </div>
+            <div className="col-span-2">
+                <section className="mb-12">
+                    <h2 className="text-2xl font-bold text-white mb-4">1. Architecture Overview</h2>
+                    <p>MasterVoice is a hybrid application leveraging <strong>Supabase</strong> for state management and <strong>WebRTC</strong> for peer-to-peer media. Unlike traditional messaging apps that route all traffic through a central server, MasterVoice establishes direct encrypted tunnels between users for voice and video.</p>
+                    <div className="bg-black/40 p-4 rounded-xl border border-white/10 mt-4 font-mono text-xs">
+                        Client A &lt;-- Signaling (Supabase) --&gt; Client B<br/>
+                        &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|<br/>
+                        &nbsp;&nbsp;&nbsp;+------- Encrypted P2P Media -------+
+                    </div>
+                </section>
+
+                <section className="mb-12">
+                    <h2 className="text-2xl font-bold text-white mb-4">2. Authentication</h2>
+                    <p>We use Supabase GoTrue for authentication. Users are identified by their email and a unique UUID. JWTs (JSON Web Tokens) are issued upon login and stored securely in the browser. These tokens are required for all database interactions.</p>
+                </section>
+
+                <section className="mb-12">
+                    <h2 className="text-2xl font-bold text-white mb-4">3. Database Schema</h2>
+                    <p>Our PostgreSQL database uses the following core tables:</p>
+                    <ul className="list-disc pl-5 space-y-2 mt-2">
+                        <li><strong>profiles:</strong> Public user information (ID, email, avatar).</li>
+                        <li><strong>messages:</strong> Encrypted text content linked to sender/receiver.</li>
+                        <li><strong>groups:</strong> Metadata for multi-user channels.</li>
+                        <li><strong>group_members:</strong> Association table linking users to groups.</li>
+                    </ul>
+                </section>
+
+                <section className="mb-12">
+                    <h2 className="text-2xl font-bold text-white mb-4">4. WebRTC Signaling</h2>
+                    <p>Signaling is the process of coordinating communication. We use Supabase Realtime (WebSockets) to exchange SDP (Session Description Protocol) packets and ICE Candidates.</p>
+                    <pre className="bg-[#111] p-4 rounded-lg mt-4 overflow-x-auto text-sm text-gray-300">
+{`// Example Signaling Payload
+{
+  type: "broadcast", 
+  event: "signal",
+  payload: {
+    type: "offer",
+    sdp: "v=0...",
+    callerId: "uuid-123"
+  }
+}`}
+                    </pre>
+                </section>
+
+                <section>
+                    <h2 className="text-2xl font-bold text-white mb-4">5. Security (RLS)</h2>
+                    <p>Row Level Security (RLS) is enforced on all tables. This ensures that:</p>
+                    <ul className="list-disc pl-5 space-y-2 mt-2">
+                        <li>Users can only read messages sent <em>to</em> them or <em>by</em> them.</li>
+                        <li>Group messages are only accessible to members of that group.</li>
+                        <li>Profile updates are restricted to the account owner.</li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </PageLayout>
 );
 
 export const PlansPage: React.FC<PageProps> = ({ onBack }) => {

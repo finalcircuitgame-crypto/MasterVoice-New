@@ -182,6 +182,9 @@ create policy "Creator can add members" on public.group_members
 -- Add group_id to messages
 alter table public.messages add column if not exists group_id uuid references public.groups(id) on delete cascade;
 
+-- CRITICAL FIX: Make receiver_id NULLABLE to support Group Messages
+alter table public.messages alter column receiver_id drop not null;
+
 -- Recreate Message Policies to handle Groups AND DMs
 drop policy if exists "Users can update messages they are involved in" on messages;
 drop policy if exists "Users can insert messages" on messages;

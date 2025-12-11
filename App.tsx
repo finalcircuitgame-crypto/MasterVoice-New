@@ -7,7 +7,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { GroupWindow } from './components/GroupWindow';
 import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
-import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage } from './components/Pages';
+import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage, Documentation } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
@@ -288,6 +288,7 @@ const App: React.FC = () => {
           case '/privacy': return <PrivacyPolicy onBack={() => navigate('/')} />;
           case '/terms': return <TermsOfService onBack={() => navigate('/')} />;
           case '/contact': return <ContactSupport onBack={() => navigate('/')} />;
+          case '/docs': return <Documentation onBack={() => navigate('/')} />;
           case '/plans/show-more': return <PlansPage onBack={() => navigate('/')} />;
           case '/': return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;
           default: if (showChatInterface) return null; return <NotFoundPage onBack={() => navigate('/')} />;

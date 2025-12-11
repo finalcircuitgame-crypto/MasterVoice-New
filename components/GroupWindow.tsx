@@ -59,7 +59,8 @@ const MessageItem = React.memo<{
     currentUser: UserProfile;
     onReaction: (msg: Message, emoji: string) => void;
     availableEmojis: string[];
-}>(({ msg, isMe, currentUser, onReaction, availableEmojis }) => {
+    onRetry?: (msg: Message) => void;
+}>(({ msg, isMe, currentUser, onReaction, availableEmojis, onRetry }) => {
     const [showActions, setShowActions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
@@ -67,6 +68,8 @@ const MessageItem = React.memo<{
     const senderInitial = msg.sender?.email ? msg.sender.email[0].toUpperCase() : '?';
 
     const hasReacted = (emoji: string) => msg.reactions?.[emoji]?.includes(currentUser.id);
+    const isSending = msg.status === 'sending';
+    const isError = msg.status === 'error';
 
     return (
         <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 group`}>
@@ -82,7 +85,7 @@ const MessageItem = React.memo<{
                         {!isMe && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{senderName}</span>}
                         
                         {/* Reaction Menu */}
-                        {showActions && (
+                        {showActions && !isError && (
                             <div className={`absolute -top-10 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-full p-1 flex gap-1 shadow-xl z-20`}>
                                 {availableEmojis.slice(0, 5).map(emoji => (
                                     <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition text-sm">
@@ -92,10 +95,18 @@ const MessageItem = React.memo<{
                             </div>
                         )}
 
-                        <div className={`relative px-5 py-3 shadow-md backdrop-blur-md ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'}`}>
+                        <div className={`relative px-5 py-3 shadow-md backdrop-blur-md ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'} ${isError ? 'border-red-500 bg-red-900/10' : ''}`}>
                             {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
                             <div className={`flex items-center justify-end mt-1.5 gap-1.5 ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
-                                <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                {isError ? (
+                                    <span className="text-red-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); onRetry?.(msg); }}>
+                                        Failed <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                    </span>
+                                ) : isSending ? (
+                                    <span className="text-white/50 text-[10px]">Sending...</span>
+                                ) : (
+                                    <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                )}
                             </div>
                         </div>
 
@@ -146,15 +157,24 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 .select('*, sender:sender_id(email, avatar_url)')
                 .eq('group_id', selectedGroup.id)
                 .order('created_at', { ascending: true });
-            if (data) setMessages(data);
+            if (data) setMessages(data.map(m => ({ ...m, status: 'sent' })));
             setLoading(false);
         };
         fetchMessages();
 
         const channel = supabase.channel(`group:${selectedGroup.id}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, async (payload) => {
-                const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', payload.new.sender_id).single();
-                setMessages(prev => [...prev, { ...payload.new, sender: data } as Message]);
+                // Skip if we already added it optimistically
+                setMessages(prev => {
+                    if (prev.find(m => m.id === payload.new.id)) return prev;
+                    return prev; // We will handle optimistic update in send
+                });
+
+                // Fetch sender details for incoming messages from others
+                if (payload.new.sender_id !== currentUser.id) {
+                     const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', payload.new.sender_id).single();
+                     setMessages(prev => [...prev, { ...payload.new, sender: data, status: 'sent' } as Message]);
+                }
             })
             // Realtime listener for member additions
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `group_id=eq.${selectedGroup.id}` }, () => {
@@ -166,7 +186,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         fetchMembers();
 
         return () => { supabase.removeChannel(channel); };
-    }, [selectedGroup.id]);
+    }, [selectedGroup.id, currentUser.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -189,8 +209,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
         if (friendIds.size === 0) { setFriends([]); return; }
 
-        // 2. Exclude current members (Reliable because we refresh member list on open)
-        // With the SQL Fix, we can now see all members, so this filtering will actually work correctly.
+        // 2. Exclude current members
         const { data: current } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
         const currentIds = new Set(current?.map(m => m.user_id));
         const available = Array.from(friendIds).filter(id => !currentIds.has(id));
@@ -209,7 +228,6 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         if (!error) {
             setFriends(prev => prev.filter(f => f.id !== userId));
             showAlert("Success", "Member added!");
-            // No need to manually call fetchMembers() because realtime will trigger it
         } else {
             showAlert("Error", "Failed to add member.");
         }
@@ -224,20 +242,52 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         
         // Optimistic
         const tempId = Math.random().toString();
-        setMessages(prev => [...prev, { 
+        const optimisticMsg: Message = { 
             id: tempId, 
             sender_id: currentUser.id, 
             group_id: selectedGroup.id, 
             content, 
             created_at: new Date().toISOString(),
+            status: 'sending',
             sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } 
-        } as Message]);
+        };
+        
+        setMessages(prev => [...prev, optimisticMsg]);
 
-        await supabase.from('messages').insert({
+        // Insert with explicit NULL receiver_id for groups
+        const { data, error } = await supabase.from('messages').insert({
             sender_id: currentUser.id,
             group_id: selectedGroup.id,
+            receiver_id: null, 
             content
-        });
+        }).select().single();
+
+        if (error) {
+            console.error("Group message failed:", error);
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+        } else {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: optimisticMsg.sender, status: 'sent' } : m));
+        }
+    };
+
+    const handleRetry = async (msg: Message) => {
+        // Retry sending a failed message
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sending' } : m));
+        
+        const { data, error } = await supabase.from('messages').insert({
+            sender_id: currentUser.id,
+            group_id: selectedGroup.id,
+            receiver_id: null,
+            content: msg.content
+        }).select().single();
+
+        if (error) {
+            console.error("Retry failed:", error);
+            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
+        } else {
+            // Remove the old temporary message and add the new real one, or update in place
+            setMessages(prev => prev.map(m => m.id === msg.id ? { ...data, sender: msg.sender, status: 'sent' } : m));
+        }
     };
 
     const handleReaction = async (msg: Message, emoji: string) => {
@@ -289,6 +339,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                             currentUser={currentUser} 
                             onReaction={handleReaction} 
                             availableEmojis={emojiList} 
+                            onRetry={handleRetry}
                         />
                     ))
                 )}

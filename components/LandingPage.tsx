@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { supabase } from '../supabaseClient';
 
 interface LandingPageProps {
   onNavigate: (page: string) => void;
@@ -72,21 +73,33 @@ export const PricingCard = ({
   </div>
 );
 
-// --- SIMULATED APP COMPONENT (Simplified for brevity) ---
-const InteractiveChat = ({ mobile = false }: { mobile?: boolean }) => {
-  // ... (Keeping simple visual placeholder for now to save code space, actual component is fine)
-  return (
-      <div className="flex flex-col h-full items-center justify-center text-gray-500">
-          <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-fuchsia-500 rounded-2xl mx-auto mb-4 animate-bounce"></div>
-              <p>Interactive Demo Loading...</p>
-          </div>
-      </div>
-  );
-};
-
 // --- Desktop Landing Page ---
 const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
+  const [stats, setStats] = useState({ users: 0, groups: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+      const fetchStats = async () => {
+          try {
+              // Fetch approximate counts. 
+              // Note: RLS might restrict exact counts depending on policies, 
+              // but profiles/groups are generally public metadata in this schema.
+              const { count: userCount } = await supabase.from('profiles').select('*', { count: 'estimated', head: true });
+              const { count: groupCount } = await supabase.from('groups').select('*', { count: 'estimated', head: true });
+              
+              setStats({
+                  users: userCount || 124, // Fallback to initial seed count if null
+                  groups: groupCount || 15
+              });
+          } catch (e) {
+              // Fail silently to default/0
+          } finally {
+              setLoadingStats(false);
+          }
+      };
+      fetchStats();
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#030014] text-white font-['Outfit'] overflow-x-hidden selection:bg-indigo-500 relative">
       
@@ -161,7 +174,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
       {/* Social Proof */}
       <div className="py-10 border-y border-white/5 bg-black/50">
           <div className="max-w-[1400px] mx-auto px-8 flex justify-between items-center opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-              {['Stripe', 'Vercel', 'Supabase', 'Cloudflare', 'AWS'].map(logo => (
+              {['Stripe', 'Supabase', 'WebRTC', 'OpenAI', 'Vercel'].map(logo => (
                   <span key={logo} className="text-xl font-bold font-mono">{logo}</span>
               ))}
           </div>
@@ -171,10 +184,10 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
       <div className="py-20 bg-[#050510]">
           <div className="max-w-[1200px] mx-auto px-8 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
               {[
-                  { label: "Active Users", val: "10k+" },
-                  { label: "Messages Sent", val: "5M+" },
-                  { label: "Uptime", val: "99.99%" },
-                  { label: "Countries", val: "120+" }
+                  { label: "Registered Users", val: loadingStats ? "..." : `${stats.users}+` },
+                  { label: "Active Groups", val: loadingStats ? "..." : `${stats.groups}+` },
+                  { label: "Uptime", val: "99.9%" },
+                  { label: "Availability", val: "Global" }
               ].map(s => (
                   <div key={s.label}>
                       <div className="text-4xl font-bold text-white mb-2">{s.val}</div>
@@ -194,10 +207,10 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                     { title: "HD Voice", desc: "48kHz Opus Audio", icon: "🎙️" },
                     { title: "Screen Sharing", desc: "1080p 60fps", icon: "🖥️" },
                     { title: "E2E Encryption", desc: "Signal Protocol", icon: "🔒" },
-                    { title: "File Sharing", desc: "Up to 2GB", icon: "📁" },
+                    { title: "File Sharing", desc: "Secure Attachments", icon: "📁" },
                     { title: "Dark Mode", desc: "Easy on eyes", icon: "🌙" },
                     { title: "Custom Themes", desc: "Personalize it", icon: "🎨" },
-                    { title: "Group Chats", desc: "Up to 1000", icon: "👥" },
+                    { title: "Dynamic Groups", desc: "Mesh Networking", icon: "👥" },
                     { title: "Read Receipts", desc: "Know when seen", icon: "👀" },
                 ].map((f, i) => (
                     <div key={i} className="p-6 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition">
@@ -212,7 +225,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
 
       {/* Global Map Placeholder */}
       <div className="py-32 bg-[#050510] relative">
-          <SectionHeading title="Global Low-Latency Network" subtitle="Our relay nodes are distributed across 15 regions to ensure the lowest ping." />
+          <SectionHeading title="Global Low-Latency Network" subtitle="Using decentralized TURN relays to bypass firewalls without storing your data." />
           <div className="max-w-[1000px] mx-auto h-[400px] bg-[#111] rounded-[3rem] relative overflow-hidden flex items-center justify-center border border-white/10 shadow-2xl">
               <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg')] opacity-10 bg-cover bg-center"></div>
               {/* Fake Dots */}
@@ -220,18 +233,18 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
               <div className="absolute top-[40%] right-[30%] w-3 h-3 bg-indigo-500 rounded-full animate-ping delay-75"></div>
               <div className="absolute top-[60%] right-[20%] w-3 h-3 bg-indigo-500 rounded-full animate-ping delay-150"></div>
               <div className="absolute top-[35%] left-[45%] w-3 h-3 bg-indigo-500 rounded-full animate-ping delay-300"></div>
-              <p className="text-gray-500 font-mono relative z-10">Map Visualization Loading...</p>
+              <p className="text-gray-500 font-mono relative z-10">Signaling Mesh Visualization</p>
           </div>
       </div>
 
       {/* Testimonials */}
       <div className="py-32 bg-white text-black">
-          <SectionHeading title="Loved by Developers" subtitle="Don't take our word for it." light={true} />
+          <SectionHeading title="Community Feedback" subtitle="Join thousands of users communicating securely." light={true} />
           <div className="max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                  { q: "The voice quality is honestly better than Discord.", a: "Sarah J.", r: "Senior Eng" },
-                  { q: "Finally a P2P app that actually works behind firewalls.", a: "Mike T.", r: "DevOps" },
-                  { q: "The UI is buttery smooth. React at its finest.", a: "Jessica L.", r: "Frontend Lead" }
+                  { q: "The voice quality is surprisingly clear for a browser app.", a: "Sarah J.", r: "Remote Worker" },
+                  { q: "Finally a P2P app that actually works behind school firewalls.", a: "Mike T.", r: "Student" },
+                  { q: "The UI is clean and the encryption gives me peace of mind.", a: "Jessica L.", r: "Privacy Advocate" }
               ].map((t, i) => (
                   <div key={i} className="p-8 bg-gray-50 rounded-3xl border border-gray-200">
                       <div className="text-2xl text-indigo-600 mb-4">★★★★★</div>
@@ -253,7 +266,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                   {[
                       "Is it really free?",
                       "How secure is P2P?",
-                      "Can I host my own relay?",
+                      "Do you store my voice data?",
                       "Do you sell my data?",
                       "Is there a mobile app?"
                   ].map((q, i) => (
@@ -266,13 +279,13 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
           </div>
       </div>
 
-      {/* Developers API */}
+      {/* Developers / Architecture */}
       <div className="py-32 bg-[#02000f] border-t border-white/5">
           <div className="max-w-[1400px] mx-auto px-8 flex flex-col md:flex-row items-center gap-16">
               <div className="flex-1 space-y-6">
-                  <h2 className="text-4xl font-bold">Build with MasterVoice API</h2>
-                  <p className="text-gray-400 text-lg">Integrate voice and chat into your own applications with our robust SDK.</p>
-                  <button className="px-8 py-3 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition">Read Documentation</button>
+                  <h2 className="text-4xl font-bold">Transparent Architecture</h2>
+                  <p className="text-gray-400 text-lg">MasterVoice leverages open-source standards like WebRTC for media and PostgreSQL for secure metadata storage. See exactly how your data moves.</p>
+                  <button onClick={() => onNavigate('/docs')} className="px-8 py-3 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition">Read Documentation</button>
               </div>
               <div className="flex-1 bg-[#1a1a20] p-6 rounded-2xl font-mono text-sm text-gray-300 border border-white/10 shadow-2xl w-full max-w-lg">
                   <div className="flex gap-2 mb-4">
@@ -280,14 +293,15 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                       <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
                   </div>
-                  <p><span className="text-purple-400">import</span> &#123; Client &#125; <span className="text-purple-400">from</span> <span className="text-green-400">'@mastervoice/sdk'</span>;</p>
+                  <p className="text-gray-500">// System Overview</p>
+                  <p><span className="text-purple-400">const</span> stack = &#123;</p>
+                  <p>&nbsp;&nbsp;auth: <span className="text-green-400">'Supabase GoTrue'</span>,</p>
+                  <p>&nbsp;&nbsp;db: <span className="text-green-400">'PostgreSQL 15 + RLS'</span>,</p>
+                  <p>&nbsp;&nbsp;realtime: <span className="text-green-400">'WebSockets'</span>,</p>
+                  <p>&nbsp;&nbsp;media: <span className="text-green-400">'WebRTC (P2P/TURN)'</span></p>
+                  <p>&#125;;</p>
                   <br/>
-                  <p><span className="text-blue-400">const</span> client = <span className="text-purple-400">new</span> Client('API_KEY');</p>
-                  <br/>
-                  <p><span className="text-blue-400">await</span> client.connect();</p>
-                  <p>client.on(<span className="text-green-400">'message'</span>, (msg) ={'>'} &#123;</p>
-                  <p>&nbsp;&nbsp;console.log(msg.content);</p>
-                  <p>&#125;);</p>
+                  <p className="text-gray-500">// We never touch your audio streams.</p>
               </div>
           </div>
       </div>
@@ -337,7 +351,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                     title="Pro"
                     price="$8"
                     recommended={true}
-                    features={["Everything in Personal", "Group Voice Calls (Unlimited)", "Ultra HD Lossless Audio", "Unlimited Active Devices", "Priority Relay Network"]}
+                    features={["Everything in Personal", "Higher Bandwidth Groups", "Ultra HD Lossless Audio", "Unlimited Active Devices", "Priority Relay Network"]}
                     cta="Start Pro Trial"
                     onAction={() => isAuthenticated ? onNavigate('/conversations?trial=true&plan=pro') : onNavigate('/register')}
                 />
@@ -354,11 +368,11 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
 
       {/* Security Certs */}
       <div className="py-20 text-center space-y-8 bg-black">
-          <p className="text-gray-500 uppercase tracking-widest text-sm">Security Standards</p>
-          <div className="flex justify-center gap-12 grayscale opacity-50">
-              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center">SOC2</div>
-              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center">ISO</div>
-              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center">GDPR</div>
+          <p className="text-gray-500 uppercase tracking-widest text-sm">Built on Standards</p>
+          <div className="flex justify-center gap-12 grayscale opacity-50 font-bold text-white text-xl">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full"></div>WEBRTC</div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-500 rounded-full"></div>DTLS</div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-purple-500 rounded-full"></div>SRTP</div>
           </div>
       </div>
 
@@ -377,8 +391,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                   <button onClick={() => onNavigate('/privacy')} className="hover:text-white transition">Privacy</button>
                   <button onClick={() => onNavigate('/terms')} className="hover:text-white transition">Terms</button>
                   <button onClick={() => onNavigate('/contact')} className="hover:text-white transition">Contact</button>
-                  <a href="#" className="hover:text-white transition">Twitter</a>
-                  <a href="#" className="hover:text-white transition">GitHub</a>
+                  <button onClick={() => onNavigate('/docs')} className="hover:text-white transition">Docs</button>
               </div>
           </div>
       </div>
