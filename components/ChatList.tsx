@@ -29,7 +29,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   // --- Data Fetching ---
   const fetchData = async () => {
-    // Friends
+    // Friends & Requests
     const { data: requestsData } = await supabase.from('friend_requests')
         .select(`*, sender:sender_id(id, email, avatar_url), receiver:receiver_id(id, email, avatar_url)`)
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
@@ -66,8 +66,30 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   useEffect(() => {
     fetchData();
-    const channel = supabase.channel('public:friend_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, fetchData).subscribe();
-    return () => { supabase.removeChannel(channel); };
+    
+    // Subscribe to Friend Requests (Both incoming and outgoing events)
+    const requestsChannel = supabase.channel('realtime:friend_requests')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
+            console.log("Friend request update detected, refreshing...");
+            fetchData();
+        })
+        .subscribe();
+
+    // Subscribe to Groups (New groups added)
+    const groupsChannel = supabase.channel('realtime:groups_list')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'groups' }, (payload) => {
+            if (payload.new.created_by === currentUser.id) fetchData(); // We already add optimistic, but this confirms
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `user_id=eq.${currentUser.id}` }, () => {
+            // Someone added me to a group
+            fetchData();
+        })
+        .subscribe();
+
+    return () => { 
+        supabase.removeChannel(requestsChannel); 
+        supabase.removeChannel(groupsChannel);
+    };
   }, [currentUser.id]);
 
   // --- Sync Active ID from URL ---
@@ -97,25 +119,29 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   // --- Actions ---
   const sendRequest = async (targetId: string) => {
+      // Optimistic UI update could go here, but realtime is fast enough usually
       await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' });
-      fetchData();
   };
+  
   const acceptRequest = async (id: string) => {
       await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', id);
-      fetchData();
   };
+  
   const cancelRequest = async (id: string) => {
       await supabase.from('friend_requests').delete().eq('id', id);
-      fetchData();
   };
 
   const createGroup = async () => {
       const name = await showPrompt("New Group", "Enter a name for your group:", "e.g. Project Alpha");
       if (!name) return;
       try {
+          // RLS ensures we can only create if auth.uid is sent as created_by
           const { data: group, error } = await supabase.from('groups').insert({ name, created_by: currentUser.id }).select().single();
           if (error) throw error;
+          
+          // Add self as member
           await supabase.from('group_members').insert({ group_id: group.id, user_id: currentUser.id });
+          
           setGroups(prev => [group, ...prev]);
           showAlert("Success", "Group created!");
       } catch (e: any) {
@@ -196,7 +222,14 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                     {searchResults.length > 0 && searchResults.map(user => (
                         <div key={user.id} className="flex justify-between items-center p-2 mt-2 bg-white/5 rounded-xl">
                             <span className="text-sm text-gray-300">{user.email}</span>
-                            <button onClick={() => { sendRequest(user.id); setSearchQuery(''); setSearchResults([]); }} className="text-xs bg-indigo-600 px-2 py-1 rounded text-white">Add</button>
+                            {/* Check if already friend or pending */}
+                            {friends.find(f => f.id === user.id) ? (
+                                <span className="text-xs text-gray-500">Added</span>
+                            ) : incomingRequests.find(r => r.sender_id === user.id) || outgoingRequests.find(r => r.receiver_id === user.id) ? (
+                                <span className="text-xs text-gray-500">Pending</span>
+                            ) : (
+                                <button onClick={() => { sendRequest(user.id); setSearchQuery(''); setSearchResults([]); }} className="text-xs bg-indigo-600 px-2 py-1 rounded text-white">Add</button>
+                            )}
                         </div>
                     ))}
                 </div>

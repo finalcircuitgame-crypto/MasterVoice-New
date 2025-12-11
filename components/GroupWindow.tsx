@@ -61,7 +61,6 @@ const MessageItem = React.memo<{
     availableEmojis: string[];
 }>(({ msg, isMe, currentUser, onReaction, availableEmojis }) => {
     const [showActions, setShowActions] = useState(false);
-    const [showReactions, setShowReactions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
     const senderAvatar = msg.sender?.avatar_url;
@@ -139,7 +138,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         }).catch(() => {});
     }, []);
 
-    // Load Group Data
+    // Load Group Data & Setup Realtime
     useEffect(() => {
         const fetchMessages = async () => {
             setLoading(true);
@@ -157,7 +156,14 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', payload.new.sender_id).single();
                 setMessages(prev => [...prev, { ...payload.new, sender: data } as Message]);
             })
+            // Realtime listener for member additions
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `group_id=eq.${selectedGroup.id}` }, () => {
+                fetchMembers(); // Reload members if someone else adds one
+            })
             .subscribe();
+
+        // Initial member load
+        fetchMembers();
 
         return () => { supabase.removeChannel(channel); };
     }, [selectedGroup.id]);
@@ -183,7 +189,8 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
         if (friendIds.size === 0) { setFriends([]); return; }
 
-        // 2. Exclude current members
+        // 2. Exclude current members (Reliable because we refresh member list on open)
+        // With the SQL Fix, we can now see all members, so this filtering will actually work correctly.
         const { data: current } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
         const currentIds = new Set(current?.map(m => m.user_id));
         const available = Array.from(friendIds).filter(id => !currentIds.has(id));
@@ -202,7 +209,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         if (!error) {
             setFriends(prev => prev.filter(f => f.id !== userId));
             showAlert("Success", "Member added!");
-            fetchMembers(); // Refresh member list
+            // No need to manually call fetchMembers() because realtime will trigger it
         } else {
             showAlert("Error", "Failed to add member.");
         }

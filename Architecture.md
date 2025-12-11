@@ -1,3 +1,4 @@
+
 # Architecture & Deployment Guide
 
 ## 1. System Components
@@ -23,7 +24,7 @@
 
 ## 2. SQL Schema (Run in Supabase SQL Editor)
 
-**CRITICAL: Run this ENTIRE block to fix "Row-Level Security" errors, "Avatar" issues, and Enable Groups:**
+**CRITICAL: Run this ENTIRE block to fix "Row-Level Security" errors, "Avatar" issues, and Enable Groups/Friend Requests:**
 
 ```sql
 -- 1. DROP OLD POLICIES TO PREVENT CONFLICTS
@@ -39,6 +40,7 @@ drop policy if exists "Authenticated users can insert attachments" on storage.ob
 -- 2. CREATE ROBUST STORAGE POLICIES (Insert, Select, Update, Delete)
 
 -- Avatars Bucket
+insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true) on conflict do nothing;
 create policy "Public can view avatars"
 on storage.objects for select
 using ( bucket_id = 'avatars' );
@@ -58,6 +60,7 @@ on storage.objects for delete
 using ( bucket_id = 'avatars' and auth.uid() = owner );
 
 -- Attachments Bucket
+insert into storage.buckets (id, name, public) values ('attachments', 'attachments', true) on conflict do nothing;
 create policy "Public can view attachments"
 on storage.objects for select
 using ( bucket_id = 'attachments' );
@@ -73,6 +76,36 @@ alter table public.messages add column if not exists reply_to_id uuid references
 alter table public.messages add column if not exists updated_at timestamp with time zone default timezone('utc'::text, now());
 
 -- ============================
+-- === FRIEND REQUESTS FIX ===
+-- ============================
+create table if not exists public.friend_requests (
+  id uuid default gen_random_uuid() primary key,
+  sender_id uuid references public.profiles(id) not null,
+  receiver_id uuid references public.profiles(id) not null,
+  status text check (status in ('pending', 'accepted', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  unique(sender_id, receiver_id)
+);
+
+alter table public.friend_requests enable row level security;
+drop policy if exists "View requests involved in" on public.friend_requests;
+drop policy if exists "Create requests" on public.friend_requests;
+drop policy if exists "Update requests involved in" on public.friend_requests;
+drop policy if exists "Delete requests involved in" on public.friend_requests;
+
+create policy "View requests involved in" on public.friend_requests
+for select using ( auth.uid() = sender_id OR auth.uid() = receiver_id );
+
+create policy "Create requests" on public.friend_requests
+for insert with check ( auth.uid() = sender_id );
+
+create policy "Update requests involved in" on public.friend_requests
+for update using ( auth.uid() = sender_id OR auth.uid() = receiver_id );
+
+create policy "Delete requests involved in" on public.friend_requests
+for delete using ( auth.uid() = sender_id OR auth.uid() = receiver_id );
+
+-- ============================
 -- === GROUP POLICIES FIX ===
 -- ============================
 
@@ -83,6 +116,7 @@ drop policy if exists "Users can create groups" on public.groups;
 drop policy if exists "View members if in group" on public.group_members;
 drop policy if exists "Creator can add members" on public.group_members;
 drop policy if exists "View own membership" on public.group_members;
+drop policy if exists "View members of my groups" on public.group_members;
 
 -- (Re)Create Tables if not exist
 create table if not exists public.groups (
@@ -104,7 +138,6 @@ alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 
 -- 1. View groups (Select)
--- CRITICAL: Must allow creator to see group immediately after creation (before member row is added)
 create policy "View groups if member or creator" on public.groups
   for select using (
     created_by = auth.uid() OR
@@ -122,9 +155,14 @@ create policy "Users can create groups" on public.groups
     created_by = auth.uid()
   );
 
--- 3. View own membership (Select)
-create policy "View own membership" on public.group_members
-  for select using ( user_id = auth.uid() );
+-- 3. View Group Members (Select) - CRITICAL FIX
+-- Old policy only let you see YOURSELF. This lets you see ALL members of groups you are in.
+create policy "View members of my groups" on public.group_members
+  for select using (
+    group_id in (
+      select group_id from public.group_members where user_id = auth.uid()
+    )
+  );
 
 -- 4. Manage members (Insert)
 create policy "Creator can add members" on public.group_members
@@ -172,16 +210,4 @@ create policy "Users can update messages they are involved in"
     auth.uid() = receiver_id OR
     (group_id is not null AND exists (select 1 from public.group_members where group_id = messages.group_id and user_id = auth.uid()))
   );
-```
-
----
-
-## 3. Environment Variables
-
-Create a `.env` file in your root (or configure in your deployment platform):
-
-```env
-# Get these from Supabase Dashboard -> Project Settings -> API
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
