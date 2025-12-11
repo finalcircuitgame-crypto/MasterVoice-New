@@ -377,9 +377,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
     
-    // Add Member State
+    // Add Member & View Members State
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+    const [showGroupMembersModal, setShowGroupMembersModal] = useState(false);
     const [friends, setFriends] = useState<UserProfile[]>([]);
+    const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
     const [addingMember, setAddingMember] = useState(false);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -419,8 +421,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 const response = await fetch(EMOJI_SOURCE_URL);
                 if (response.ok) {
                     const data = await response.json();
-                    // Apple dataset structure is typically array of objects { unified: '1F600', ... }
-                    // Or simpler JSON. Let's handle generic array of objects with 'unified' or direct strings
                     let emojis: string[] = [];
                     if (Array.isArray(data)) {
                         emojis = data.map((item: any) => {
@@ -432,7 +432,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     }
                     
                     if (emojis.length > 0) {
-                        setEmojiList(Array.from(new Set(emojis)).slice(0, 300)); // Limit to 300 for performance
+                        setEmojiList(Array.from(new Set(emojis)).slice(0, 300));
                     }
                 }
             } catch (error) {
@@ -442,7 +442,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         fetchEmojis();
     }, []);
 
-    // Fetch Friends for Group Adding
+    // Fetch Group Members
+    const fetchGroupMembers = async () => {
+        if (!selectedGroup) return;
+        
+        const { data: memberRows } = await supabase
+            .from('group_members')
+            .select('user_id')
+            .eq('group_id', selectedGroup.id);
+            
+        if (memberRows && memberRows.length > 0) {
+            const ids = memberRows.map(m => m.user_id);
+            const { data: profiles } = await supabase
+                .from('profiles')
+                .select('*')
+                .in('id', ids);
+            if (profiles) setGroupMembers(profiles);
+        } else {
+            setGroupMembers([]);
+        }
+    };
+
+    // Fetch Friends for Group Adding (Filtering out existing members)
     const fetchFriends = async () => {
         if (!isGroup) return;
         
@@ -458,7 +479,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             friendIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
         });
 
-        if (friendIds.size === 0) return;
+        if (friendIds.size === 0) {
+            setFriends([]);
+            return;
+        }
 
         // 2. Get current group members to exclude them
         const { data: currentMembers } = await supabase
@@ -488,6 +512,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             });
             // Remove from local list
             setFriends(prev => prev.filter(f => f.id !== userId));
+            // Refresh member list if it was open or cached
+            fetchGroupMembers();
             showAlert("Success", "Member added to group!");
         } catch (e: any) {
             showAlert("Error", "Failed to add member: " + e.message);
@@ -955,7 +981,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                         {isGroup ? (
                             <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-indigo-400">Group Chat</span>
+                                <span className="text-xs font-medium text-indigo-400 cursor-pointer hover:underline" onClick={() => { setShowGroupMembersModal(true); fetchGroupMembers(); }}>
+                                    View Members
+                                </span>
                                 <button 
                                     onClick={() => { setShowAddMemberModal(true); fetchFriends(); }}
                                     className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded transition"
@@ -995,10 +1023,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="md:hidden absolute top-4 right-4 z-30">
                 {isGroup && (
                     <button 
-                        onClick={() => { setShowAddMemberModal(true); fetchFriends(); }}
+                        onClick={() => { setShowGroupMembersModal(true); fetchGroupMembers(); }}
                         className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-md"
                     >
-                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                     </button>
                 )}
                 {!isGroup && (
@@ -1022,6 +1050,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 relative z-10 scroll-smooth space-y-2 no-scrollbar">
+                {/* ... existing message rendering ... */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4">
                         <div className="relative w-10 h-10"><div className="absolute inset-0 border-2 border-indigo-500/30 rounded-full"></div><div className="absolute inset-0 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
@@ -1058,10 +1087,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     {isGroup && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{draft.email.split('@')[0]} is typing...</span>}
                                     
                                     <div className="bg-white/5 rounded-[1.2rem] rounded-bl-sm px-4 py-3 border border-white/5 text-gray-300 italic flex items-center gap-2 relative overflow-hidden">
-                                        {/* Animated Gradient Border/Overlay for "Ghost" effect */}
                                         <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent animate-pulse"></div>
                                         <span className="relative z-10 text-sm">{draft.content}</span>
-                                        <span className="w-1.5 h-4 bg-indigo-500 animate-pulse relative z-10"></span> {/* Cursor */}
+                                        <span className="w-1.5 h-4 bg-indigo-500 animate-pulse relative z-10"></span>
                                     </div>
                                 </div>
                             </div>
@@ -1072,6 +1100,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
 
             <div className="p-4 md:p-6 pt-2 relative z-20 pb-safe">
+                {/* ... existing input area ... */}
                 <div className="max-w-4xl mx-auto flex flex-col gap-2">
                     <div className="flex flex-col gap-2">
                         {selectedFile && (
@@ -1152,6 +1181,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                 </div>
             </div>
+
+            {/* View Members Modal */}
+            {showGroupMembersModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-white">Group Members</h3>
+                            <button onClick={() => setShowGroupMembersModal(false)} className="text-gray-400 hover:text-white transition">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        
+                        <div className="max-h-64 overflow-y-auto space-y-2 mb-4 pr-1 custom-scrollbar">
+                            {groupMembers.length === 0 ? (
+                                <p className="text-center text-gray-500 text-sm py-4">No members found.</p>
+                            ) : (
+                                groupMembers.map(member => (
+                                    <div key={member.id} className="flex items-center p-3 rounded-xl bg-white/5 transition">
+                                        <div className="flex items-center gap-3">
+                                            {member.avatar_url ? (
+                                                <img src={member.avatar_url} className="w-8 h-8 rounded-full object-cover" />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{member.email[0]}</div>
+                                            )}
+                                            <span className="text-sm font-medium">{member.email.split('@')[0]}</span>
+                                            {member.id === currentUser.id && <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded">You</span>}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="mt-4">
+                            <button 
+                                onClick={() => { setShowGroupMembersModal(false); setShowAddMemberModal(true); fetchFriends(); }}
+                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition"
+                            >
+                                + Add Member
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add Member Modal */}
             {showAddMemberModal && (

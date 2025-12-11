@@ -282,17 +282,17 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                     )}
 
                     {/* Header Controls */}
-                    <div className="w-full flex justify-between items-center p-6 pt-safe-top z-20 absolute top-0 bg-gradient-to-b from-black/60 to-transparent">
-                        <button onClick={() => setIsMaximized(false)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition backdrop-blur-md">
+                    <div className="w-full flex justify-between items-center p-6 pt-safe-top z-20 absolute top-0 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+                        <button onClick={() => setIsMaximized(false)} className="pointer-events-auto p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition backdrop-blur-md shadow-lg" title="Minimize">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </button>
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center pointer-events-auto">
                             <span className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${callState === CallState.RECONNECTING ? 'text-amber-400' : 'text-green-400'}`}>
                                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${callState === CallState.RECONNECTING ? 'bg-amber-500' : 'bg-green-500'}`}></div> 
                                  {callState === CallState.RECONNECTING ? 'Reconnecting...' : 'Encrypted P2P'}
                             </span>
                         </div>
-                        <button onClick={() => setShowDebug(!showDebug)} className={`p-2 rounded-full transition backdrop-blur-md ${showDebug ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>
+                        <button onClick={() => setShowDebug(!showDebug)} className={`pointer-events-auto p-2 rounded-full transition backdrop-blur-md ${showDebug ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                         </button>
                     </div>

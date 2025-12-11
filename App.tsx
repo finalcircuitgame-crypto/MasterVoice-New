@@ -292,44 +292,51 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Handle URL-based Chat Selection (Deep Linking)
+  // Handle URL-based Chat Selection (Deep Linking) with Flicker Prevention
   useEffect(() => {
     if (!currentUser) return;
     
     const userIdParam = query.get('userId');
     const groupIdParam = query.get('groupId');
     
+    // If we have params, handle switching
     if (userIdParam) {
-        // Atomic switch: Check if we need to switch
         if (!selectedUser || selectedUser.id !== userIdParam) {
             const fetchUser = async () => {
                 const { data, error } = await supabase.from('profiles').select('*').eq('id', userIdParam).single();
                 if (data && !error) {
-                    // Force mutual exclusivity
                     setSelectedGroup(null);
                     setSelectedUser(data);
                 }
             };
             fetchUser();
+        } else if (selectedGroup) {
+            // If user matches but we still have a group set, clear group
+            setSelectedGroup(null);
         }
     } else if (groupIdParam) {
         if (!selectedGroup || selectedGroup.id !== groupIdParam) {
             const fetchGroup = async () => {
                 const { data, error } = await supabase.from('groups').select('*').eq('id', groupIdParam).single();
                 if (data && !error) {
-                    // Force mutual exclusivity
                     setSelectedUser(null);
                     setSelectedGroup(data);
                 }
             };
             fetchGroup();
+        } else if (selectedUser) {
+            // If group matches but we still have a user set, clear user
+            setSelectedUser(null);
         }
     } else {
-        // If no params, only clear if we have selections (prevents flicker on initial load if something is setting state)
-        if (selectedUser) setSelectedUser(null);
-        if (selectedGroup) setSelectedGroup(null);
+        // Only clear if we explicitly have NO params and are not on a specific conversation path intent
+        // This prevents flicker on mount if App loads before params are processed
+        if (window.location.search === '' && (selectedUser || selectedGroup)) {
+             setSelectedUser(null);
+             setSelectedGroup(null);
+        }
     }
-  }, [query, currentUser]); // Removed selectedUser/selectedGroup from deps to prevent loops
+  }, [query, currentUser]); // Removing selectedUser/selectedGroup from deps prevents recursive updates
 
   // Check for trial params
   useEffect(() => {
@@ -343,16 +350,20 @@ const App: React.FC = () => {
 
   const handleSelectUser = (user: UserProfile) => {
       // Set state locally first for instant feedback, then navigate
-      setSelectedGroup(null);
-      setSelectedUser(user);
-      navigate(`/conversations?userId=${user.id}`);
+      if (selectedUser?.id !== user.id) {
+          setSelectedGroup(null);
+          setSelectedUser(user);
+          navigate(`/conversations?userId=${user.id}`);
+      }
   };
 
   const handleSelectGroup = (group: Group) => {
       // Set state locally first for instant feedback, then navigate
-      setSelectedUser(null);
-      setSelectedGroup(group);
-      navigate(`/conversations?groupId=${group.id}`);
+      if (selectedGroup?.id !== group.id) {
+          setSelectedUser(null);
+          setSelectedGroup(group);
+          navigate(`/conversations?groupId=${group.id}`);
+      }
   };
 
   const handleOpenSettings = () => {
@@ -435,6 +446,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
             )}
+            {/* Always mount overlay even on landing pages if persistence is needed, though usually hidden */}
             <VoiceCallOverlay 
                 callState={callState} 
                 remoteStream={remoteStream} 
