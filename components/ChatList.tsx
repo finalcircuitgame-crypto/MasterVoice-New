@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserProfile, FriendRequest, FriendshipStatus, Group } from '../types';
+import { useModal } from './ModalContext';
 
 interface ChatListProps {
   currentUser: UserProfile;
@@ -21,6 +22,9 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Modal Hooks
+  const { showPrompt, showAlert } = useModal();
 
   // --- Data Fetching ---
   
@@ -69,10 +73,6 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     const { data: groupData } = await supabase
         .from('groups')
         .select('*'); 
-    // Note: In real app, we'd join group_members to only show groups user is in
-    // But for this demo we might fetch all if RLS allows or just fetch my groups
-    // The RLS policy I gave allows selecting groups you are a member of.
-    // However, if we just created a group, we should be in it.
     
     if (groupData) setGroups(groupData);
   };
@@ -163,7 +163,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   };
 
   const createGroup = async () => {
-      const name = prompt("Enter group name:");
+      const name = await showPrompt("New Group", "Enter a name for your group:", "e.g. Project Alpha");
       if (!name) return;
 
       try {
@@ -184,9 +184,9 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
           if (memberError) throw memberError;
 
           fetchData();
-          alert("Group created!");
+          await showAlert("Success", "Group created successfully!");
       } catch (e: any) {
-          alert("Error creating group: " + e.message);
+          await showAlert("Error", "Could not create group: " + e.message);
       }
   };
 

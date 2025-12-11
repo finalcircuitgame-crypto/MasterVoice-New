@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ModalProvider } from './components/ModalContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,6 +12,8 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   // StrictMode can cause double-invoke of effects, handled in WebRTC logic via refs
   <React.StrictMode>
-    <App />
+    <ModalProvider>
+      <App />
+    </ModalProvider>
   </React.StrictMode>
 );

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Message, UserProfile, CallState, Attachment } from '../types';
 import { ICE_SERVERS } from '../constants';
+import { useModal } from './ModalContext';
 
 // --- Confetti Utility ---
 const triggerConfetti = () => {
@@ -331,6 +332,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     onEndCall,
     onAnswerCall
 }) => {
+    // ... existing state ...
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -360,10 +362,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
 
+    const { showAlert } = useModal(); // Use Modal Hook
+
     const isRecipientOnline = onlineUsers.has(recipient.id);
     const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
     const roomId = [currentUser.id, recipient.id].sort().join('_');
 
+    // ... subscriptions ...
     useEffect(() => {
         const chatRoomId = [currentUser.id, recipient.id].sort().join('_');
         const newChannel = supabase.channel(`chat_messages:${chatRoomId}`);
@@ -481,7 +486,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setIsRecording(true);
         } catch (err) {
             console.error("Failed to start recording", err);
-            alert("Could not access microphone.");
+            showAlert("Microphone Error", "Could not access microphone. Please check your browser permissions.");
         }
     };
 
@@ -511,6 +516,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         audioChunksRef.current = [];
     };
 
+    // ... handleSendMessage same as before ...
     const handleSendMessage = async (e?: React.FormEvent, retryMsg?: Message) => {
         if (e) e.preventDefault();
         const content = retryMsg ? retryMsg.content : newMessage;
@@ -623,7 +629,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
 
     const handleEdit = (msg: Message) => {
-        if (msg.attachment) { alert("Editing messages with attachments is not supported."); return; }
+        if (msg.attachment) { 
+            showAlert("Edit Error", "Editing messages with attachments is not supported."); 
+            return; 
+        }
         setNewMessage(msg.content);
         setEditingId(msg.id);
         setReplyingTo(null);
@@ -655,7 +664,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
 
     const handleStartCallClick = () => {
-        // Prevent starting a call if one is already active (any state other than IDLE)
         if (callState !== CallState.IDLE) return;
 
         if (hasAcceptedTerms.current) onStartCall();
@@ -673,6 +681,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
+            {/* ... Render Content (same as previous) ... */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -846,24 +855,4 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <div className="h-64 overflow-y-auto bg-black/20 p-4 rounded-lg border border-white/5 text-[10px] md:text-xs text-gray-400 space-y-4 font-mono mb-6 shadow-inner scrollbar-thin scrollbar-thumb-indigo-900">
                             <p className="font-bold text-gray-200">1. WEB RTC MESH</p><p>Calls use direct P2P connections where available. Your IP is shared with the peer to establish the tunnel.</p>
                             <p className="font-bold text-gray-200">2. ICE CANDIDATES</p><p>Authorized STUN/TURN: {ICE_SERVERS[0].urls[0]}</p>
-                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>DTLS-SRTP mandated for all audio streams.</p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <button onClick={handleAcceptTerms} className="w-full py-3.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg active:scale-95 text-sm uppercase tracking-wide">I Accept</button>
-                            <button onClick={() => { setShowCallTerms(false); setPendingAction(null); }} className="w-full py-3.5 text-gray-500 font-medium hover:text-white transition-colors text-sm">Decline</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {messageToDelete && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#1a1a20] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
-                        <div className="flex justify-center mb-4"><div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center text-red-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></div></div>
-                        <h3 className="text-lg font-bold text-white mb-2 text-center">Delete Message?</h3>
-                        <div className="flex gap-3"><button onClick={() => setMessageToDelete(null)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-sm font-medium transition">Cancel</button><button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-medium transition shadow-lg">Delete</button></div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>
