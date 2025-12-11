@@ -855,4 +855,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <div className="h-64 overflow-y-auto bg-black/20 p-4 rounded-lg border border-white/5 text-[10px] md:text-xs text-gray-400 space-y-4 font-mono mb-6 shadow-inner scrollbar-thin scrollbar-thumb-indigo-900">
                             <p className="font-bold text-gray-200">1. WEB RTC MESH</p><p>Calls use direct P2P connections where available. Your IP is shared with the peer to establish the tunnel.</p>
                             <p className="font-bold text-gray-200">2. ICE CANDIDATES</p><p>Authorized STUN/TURN: {ICE_SERVERS[0].urls[0]}</p>
-                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>
+                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>End-to-end encryption (DTLS-SRTP) is enforced for all media streams. Keys are negotiated via the signaling channel.</p>
+                        </div>
+                        <div className="flex gap-4">
+                            <button onClick={() => { setShowCallTerms(false); setPendingAction(null); }} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl transition">Cancel</button>
+                            <button onClick={handleAcceptTerms} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/20">Accept & Connect</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

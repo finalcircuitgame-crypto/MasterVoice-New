@@ -45,6 +45,7 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
         // FIX #1: Capture the data object to check for success/session
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
+  console.log(error)
              // Handle unconfirmed email case
              if (error.message.includes("Email not confirmed")) {
                  await supabase.auth.resend({
