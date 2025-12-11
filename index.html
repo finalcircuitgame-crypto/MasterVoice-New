@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -11,10 +12,35 @@
     <style>
       :root {
         --font-outfit: 'Outfit', sans-serif;
+        --theme-color: #6366f1; /* Indigo-500 */
+        --theme-hover: #4f46e5; /* Indigo-600 */
       }
       
       body {
         font-family: var(--font-outfit);
+        cursor: none; /* Custom cursor handling */
+      }
+
+      /* Custom Cursor */
+      .custom-cursor {
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--theme-color);
+        border-radius: 50%;
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        transition: transform 0.1s ease, width 0.2s, height 0.2s, background-color 0.2s;
+        transform: translate(-50%, -50%);
+        mix-blend-mode: difference;
+      }
+      
+      .custom-cursor.hovering {
+        width: 50px;
+        height: 50px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: white;
+        mix-blend-mode: difference;
       }
 
       /* Custom scrollbar for webkit */
@@ -181,6 +207,12 @@
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
+      
+      /* Theme Classes */
+      body.theme-emerald { --theme-color: #10b981; --theme-hover: #059669; }
+      body.theme-rose { --theme-color: #f43f5e; --theme-hover: #e11d48; }
+      body.theme-amber { --theme-color: #f59e0b; --theme-hover: #d97706; }
+      body.theme-blue { --theme-color: #3b82f6; --theme-hover: #2563eb; }
     </style>
   <script type="importmap">
 {
@@ -194,7 +226,28 @@
 </script>
 </head>
   <body class="bg-[#030014] text-gray-100 antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+    <div id="cursor" class="custom-cursor hidden md:block"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Custom Cursor Logic
+      const cursor = document.getElementById('cursor');
+      document.addEventListener('mousemove', (e) => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+      });
+      document.querySelectorAll('a, button, input').forEach(el => {
+        el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
+        el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
+      });
+      // Re-bind on mutation for React app
+      const observer = new MutationObserver(() => {
+         document.querySelectorAll('a, button, input, .cursor-pointer').forEach(el => {
+            el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
+            el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
+         });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    </script>
   </body>
 </html>

@@ -14,19 +14,28 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   // Settings State
   const [notifications, setNotifications] = useState(localStorage.getItem('mv_notifications') !== 'false');
   const [darkMode, setDarkMode] = useState(localStorage.getItem('mv_dark_mode') !== 'false');
+  const [currentTheme, setCurrentTheme] = useState(localStorage.getItem('mv_theme') || 'indigo');
   
   // Modals State
   const [showKeysModal, setShowKeysModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
-      // Apply dark mode on mount
+      // Apply dark mode
       if (darkMode) {
           document.documentElement.classList.add('dark');
       } else {
           document.documentElement.classList.remove('dark');
       }
   }, [darkMode]);
+
+  useEffect(() => {
+      // Apply theme
+      document.body.classList.remove('theme-emerald', 'theme-rose', 'theme-amber', 'theme-blue');
+      if (currentTheme !== 'indigo') {
+          document.body.classList.add(`theme-${currentTheme}`);
+      }
+  }, [currentTheme]);
 
   const toggleNotifications = () => {
       const newVal = !notifications;
@@ -40,14 +49,17 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
       localStorage.setItem('mv_dark_mode', String(newVal));
   };
 
+  const changeTheme = (theme: string) => {
+      setCurrentTheme(theme);
+      localStorage.setItem('mv_theme', theme);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
   };
   
   const handleDeleteAccount = async () => {
-      // In a real app, call a backend function. 
-      // Here we will sign out and pretend, as client-side user deletion is restricted.
       try {
           const { error } = await supabase.from('profiles').delete().eq('id', currentUser.id);
           if (error) throw error;
@@ -73,52 +85,33 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
       setUploading(true);
 
       try {
-          // 1. Smart Detection: Calculate Hash
           const fileHash = await calculateFileHash(file);
           const fileExt = file.name.split('.').pop();
           const fileName = `${fileHash}.${fileExt}`;
           const filePath = `avatars/${fileName}`;
 
-          // 2. Check if this exact file already exists in public storage
-          const { data: { publicUrl } } = supabase.storage
-              .from('avatars')
-              .getPublicUrl(filePath);
+          const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-          // 3. Attempt Upload with upsert: FALSE
-          // We do NOT want to overwrite if it exists (deduplication).
-          // If it exists, Supabase throws an error. We catch it and ignore it if it's a duplicate.
           const { error: uploadError } = await supabase.storage
               .from('avatars')
-              .upload(filePath, file, {
-                  upsert: false // CRITICAL: Do not try to overwrite files owned by others
-              });
+              .upload(filePath, file, { upsert: false });
 
           if (uploadError) {
-              // If the error is because it exists, that's GOOD! We use the existing one.
-              // Error message varies, usually "The resource already exists" or RLS violation if owned by someone else.
               const isExisting = uploadError.message.includes('already exists') || 
                                  uploadError.message.includes('violates row-level security') ||
-                                 (uploadError as any).statusCode === '409'; // Conflict
-
-              if (!isExisting) {
-                  throw uploadError;
-              }
-              console.log("Smart Upload: Image hash exists, linking to existing file.");
+                                 (uploadError as any).statusCode === '409';
+              if (!isExisting) throw uploadError;
           }
 
-          // 4. Update Profile with the URL (whether we just uploaded it or it was already there)
           const { error: updateError } = await supabase
               .from('profiles')
               .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
               .eq('id', currentUser.id);
 
           if (updateError) throw updateError;
-          
-          // Force page reload to reflect changes
           window.location.reload();
 
       } catch (error: any) {
-          console.error('Error uploading avatar:', error.message);
           alert('Failed to update avatar. ' + error.message);
       } finally {
           setUploading(false);
@@ -132,7 +125,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
         <button 
             onClick={onBack} 
             className="p-2 -ml-2 hover:bg-white/10 rounded-full transition text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/20"
-            aria-label="Back"
         >
            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
@@ -152,34 +144,43 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
                      ) : (
                          <span>{currentUser.email[0].toUpperCase()}</span>
                      )}
-                     
-                     {/* Overlay for upload */}
                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                      </div>
-
-                     {currentUser.is_family && (
-                        <div className="absolute bottom-0 right-0 bg-amber-500 text-white p-1.5 rounded-full border-4 border-[#13131a] shadow-lg z-20">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                        </div>
-                     )}
                  </div>
                  {uploading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full z-30"><div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div></div>}
              </div>
              
-             <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleAvatarUpload} 
-                accept="image/*" 
-                className="hidden" 
-             />
-
+             <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
              <h2 className="text-xl font-bold text-white">{currentUser.email}</h2>
-             <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.is_family ? 'Family Plan' : 'Free Plan'}</p>
+             <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.plan || 'Free Plan'}</p>
          </div>
 
          {/* General Settings */}
+         <div className="space-y-3">
+             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4">Appearance</h3>
+             <div className="bg-[#13131a] border border-white/5 rounded-[1.5rem] overflow-hidden p-4">
+                 <div className="flex items-center justify-between mb-4">
+                     <span className="text-gray-200 font-medium">Accent Color</span>
+                 </div>
+                 <div className="flex gap-3 justify-start">
+                     {[
+                         { id: 'indigo', color: 'bg-indigo-500' },
+                         { id: 'emerald', color: 'bg-emerald-500' },
+                         { id: 'rose', color: 'bg-rose-500' },
+                         { id: 'amber', color: 'bg-amber-500' },
+                         { id: 'blue', color: 'bg-blue-500' },
+                     ].map(t => (
+                         <button 
+                            key={t.id}
+                            onClick={() => changeTheme(t.id)}
+                            className={`w-8 h-8 rounded-full ${t.color} ${currentTheme === t.id ? 'ring-2 ring-white ring-offset-2 ring-offset-[#13131a]' : ''} transition-all hover:scale-110`}
+                         />
+                     ))}
+                 </div>
+             </div>
+         </div>
+
          <div className="space-y-3">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4">App Preferences</h3>
              <div className="bg-[#13131a] border border-white/5 rounded-[1.5rem] overflow-hidden">
@@ -231,7 +232,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              Sign Out
          </button>
          
-         <p className="text-center text-[10px] text-gray-600 mt-4">MasterVoice v2.1.0 (Beta)</p>
+         <p className="text-center text-[10px] text-gray-600 mt-4">MasterVoice v2.2.0 (Beta)</p>
       </div>
 
       {/* Keys Modal */}

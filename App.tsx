@@ -25,6 +25,35 @@ const App: React.FC = () => {
   const [activeCallContact, setActiveCallContact] = useState<UserProfile | null>(null);
   const [isCallMaximized, setIsCallMaximized] = useState(false);
 
+  // Sound Logic
+  useEffect(() => {
+      const playTone = (freq: number, type: 'sine'|'square'|'triangle' = 'sine', duration: number = 0.1) => {
+          try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = type;
+              osc.frequency.setValueAtTime(freq, ctx.currentTime);
+              gain.gain.setValueAtTime(0.1, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + duration);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              osc.stop(ctx.currentTime + duration);
+          } catch(e) {}
+      };
+
+      const handleIncoming = () => playTone(880, 'sine', 0.2); // High beep
+      const handleSent = () => playTone(440, 'triangle', 0.1); // Lower pop
+
+      window.addEventListener('play-notification', handleIncoming);
+      window.addEventListener('play-sent', handleSent);
+      return () => {
+          window.removeEventListener('play-notification', handleIncoming);
+          window.removeEventListener('play-sent', handleSent);
+      };
+  }, []);
+
   const { path, navigate, query } = useRouter();
 
   // Resize Listener
