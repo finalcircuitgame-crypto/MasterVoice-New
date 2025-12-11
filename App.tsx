@@ -38,6 +38,14 @@ const App: React.FC = () => {
   const webrtcTargetUser = activeCallContact || selectedUser;
   const rtcRoomId = (currentUser && webrtcTargetUser) ? [currentUser.id, webrtcTargetUser.id].sort().join('_') : null;
 
+  // Handle call ending (local or remote) to clear persistence
+  const handleCallEnded = () => {
+      console.log("App: Call ended signal received. Clearing persistence.");
+      localStorage.removeItem('mv_active_call');
+      setActiveCallContact(null);
+      setIsCallMaximized(false);
+  };
+
   const { 
     callState, 
     remoteStream, 
@@ -55,7 +63,7 @@ const App: React.FC = () => {
     rtcStats,
     setInputGain,
     inputGain
-  } = useWebRTC(rtcRoomId, currentUser?.id || '');
+  } = useWebRTC(rtcRoomId, currentUser?.id || '', handleCallEnded);
 
   // --- PERSISTENCE RESTORATION ---
   useEffect(() => {
@@ -81,6 +89,8 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+      // Auto-rejoin ONLY if we have persistence item.
+      // handleCallEnded clears this item, preventing loops.
       if (activeCallContact && callState === CallState.IDLE && localStorage.getItem('mv_active_call')) {
            const t = setTimeout(() => { rtcStartCall(); }, 1000);
            return () => clearTimeout(t);
@@ -103,9 +113,8 @@ const App: React.FC = () => {
 
   const handleEndCall = () => {
       rtcEndCall();
-      setActiveCallContact(null);
-      setIsCallMaximized(false);
-      localStorage.removeItem('mv_active_call');
+      // We manually call this here too just in case 'hangup' signal isn't involved (local end)
+      handleCallEnded();
   };
 
   const handleAnswerCall = () => {
@@ -123,15 +132,6 @@ const App: React.FC = () => {
           setIsCallMaximized(true);
       }
   }, [callState, selectedUser, activeCallContact]);
-
-  useEffect(() => {
-      if (callState === CallState.IDLE && activeCallContact) {
-          if (!localStorage.getItem('mv_active_call')) {
-              setActiveCallContact(null);
-              setIsCallMaximized(false);
-          }
-      }
-  }, [callState, activeCallContact]);
 
   // Presence logic
   useEffect(() => {
@@ -216,7 +216,7 @@ const App: React.FC = () => {
              setSelectedGroup(null);
         }
     }
-  }, [window.location.pathname, window.location.search, currentUser]); // Minimal dependencies to avoid loops
+  }, [path, query, currentUser]); // Updated dependencies to rely on router hooks state
 
   const handleSelectUser = (user: UserProfile) => {
       if (selectedUser?.id !== user.id) {

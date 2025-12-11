@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { ICE_SERVERS } from '../constants';
 import { CallState, SignalingPayload } from '../types';
 
-export const useWebRTC = (roomId: string | null, userId: string) => {
+export const useWebRTC = (roomId: string | null, userId: string, onCallEnded?: () => void) => {
   const [callState, setCallState] = useState<CallState>(CallState.IDLE);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null); // Audio Stream
@@ -46,7 +46,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   }, [inputGain]);
 
   // --- Cleanup Function ---
-  // CRITICAL: No dependencies here that change during a call (like localVideoStream)
   const cleanup = useCallback((reason?: string) => {
     console.log('[WebRTC] Cleaning up call resources', reason ? `Reason: ${reason}` : '');
 
@@ -205,7 +204,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           console.log('[WebRTC] Reconnection timed out. Ending call.');
           cleanup('reconnection timeout');
-        }, 15 * 60 * 1000); // Extended to 15 minutes as per user request to "prevent ending no matter what"
+        }, 15 * 60 * 1000); // 15 minutes grace period
 
       } else if (newPc.connectionState === 'failed' || newPc.connectionState === 'closed') {
         setConnectionError('Connection failed. Please try again.');
@@ -276,11 +275,10 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
   // --- Signaling Logic ---
   const handleSignal = useCallback(async (payload: SignalingPayload) => {
-    // console.log('[WebRTC] Received signal:', payload.type);
-
     if (payload.type === 'hangup') {
       console.log('[WebRTC] Remote signal hangup received');
-      cleanup('remote user ended call'); // Explicit hangup kills it immediately
+      if (onCallEnded) onCallEnded(); // Trigger external cleanup (persistence)
+      cleanup('remote user ended call');
       return;
     }
 
@@ -292,9 +290,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
           console.log('[WebRTC] Processing Offer (Renegotiation/Recovery)');
           if (!pc.current) {
-              // If we are in RECONNECTING but pc is null/closed, we treat as initial offer (recovery)
-              // But createPeerConnection should have been called if we were connected.
-              // If pc is null, we create it.
               createPeerConnection(); 
           }
           
@@ -310,7 +305,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
                     payload: { type: 'answer', sdp: answer } as SignalingPayload,
                 });
                 
-                // If we were reconnecting, receiving an offer and answering it puts us back in receiving/connecting flow
                 if (callState === CallState.RECONNECTING) {
                     setCallState(CallState.CONNECTED); 
                 }
@@ -360,7 +354,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
           if (pc.current.remoteDescription && pc.current.remoteDescription.type) {
             await pc.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
           } else {
-            // console.log('[WebRTC] Queueing candidate, no remote description yet');
             iceCandidateQueue.current.push(payload.candidate);
           }
         } catch (e) {
@@ -371,7 +364,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       console.error("Signaling error", err);
       isProcessingOfferRef.current = false;
     }
-  }, [callState, cleanup, createPeerConnection]);
+  }, [callState, cleanup, createPeerConnection, onCallEnded]);
 
   useEffect(() => { handleSignalRef.current = handleSignal; }, [handleSignal]);
 
@@ -436,8 +429,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       if (isVideoEnabled) {
           // STOP VIDEO
           if (videoSenderRef.current) {
-              // Instead of removing track (which changes SDP structure), just replace with null
-              // This keeps the "slot" open but sends blackness
               videoSenderRef.current.replaceTrack(null); 
           }
           if (localVideoStream) {
@@ -446,8 +437,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
           }
           setIsVideoEnabled(false);
           setIsScreenSharing(false);
-          // Renegotiate to inform remote to stop video
-          // renegotiate();
       } else {
           // START VIDEO
           try {
@@ -462,23 +451,18 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
                   setLocalVideoStream(null);
               };
 
-              // Check if we already have a sender from initial negotiation or previous toggle
               let sender = videoSenderRef.current;
               
-              // If we don't have a sender reference, try to find one in the PC
               if (!sender) {
                   const senders = pc.current.getSenders();
                   sender = senders.find(s => s.track && s.track.kind === 'video') || null;
               }
 
               if (sender) {
-                  // Seamless switch
                   await sender.replaceTrack(videoTrack);
                   videoSenderRef.current = sender;
-                  // FORCE Renegotiation to ensure SDP direction flips from recvonly to sendrecv
                   renegotiate();
               } else {
-                  // Must add new track and renegotiate
                   const newSender = pc.current.addTrack(videoTrack, videoStream);
                   videoSenderRef.current = newSender;
                   renegotiate();
@@ -498,7 +482,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       if (!pc.current) return;
 
       if (isScreenSharing) {
-          // STOP SHARE -> Revert to nothing (video off)
+          // STOP SHARE
           if (videoSenderRef.current) {
               videoSenderRef.current.replaceTrack(null);
           }
@@ -560,26 +544,23 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       return;
     }
 
-    cleanup('starting new call'); // Reset any old state
+    cleanup('starting new call');
 
     try {
       console.log('[WebRTC] Starting Call (Caller)...');
       setCallState(CallState.CONNECTING);
 
-      // Get processed stream (with gain)
       const { rawStream, processedStream } = await getProcessedStream().catch(err => {
         console.error('[WebRTC] Failed to get media:', err);
         setConnectionError('Microphone access denied. Please check permissions.');
         throw err;
       });
 
-      setLocalStream(rawStream); // Store raw stream for simple track cleanup
+      setLocalStream(rawStream);
       localStreamRef.current = rawStream;
 
-      // Create peer connection
       const peer = createPeerConnection();
 
-      // Add the PROCESSED tracks to the connection
       processedStream.getTracks().forEach(track => {
         peer.addTrack(track, processedStream);
       });
@@ -590,7 +571,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
       const offer = await peer.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: true, // Request video capability initially
+        offerToReceiveVideo: true,
         iceRestart: false
       });
 
@@ -640,7 +621,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
       const peer = createPeerConnection();
 
-      // Add processed tracks
       processedStream.getTracks().forEach(track => {
         peer.addTrack(track, processedStream);
       });
@@ -660,7 +640,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
       const answer = await peer.createAnswer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: true // Support video if offered
+        offerToReceiveVideo: true
       });
 
       await peer.setLocalDescription(answer);
@@ -692,7 +672,6 @@ const endCall = useCallback(() => {
 }, [cleanup]);
 
 const toggleMute = useCallback(() => {
-  // Mute at the source level
   if (localStreamRef.current) {
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
     if (audioTrack) {
@@ -707,24 +686,21 @@ const toggleRemoteAudio = useCallback(() => {
         remoteStream.getAudioTracks().forEach(track => {
             track.enabled = !track.enabled;
         });
-        // Force re-render if needed via state in parent, 
-        // but simple toggle works on stream level usually.
-        // We will return the status for UI.
     }
 }, [remoteStream]);
 
 return {
   callState,
   localStream,
-  localVideoStream, // Export video stream
+  localVideoStream,
   remoteStream,
   startCall,
   endCall,
   answerCall,
   toggleMute,
-  toggleVideo, // Export video toggle
-  toggleScreenShare, // Export screen share
-  toggleRemoteAudio, // Export remote mute
+  toggleVideo,
+  toggleScreenShare,
+  toggleRemoteAudio,
   isMuted,
   isVideoEnabled,
   isScreenSharing,
