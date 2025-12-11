@@ -74,7 +74,7 @@ export const PricingCard = ({
 );
 
 // --- Desktop Landing Page ---
-const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
   const [stats, setStats] = useState({ users: 0, groups: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -113,6 +113,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                 <span className="text-xl font-bold tracking-tight group-hover:text-indigo-200 transition-colors">MasterVoice</span>
             </div>
             <div className="flex items-center gap-8">
+                <button onClick={() => onNavigate('/docs')} className="text-gray-400 hover:text-white transition text-xs font-bold tracking-wide uppercase hidden md:block">Developers</button>
                 {isAuthenticated ? (
                   <button onClick={() => onNavigate('/conversations')} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm transition transform hover:-translate-y-0.5 shadow-lg shadow-indigo-600/20">
                     OPEN APP
@@ -135,7 +136,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
                   </span>
-                  v2.2 Public Beta
+                  v2.2 Public Beta • SDK Available
               </div>
               <h1 className="text-7xl md:text-8xl font-extrabold leading-[1] tracking-tighter">
                   Speak <br/>
@@ -153,7 +154,7 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
                   ) : (
                     <>
                       <button onClick={() => onNavigate('/register')} className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-600/25 transition-all hover:scale-105 active:scale-95">Start Chatting</button>
-                      <button onClick={() => onNavigate('/login')} className="px-10 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-md">Log In</button>
+                      <button onClick={() => onNavigate('/docs')} className="px-10 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-md">Get SDK</button>
                     </>
                   )}
               </div>
@@ -283,9 +284,13 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
       <div className="py-32 bg-[#02000f] border-t border-white/5">
           <div className="max-w-[1400px] mx-auto px-8 flex flex-col md:flex-row items-center gap-16">
               <div className="flex-1 space-y-6">
+                  <div className="inline-block bg-indigo-500/10 text-indigo-400 font-bold px-3 py-1 rounded-full text-xs">OPEN SOURCE</div>
                   <h2 className="text-4xl font-bold">Transparent Architecture</h2>
                   <p className="text-gray-400 text-lg">MasterVoice leverages open-source standards like WebRTC for media and PostgreSQL for secure metadata storage. See exactly how your data moves.</p>
-                  <button onClick={() => onNavigate('/docs')} className="px-8 py-3 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition">Read Documentation</button>
+                  <div className="flex gap-4">
+                      <button onClick={() => onNavigate('/docs')} className="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Read Documentation</button>
+                      <button onClick={() => onNavigate('/docs')} className="px-8 py-3 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition">View SDK</button>
+                  </div>
               </div>
               <div className="flex-1 bg-[#1a1a20] p-6 rounded-2xl font-mono text-sm text-gray-300 border border-white/10 shadow-2xl w-full max-w-lg">
                   <div className="flex gap-2 mb-4">
@@ -397,40 +402,4 @@ const DesktopLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticate
       </div>
     </div>
   );
-};
-
-// --- Mobile Landing Page (Simplified Wrapper) ---
-const MobileLanding: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
-  return (
-    <div className="min-h-screen bg-[#050505] text-white font-['Outfit'] overflow-hidden relative pb-20">
-        <div className="flex justify-between items-center p-6 sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-md border-b border-white/5">
-            <div className="font-bold text-xl tracking-tighter flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
-                MasterVoice
-            </div>
-            {isAuthenticated ? (
-               <button onClick={() => onNavigate('/conversations')} className="text-xs font-bold text-white px-4 py-2 bg-indigo-600 rounded-full shadow-lg shadow-indigo-500/20">OPEN</button>
-            ) : (
-               <button onClick={() => onNavigate('/login')} className="text-xs font-bold text-gray-300 px-4 py-2 bg-white/5 rounded-full border border-white/10">LOG IN</button>
-            )}
-        </div>
-        <div className="px-6 pt-8 pb-12 flex flex-col relative z-10 border-b border-white/5">
-            <h1 className="text-6xl font-bold leading-[0.9] mb-6 tracking-tighter">Chat <span className="text-indigo-500">Freely.</span></h1>
-            <button onClick={() => isAuthenticated ? onNavigate('/conversations') : onNavigate('/register')} className="w-full py-5 bg-white text-black rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform">
-                {isAuthenticated ? "Launch App" : "Get Started"}
-            </button>
-        </div>
-        <div className="p-8 text-center text-gray-500">
-            <p>Visit on Desktop for full experience.</p>
-        </div>
-    </div>
-  );
-};
-
-export const LandingPage: React.FC<LandingPageProps> = (props) => {
-  const [width] = useWindowSize();
-  const isMobile = width < 768;
-  return isMobile ? <MobileLanding {...props} /> : <DesktopLanding {...props} />;
 };

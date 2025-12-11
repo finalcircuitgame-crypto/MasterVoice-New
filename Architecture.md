@@ -69,11 +69,18 @@ create policy "Authenticated users can insert attachments"
 on storage.objects for insert
 with check ( bucket_id = 'attachments' and auth.role() = 'authenticated' );
 
--- 3. ENSURE TABLE COLUMNS EXIST
+-- 3. ENSURE TABLE COLUMNS EXIST & FIX PROFILES RLS
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.messages add column if not exists reactions jsonb default '{}'::jsonb;
 alter table public.messages add column if not exists reply_to_id uuid references public.messages(id);
 alter table public.messages add column if not exists updated_at timestamp with time zone default timezone('utc'::text, now());
+
+-- Fix Profiles Visibility (This fixes "View Members" showing only yourself)
+alter table public.profiles enable row level security;
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+create policy "Public profiles are viewable by everyone" 
+on public.profiles for select 
+using ( true );
 
 -- ============================
 -- === FRIEND REQUESTS FIX ===

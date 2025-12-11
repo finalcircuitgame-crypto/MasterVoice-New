@@ -45,6 +45,7 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => (
                     <li className="text-gray-400 hover:text-white cursor-pointer">3. Database Schema</li>
                     <li className="text-gray-400 hover:text-white cursor-pointer">4. WebRTC Signaling</li>
                     <li className="text-gray-400 hover:text-white cursor-pointer">5. Security (RLS)</li>
+                    <li className="text-gray-400 hover:text-white cursor-pointer">6. Client SDK</li>
                 </ul>
             </div>
             <div className="col-span-2">
@@ -91,7 +92,7 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => (
                     </pre>
                 </section>
 
-                <section>
+                <section className="mb-12">
                     <h2 className="text-2xl font-bold text-white mb-4">5. Security (RLS)</h2>
                     <p>Row Level Security (RLS) is enforced on all tables. This ensures that:</p>
                     <ul className="list-disc pl-5 space-y-2 mt-2">
@@ -99,6 +100,33 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => (
                         <li>Group messages are only accessible to members of that group.</li>
                         <li>Profile updates are restricted to the account owner.</li>
                     </ul>
+                </section>
+
+                <section>
+                    <h2 className="text-2xl font-bold text-white mb-4">6. Client SDK</h2>
+                    <p>The MasterVoice client logic is available as a reusable hook pattern. Integrating real-time P2P calls into your React application is simple:</p>
+                    
+                    <h3 className="text-xl font-bold text-white mt-4 mb-2">Installation</h3>
+                    <code className="block bg-[#111] p-3 rounded-lg text-sm mb-4">npm install @supabase/supabase-js mastervoice-sdk</code>
+
+                    <h3 className="text-xl font-bold text-white mt-4 mb-2">Usage</h3>
+                    <pre className="bg-[#111] p-4 rounded-lg overflow-x-auto text-sm text-gray-300">
+{`import { useWebRTC } from 'mastervoice-sdk';
+
+const MyComponent = () => {
+  const { startCall, callState, remoteStream } = useWebRTC(roomId, userId);
+
+  return (
+    <div>
+      <button onClick={startCall}>Start Call</button>
+      {callState === 'CONNECTED' && (
+         <video ref={el => el.srcObject = remoteStream} autoPlay />
+      )}
+    </div>
+  );
+}`}
+                    </pre>
+                    <p className="mt-4 text-sm text-gray-400">Note: The SDK handles ICE candidate negotiation, TURN server authentication, and automatic reconnection logic internally.</p>
                 </section>
             </div>
         </div>
