@@ -11,6 +11,7 @@ import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
 
+
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -22,6 +23,10 @@ const App: React.FC = () => {
   
   // Call Navigation Guard
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  
+  // Call Persistence & UI State
+  const [activeCallContact, setActiveCallContact] = useState<UserProfile | null>(null);
+  const [isCallMaximized, setIsCallMaximized] = useState(false);
 
   // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
@@ -36,23 +41,79 @@ const App: React.FC = () => {
   }, []);
 
   // --- HOISTED WEBRTC LOGIC ---
-  // Calculate Room ID for P2P signaling
-  const roomId = (currentUser && selectedUser) 
-    ? [currentUser.id, selectedUser.id].sort().join('_') 
+  
+  // Determine the ID for WebRTC.
+  // If we are in a call, lock to that contact (activeCallContact).
+  // If not, use the selected user (to allow starting new calls or receiving offers on that channel).
+  const webrtcTargetUser = activeCallContact || selectedUser;
+  
+  const rtcRoomId = (currentUser && webrtcTargetUser) 
+    ? [currentUser.id, webrtcTargetUser.id].sort().join('_') 
     : null;
 
   const { 
     callState, 
     remoteStream, 
-    startCall, 
-    endCall, 
-    answerCall, 
+    localVideoStream,
+    startCall: rtcStartCall, 
+    endCall: rtcEndCall, 
+    answerCall: rtcAnswerCall, 
     toggleMute, 
+    toggleVideo,
+    toggleScreenShare,
     isMuted,
+    isVideoEnabled,
+    isScreenSharing,
     rtcStats,
     setInputGain,
     inputGain
-  } = useWebRTC(roomId, currentUser?.id || '');
+  } = useWebRTC(rtcRoomId, currentUser?.id || '');
+
+  // Wrappers to manage Active Call State
+  const handleStartCall = () => {
+      if (selectedUser) {
+          setActiveCallContact(selectedUser);
+          rtcStartCall();
+          setIsCallMaximized(true);
+      }
+  };
+
+  const handleEndCall = () => {
+      rtcEndCall();
+      setActiveCallContact(null);
+      setIsCallMaximized(false);
+  };
+
+  const handleAnswerCall = () => {
+      rtcAnswerCall();
+      // If we are answering, we must be looking at the caller, or we detected it.
+      // Ideally we lock the caller here.
+      if (selectedUser && !activeCallContact) {
+          setActiveCallContact(selectedUser);
+      }
+      setIsCallMaximized(true);
+  };
+  
+  const handleExpandCall = () => {
+      setIsCallMaximized(true);
+  };
+
+  // Lock contact on incoming call detection (if we are looking at them)
+  useEffect(() => {
+      if (callState === CallState.RECEIVING && !activeCallContact && selectedUser) {
+          setActiveCallContact(selectedUser);
+          setIsCallMaximized(true); // Auto-show overlay on incoming
+      }
+  }, [callState, selectedUser, activeCallContact]);
+
+  // Cleanup active call contact if call goes idle
+  useEffect(() => {
+      if (callState === CallState.IDLE && activeCallContact) {
+          setActiveCallContact(null);
+          setIsCallMaximized(false);
+      }
+  }, [callState, activeCallContact]);
+
 
   // Detect navigation to Landing Page while in call
   useEffect(() => {
@@ -217,9 +278,6 @@ const App: React.FC = () => {
   const showChatInterface = (path === '/conversations' || isSettingsOpen) && session && currentUser;
 
   const renderPublicView = () => {
-      // If we are showing the confirmation modal, just render a background placeholder or the landing page blurred
-      // But we will overlay the modal in the main return
-      
       switch (path) {
           case '/login':
               return (
@@ -279,7 +337,7 @@ const App: React.FC = () => {
                             </button>
                             <button 
                                 onClick={() => { 
-                                    endCall(); 
+                                    handleEndCall(); 
                                     setShowLeaveConfirm(false); 
                                 }} 
                                 className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-red-400 font-bold rounded-xl transition"
@@ -293,14 +351,21 @@ const App: React.FC = () => {
             <VoiceCallOverlay 
                 callState={callState} 
                 remoteStream={remoteStream} 
-                onEndCall={endCall} 
-                onAnswer={answerCall} 
+                localVideoStream={localVideoStream}
+                onEndCall={handleEndCall} 
+                onAnswer={handleAnswerCall} 
                 toggleMute={toggleMute}
+                toggleVideo={toggleVideo}
+                toggleScreenShare={toggleScreenShare}
                 isMuted={isMuted}
-                recipient={selectedUser || undefined}
+                isVideoEnabled={isVideoEnabled}
+                isScreenSharing={isScreenSharing}
+                recipient={activeCallContact || selectedUser || undefined}
                 rtcStats={rtcStats}
                 setInputGain={setInputGain}
                 inputGain={inputGain}
+                isMaximized={isCallMaximized}
+                setIsMaximized={setIsCallMaximized}
             />
           </>
       );
@@ -375,11 +440,13 @@ const App: React.FC = () => {
                             recipient={selectedUser} 
                             onlineUsers={onlineUsers}
                             // Call props hoisted from useWebRTC
-                            channel={null} // Signaling is now internal to App/useWebRTC, not passed down
+                            channel={null} 
                             callState={callState}
-                            onStartCall={startCall}
-                            onAnswerCall={answerCall}
-                            onEndCall={endCall}
+                            onStartCall={handleStartCall}
+                            onAnswerCall={handleAnswerCall}
+                            onEndCall={handleEndCall}
+                            activeCallContact={activeCallContact}
+                            onExpandCall={handleExpandCall}
                         />
                     </>
                 ) : (
@@ -411,15 +478,22 @@ const App: React.FC = () => {
         {/* Voice Call Overlay */}
         <VoiceCallOverlay 
             callState={callState} 
-            remoteStream={remoteStream} 
-            onEndCall={endCall} 
-            onAnswer={answerCall} 
+            remoteStream={remoteStream}
+            localVideoStream={localVideoStream} 
+            onEndCall={handleEndCall} 
+            onAnswer={handleAnswerCall} 
             toggleMute={toggleMute}
+            toggleVideo={toggleVideo}
+            toggleScreenShare={toggleScreenShare}
             isMuted={isMuted}
-            recipient={selectedUser || undefined}
+            isVideoEnabled={isVideoEnabled}
+            isScreenSharing={isScreenSharing}
+            recipient={activeCallContact || selectedUser || undefined}
             rtcStats={rtcStats}
             setInputGain={setInputGain}
             inputGain={inputGain}
+            isMaximized={isCallMaximized}
+            setIsMaximized={setIsCallMaximized}
         />
     </div>
   );

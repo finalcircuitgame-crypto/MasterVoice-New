@@ -36,6 +36,13 @@ drop policy if exists "Users can update their own avatars" on storage.objects;
 drop policy if exists "Users can delete their own avatars" on storage.objects;
 drop policy if exists "Authenticated users can insert attachments" on storage.objects;
 
+-- Drop old table policies to ensure clean slate for groups
+drop policy if exists "View groups if member" on public.groups;
+drop policy if exists "Users can create groups" on public.groups;
+drop policy if exists "View members if in group" on public.group_members;
+drop policy if exists "Creator can add members" on public.group_members;
+drop policy if exists "View own membership" on public.group_members;
+
 -- 2. CREATE ROBUST STORAGE POLICIES (Insert, Select, Update, Delete)
 
 -- Avatars Bucket
@@ -114,15 +121,10 @@ create policy "View groups if member" on public.groups
 create policy "Users can create groups" on public.groups
   for insert with check ( auth.role() = 'authenticated' );
 
--- Policy: Users can view members of groups they are in
-create policy "View members if in group" on public.group_members
-  for select using (
-    exists (
-      select 1 from public.group_members gm
-      where gm.group_id = group_members.group_id
-      and gm.user_id = auth.uid()
-    )
-  );
+-- Policy: Users can view THEIR OWN memberships
+-- NOTE: We restrict this to just the user's own rows to avoid Infinite Recursion with the 'groups' policy
+create policy "View own membership" on public.group_members
+  for select using ( user_id = auth.uid() );
 
 -- Policy: Users can add members (simplified for demo: anyone can join/add for now or creator only)
 -- Allowing creator to add members
@@ -133,7 +135,7 @@ create policy "Creator can add members" on public.group_members
       where groups.id = group_members.group_id
       and groups.created_by = auth.uid()
     )
-    or auth.uid() = user_id -- Allow self-join if we implement invite codes later
+    or auth.uid() = user_id -- Allow self-join
   );
 ```
 
