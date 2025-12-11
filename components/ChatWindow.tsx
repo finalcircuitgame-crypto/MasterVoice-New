@@ -77,7 +77,8 @@ const formatDuration = (seconds: number) => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
-const MessageItem: React.FC<MessageItemProps> = ({
+// Optimized MessageItem with React.memo to prevent re-renders on parent state changes (like typing)
+const MessageItem = React.memo<MessageItemProps>(({
     msg,
     isMe,
     recipient,
@@ -308,7 +309,18 @@ const MessageItem: React.FC<MessageItemProps> = ({
             </div>
         </div>
     );
-};
+}, (prev, next) => {
+    // Custom Comparator to ignore constant function prop recreation on parent re-render
+    return (
+        prev.msg === next.msg && 
+        prev.isMe === next.isMe && 
+        prev.isHighlighted === next.isHighlighted && 
+        prev.isFamily === next.isFamily &&
+        prev.recipient.id === next.recipient.id &&
+        prev.recipient.avatar_url === next.recipient.avatar_url &&
+        prev.currentUser.id === next.currentUser.id
+    );
+});
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
     currentUser,
