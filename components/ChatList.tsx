@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserProfile, FriendRequest, FriendshipStatus, Group } from '../types';
 import { useModal } from './ModalContext';
+import { useRouter } from '../hooks/useRouter';
 
 interface ChatListProps {
   currentUser: UserProfile;
   onSelectUser: (user: UserProfile) => void;
-  onSelectGroup: (group: Group) => void; // New prop for group selection
+  onSelectGroup: (group: Group) => void;
   onlineUsers: Set<string>;
   onOpenSettings: () => void;
 }
@@ -18,528 +19,189 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   
-  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Modal Hooks
   const { showPrompt, showAlert } = useModal();
+  const { navigate } = useRouter();
 
   // --- Data Fetching ---
-  
   const fetchData = async () => {
-    // 1. Fetch all requests involving me
-    const { data: requestsData, error: reqError } = await supabase
-        .from('friend_requests')
-        .select(`
-            *,
-            sender:sender_id(id, email, avatar_url),
-            receiver:receiver_id(id, email, avatar_url)
-        `)
+    // Friends
+    const { data: requestsData } = await supabase.from('friend_requests')
+        .select(`*, sender:sender_id(id, email, avatar_url), receiver:receiver_id(id, email, avatar_url)`)
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
 
-    if (reqError || !requestsData) return;
+    if (requestsData) {
+        const acceptedIds = new Set<string>();
+        const incoming: any[] = [];
+        const outgoing: any[] = [];
 
-    // Split into categories
-    const acceptedIds = new Set<string>();
-    const incoming: any[] = [];
-    const outgoing: any[] = [];
+        requestsData.forEach((req: any) => {
+            if (req.status === 'accepted') {
+                acceptedIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
+            } else if (req.status === 'pending') {
+                if (req.receiver_id === currentUser.id) incoming.push(req);
+                else outgoing.push(req);
+            }
+        });
 
-    requestsData.forEach((req: any) => {
-        if (req.status === 'accepted') {
-            acceptedIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
-        } else if (req.status === 'pending') {
-            if (req.receiver_id === currentUser.id) incoming.push(req);
-            else outgoing.push(req);
+        setIncomingRequests(incoming);
+        setOutgoingRequests(outgoing);
+
+        if (acceptedIds.size > 0) {
+            const { data: friendsData } = await supabase.from('profiles').select('*').in('id', Array.from(acceptedIds));
+            if (friendsData) setFriends(friendsData);
+        } else {
+            setFriends([]);
         }
-    });
-
-    setIncomingRequests(incoming);
-    setOutgoingRequests(outgoing);
-
-    // 2. Fetch Profiles for Accepted Friends
-    if (acceptedIds.size > 0) {
-        const { data: friendsData } = await supabase
-            .from('profiles')
-            .select('*')
-            .in('id', Array.from(acceptedIds));
-        if (friendsData) setFriends(friendsData);
-    } else {
-        setFriends([]);
     }
 
-    // 3. Fetch Groups
-    const { data: groupData } = await supabase
-        .from('groups')
-        .select('*')
-        .order('created_at', { ascending: false }); 
-    
+    // Groups
+    const { data: groupData } = await supabase.from('groups').select('*').order('created_at', { ascending: false }); 
     if (groupData) setGroups(groupData);
   };
 
   useEffect(() => {
     fetchData();
-
-    // Subscribe to Friend Request Changes
-    const channel = supabase.channel('public:friend_requests')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
-            fetchData();
-        })
-        .subscribe();
-        
+    const channel = supabase.channel('public:friend_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, fetchData).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentUser.id]);
 
-  // --- URL Sync ---
+  // --- Sync Active ID from URL ---
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const userIdParam = params.get('userId');
-      const groupIdParam = params.get('groupId');
-      
+      // For groups, we check the path
+      const isGroupPath = window.location.pathname.startsWith('/conversations/groups/');
+      const groupIdPath = isGroupPath ? window.location.pathname.split('/').pop() : null;
+
       if (userIdParam) setActiveId(userIdParam);
-      else if (groupIdParam) setActiveId(groupIdParam);
-  }, [window.location.search]);
+      else if (groupIdPath) setActiveId(groupIdPath);
+      else setActiveId(null);
+  }, [window.location.search, window.location.pathname]);
 
   // --- Search Logic ---
   useEffect(() => {
-      if (!searchQuery.trim()) {
-          setSearchResults([]);
-          return;
-      }
-
-      const doSearch = async () => {
+      if (!searchQuery.trim()) { setSearchResults([]); return; }
+      const timer = setTimeout(async () => {
           setIsSearching(true);
-          // Search ALL profiles by email
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .ilike('email', `%${searchQuery}%`)
-            .neq('id', currentUser.id) // Don't find self
-            .limit(10);
-            
-          if (!error && data) {
-              setSearchResults(data);
-          }
+          const { data } = await supabase.from('profiles').select('*').ilike('email', `%${searchQuery}%`).neq('id', currentUser.id).limit(10);
+          if (data) setSearchResults(data);
           setIsSearching(false);
-      };
-
-      const timer = setTimeout(doSearch, 300);
+      }, 300);
       return () => clearTimeout(timer);
   }, [searchQuery, currentUser.id]);
 
   // --- Actions ---
-
-  const acceptRequest = async (requestId: string) => {
-      const { error } = await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', requestId);
-      if (!error) {
-          fetchData(); // Force refresh UI immediately
-      }
+  const sendRequest = async (targetId: string) => {
+      await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' });
+      fetchData();
   };
-
-  const cancelOrRejectRequest = async (requestId: string) => {
-      const { error } = await supabase.from('friend_requests').delete().eq('id', requestId);
-      if (!error) {
-          fetchData(); // Force refresh UI immediately
-      }
+  const acceptRequest = async (id: string) => {
+      await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', id);
+      fetchData();
   };
-
-  const sendRequest = async (targetUserId: string) => {
-      // 1. Check local state to see if a relationship already exists
-      const isFriend = friends.some(f => f.id === targetUserId);
-      const isOutgoing = outgoingRequests.some(r => r.receiver_id === targetUserId);
-      const incomingReq = incomingRequests.find(r => r.sender_id === targetUserId);
-
-      if (isFriend || isOutgoing) return;
-
-      if (incomingReq) {
-          await acceptRequest(incomingReq.id);
-          return;
-      }
-
-      const { error } = await supabase.from('friend_requests').insert({
-          sender_id: currentUser.id,
-          receiver_id: targetUserId,
-          status: 'pending'
-      });
-      
-      if (!error) fetchData(); 
+  const cancelRequest = async (id: string) => {
+      await supabase.from('friend_requests').delete().eq('id', id);
+      fetchData();
   };
 
   const createGroup = async () => {
       const name = await showPrompt("New Group", "Enter a name for your group:", "e.g. Project Alpha");
       if (!name) return;
-
       try {
-          // 1. Create Group
-          const { data: groupData, error: groupError } = await supabase
-              .from('groups')
-              .insert({ name, created_by: currentUser.id })
-              .select()
-              .single();
-          
-          if (groupError) throw groupError;
-
-          // 2. Add creator as member
-          const { error: memberError } = await supabase
-              .from('group_members')
-              .insert({ group_id: groupData.id, user_id: currentUser.id });
-
-          if (memberError) throw memberError;
-
-          // Optimistic update: Add to list instantly
-          setGroups(prev => [groupData, ...prev]);
-          await showAlert("Success", "Group created successfully!");
-          
-          // Background refresh
-          fetchData();
+          const { data: group, error } = await supabase.from('groups').insert({ name, created_by: currentUser.id }).select().single();
+          if (error) throw error;
+          await supabase.from('group_members').insert({ group_id: group.id, user_id: currentUser.id });
+          setGroups(prev => [group, ...prev]);
+          showAlert("Success", "Group created!");
       } catch (e: any) {
-          await showAlert("Error", "Could not create group: " + e.message);
+          showAlert("Error", e.message);
       }
   };
 
-  // Helper to determine relationship status for a searched user
-  const getRelationshipStatus = (targetId: string): { status: FriendshipStatus, reqId?: string } => {
-      if (friends.some(f => f.id === targetId)) return { status: 'friends' };
-      const out = outgoingRequests.find(r => r.receiver_id === targetId);
-      if (out) return { status: 'pending_sent', reqId: out.id };
-      const inc = incomingRequests.find(r => r.sender_id === targetId);
-      if (inc) return { status: 'pending_received', reqId: inc.id };
-      return { status: 'none' };
+  const renderAvatar = (user: any) => {
+      if (user?.avatar_url) return <img src={user.avatar_url} className="w-10 h-10 rounded-full object-cover border border-white/10" />;
+      return <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white text-sm font-bold border border-white/5">{user?.email?.[0].toUpperCase() || '?'}</div>;
   };
-
-  const isPenguinUser = (email: string) => email === 'cindygaldamez@yahoo.com';
-
-  const renderAvatar = (user: any, sizeClasses: string = "w-10 h-10") => {
-      // Handle cases where user object might be partial from join
-      if (user?.avatar_url) {
-          return <img src={user.avatar_url} alt={user.email} className={`${sizeClasses} rounded-full object-cover border border-white/10`} />;
-      }
-      const initial = user?.email ? user.email[0].toUpperCase() : '?';
-      return (
-        <div className={`${sizeClasses} rounded-full bg-gray-800 flex items-center justify-center text-white text-sm font-bold border border-white/5`}>
-            {initial}
-        </div>
-      );
-  };
-
-  const EmptyTab = ({ label, icon }: { label: string, icon: string }) => (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-500 animate-fade-in">
-          <div className="text-4xl mb-2 opacity-30">{icon}</div>
-          <p className="text-xs">No {label} yet</p>
-      </div>
-  );
 
   return (
     <div className="w-full md:w-80 bg-[#060609] md:bg-[#060609]/95 md:backdrop-blur-xl md:border-r border-white/5 flex flex-col h-full font-['Outfit'] relative z-20 shadow-2xl overflow-hidden">
-      {/* Current User Header */}
+      {/* Header */}
       <div className="p-6 bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
-        <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                <div className="w-2 h-6 bg-indigo-500 rounded-full"></div>
-                MasterVoice
-            </h1>
-            <p className="text-xs text-gray-500 ml-4 font-medium tracking-wide">SECURE P2P MESH</p>
-        </div>
-        
-        <button 
-            onClick={onOpenSettings}
-            className="rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg overflow-hidden"
-            aria-label="Settings"
-        >
-            {renderAvatar(currentUser, "w-10 h-10")}
-        </button>
+        <div><h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2"><div className="w-2 h-6 bg-indigo-500 rounded-full"></div>MasterVoice</h1><p className="text-xs text-gray-500 ml-4 font-medium tracking-wide">SECURE P2P MESH</p></div>
+        <button onClick={onOpenSettings} className="rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg overflow-hidden">{renderAvatar(currentUser)}</button>
       </div>
       
-      {/* Scrollable Tabs */}
+      {/* Tabs */}
       <div className="flex px-4 pt-4 gap-4 overflow-x-auto no-scrollbar shrink-0 border-b border-white/5 pb-0">
-          {[
-              { id: 'chats', label: 'Chats' },
-              { id: 'requests', label: 'Requests', count: incomingRequests.length },
-              { id: 'groups', label: 'Groups' },
-              { id: 'favorites', label: 'Favorites' },
-              { id: 'archived', label: 'Archived' },
-              { id: 'files', label: 'Files' },
-          ].map((tab: any) => (
-             <button 
-                key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSearchQuery(''); }}
-                className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-             >
+          {[{ id: 'chats', label: 'Chats' }, { id: 'groups', label: 'Groups' }, { id: 'requests', label: 'Requests', count: incomingRequests.length }].map((tab: any) => (
+             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearchQuery(''); }} className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                   {tab.label}
-                  {tab.count > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{tab.count}</span>
-                  )}
+                  {tab.count > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{tab.count}</span>}
              </button>
           ))}
       </div>
 
-      {/* Search */}
-      <div className="p-4 pb-2 shrink-0">
-          <div className="bg-[#13131a] border border-white/5 rounded-2xl px-4 py-3.5 flex items-center gap-3 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all focus-within:bg-[#1a1a20] shadow-inner">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input 
-                className="bg-transparent outline-none w-full placeholder-gray-600 text-gray-200" 
-                placeholder={activeTab === 'groups' ? "Search groups..." : "Find friends..."} 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-          </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-20 md:pb-0">
-        
-        {/* --- SEARCH RESULTS MODE --- */}
-        {searchQuery.trim() !== '' ? (
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-20 md:pb-0 pt-2">
+        {activeTab === 'chats' && (
             <>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Global Search</h3>
-                {isSearching ? (
-                    <div className="p-8 text-center text-gray-500 text-xs animate-pulse">Searching directory...</div>
-                ) : searchResults.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500 text-xs">No users found.</div>
-                ) : (
-                    searchResults.map(user => {
-                        const { status, reqId } = getRelationshipStatus(user.id);
-                        return (
-                            <div key={user.id} className="w-full p-3 flex items-center justify-between rounded-2xl hover:bg-white/5 border border-transparent transition-all group animate-fade-in-up">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    {renderAvatar(user, "w-10 h-10")}
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium text-gray-200 truncate">{user.email}</p>
-                                        <p className="text-[10px] text-gray-500 font-medium">
-                                            {status === 'friends' ? 'Already friends' : status === 'pending_sent' ? 'Request sent' : status === 'pending_received' ? 'Request received' : 'Stranger'}
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                {/* Action Buttons */}
-                                <div>
-                                    {status === 'none' && (
-                                        <button onClick={() => sendRequest(user.id)} className="p-2.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white rounded-xl transition" title="Add Friend">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                        </button>
-                                    )}
-                                    {status === 'pending_sent' && reqId && (
-                                        <button onClick={() => cancelOrRejectRequest(reqId)} className="p-2.5 bg-gray-800 text-gray-400 hover:text-red-400 rounded-xl transition" title="Cancel Request">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                        </button>
-                                    )}
-                                    {status === 'pending_received' && reqId && (
-                                        <div className="flex gap-2">
-                                            <button onClick={() => acceptRequest(reqId)} className="p-2.5 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded-xl transition">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                            </button>
-                                            <button onClick={() => cancelOrRejectRequest(reqId)} className="p-2.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </div>
-                                    )}
-                                    {status === 'friends' && (
-                                        <button onClick={() => { setActiveId(user.id); onSelectUser(user); setSearchQuery(''); }} className="p-2.5 bg-white/5 text-gray-300 hover:bg-white/10 rounded-xl transition" title="Message">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })
-                )}
-            </>
-        ) : activeTab === 'requests' ? (
-            /* --- INCOMING & OUTGOING REQUESTS MODE --- */
-            <>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Incoming</h3>
-                {incomingRequests.length === 0 ? (
-                    <div className="p-6 text-center border border-dashed border-white/5 rounded-xl mx-2 mb-4">
-                        <div className="w-8 h-8 bg-white/5 rounded-full mx-auto mb-2 flex items-center justify-center text-lg grayscale opacity-50">📫</div>
-                        <p className="text-gray-500 text-xs">No pending incoming requests.</p>
-                    </div>
-                ) : (
-                    incomingRequests.map(req => (
-                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 hover:bg-white/10 transition-colors">
-                            <div className="flex items-center gap-3 min-w-0">
-                                {renderAvatar(req.sender, "w-10 h-10")}
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-200 truncate">{req.sender?.email || 'Unknown'}</p>
-                                    <p className="text-[10px] text-gray-500">{new Date(req.created_at).toLocaleDateString()}</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => acceptRequest(req.id)} className="p-2.5 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded-xl transition shadow-lg shadow-green-900/20">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                </button>
-                                <button onClick={() => cancelOrRejectRequest(req.id)} className="p-2.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition shadow-lg shadow-red-900/20">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                )}
-                
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-4">Outgoing</h3>
-                {outgoingRequests.length === 0 ? (
-                    <div className="p-6 text-center border border-dashed border-white/5 rounded-xl mx-2">
-                        <p className="text-gray-500 text-xs">No pending outgoing requests.</p>
-                    </div>
-                ) : (
-                    outgoingRequests.map(req => (
-                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 hover:bg-white/10 transition-colors opacity-70 hover:opacity-100">
-                            <div className="flex items-center gap-3 min-w-0">
-                                {renderAvatar(req.receiver, "w-10 h-10")}
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-200 truncate">{req.receiver?.email || 'Unknown'}</p>
-                                    <p className="text-[10px] text-gray-500">Sent: {new Date(req.created_at).toLocaleDateString()}</p>
-                                </div>
-                            </div>
-                            <button onClick={() => cancelOrRejectRequest(req.id)} className="p-2.5 bg-gray-700 text-gray-400 hover:bg-red-500 hover:text-white rounded-xl transition" title="Cancel">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                    ))
-                )}
-            </>
-        ) : activeTab === 'groups' ? (
-             <>
-                <div className="px-3 py-2 flex justify-between items-center">
-                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">My Groups</h3>
-                    <button onClick={createGroup} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition">
-                        + New
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Friends</h3>
+                {friends.length === 0 && <div className="p-8 text-center text-gray-500 text-xs">No friends yet. Add some requests!</div>}
+                {friends.map((user) => (
+                    <button key={user.id} onClick={() => { setActiveId(user.id); onSelectUser(user); }} className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${activeId === user.id ? 'bg-indigo-600/10 border border-indigo-500/30' : 'hover:bg-white/5 border border-transparent'}`}>
+                        {activeId === user.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
+                        <div className="relative shrink-0">{renderAvatar(user)} {onlineUsers.has(user.id) && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#060609]"></div>}</div>
+                        <div className="flex-1 min-w-0"><p className={`text-sm font-bold truncate ${activeId === user.id ? 'text-white' : 'text-gray-200'}`}>{user.email.split('@')[0]}</p><p className="text-[10px] text-gray-500">{onlineUsers.has(user.id) ? 'Online' : 'Offline'}</p></div>
                     </button>
-                </div>
-                
-                {groups.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-gray-500 animate-fade-in border border-dashed border-white/5 m-3 rounded-2xl">
-                        <div className="text-4xl mb-2 opacity-30">👥</div>
-                        <p className="text-xs">No groups yet</p>
-                        <p className="text-[10px] mt-1 text-gray-600">Create one to start!</p>
-                    </div>
-                ) : (
-                    groups.map(group => {
-                        const isActive = activeId === group.id;
-                        return (
-                            <button 
-                                key={group.id} 
-                                onClick={() => { setActiveId(group.id); onSelectGroup(group); }}
-                                className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${
-                                    isActive 
-                                    ? 'bg-indigo-600/10 border border-indigo-500/30' 
-                                    : 'hover:bg-white/5 border border-transparent'
-                                }`}
-                            >
-                                {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shrink-0 ${isActive ? 'shadow-indigo-500/30' : ''}`}>
-                                        {group.name[0].toUpperCase()}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>{group.name}</p>
-                                        <p className={`text-[10px] ${isActive ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-400'}`}>Group Chat</p>
-                                    </div>
-                                </div>
-                            </button>
-                        );
-                    })
-                )}
-             </>
-        ) : activeTab === 'favorites' ? (
-             <EmptyTab label="favorites" icon="⭐" />
-        ) : activeTab === 'archived' ? (
-             <EmptyTab label="archived chats" icon="📦" />
-        ) : activeTab === 'files' ? (
-             <EmptyTab label="shared files" icon="📁" />
-        ) : (
-            /* --- FRIENDS LIST MODE --- */
-            <>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">My Friends</h3>
-                {friends.length === 0 && (
-                    <div className="p-8 text-center animate-fade-in">
-                        <div className="w-16 h-16 bg-white/5 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl grayscale opacity-30">👻</div>
-                        <p className="text-gray-400 font-medium">No friends yet.</p>
-                        <p className="text-xs text-gray-600 mt-2 max-w-[200px] mx-auto">Use the search bar above to find and add people to your mesh.</p>
-                    </div>
-                )}
-                {friends.map((user) => {
-                    const isOnline = onlineUsers.has(user.id);
-                    const isActive = activeId === user.id;
-                    
-                    return (
-                    <button
-                        key={user.id}
-                        onClick={() => {
-                            setActiveId(user.id);
-                            onSelectUser(user);
-                        }}
-                        className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${
-                            isActive 
-                            ? 'bg-indigo-600/10 border border-indigo-500/30' 
-                            : 'hover:bg-white/5 border border-transparent'
-                        }`}
-                    >
-                        {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
-                        
-                        <div className="relative shrink-0">
-                            {user.avatar_url ? (
-                                <img src={user.avatar_url} alt={user.email} className="w-12 h-12 rounded-full object-cover shadow-lg border border-white/5 bg-gray-800" />
-                            ) : (
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold transition-colors shadow-lg ${
-                                    isActive ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/30' : 'bg-gray-800 group-hover:bg-gray-700'
-                                }`}>
-                                    {user.email[0].toUpperCase()}
-                                </div>
-                            )}
-                            {isOnline && (
-                                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-4 border-[#060609]"></div>
-                            )}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-1.5 truncate">
-                                <p className={`text-base font-bold truncate transition-colors ${isActive ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
-                                    {user.email.split('@')[0]}
-                                </p>
-                                {isPenguinUser(user.email) && <span className="text-sm animate-wobble">🐧</span>}
-                            </div>
-                        </div>
-                        <p className={`text-xs truncate font-medium ${isActive ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-400'}`}>
-                            {isOnline ? 'Active now' : 'Offline'}
-                        </p>
-                        </div>
-                    </button>
-                    );
-                })}
+                ))}
             </>
         )}
-      </div>
 
-      {/* Mobile Bottom Nav */}
-      <div className="md:hidden border-t border-white/5 bg-[#060609]/90 backdrop-blur-lg fixed bottom-0 left-0 right-0 z-30 flex justify-around items-center h-16 pb-safe">
-            <button 
-                onClick={() => { setActiveTab('chats'); setSearchQuery(''); }}
-                className={`flex flex-col items-center gap-1 p-2 w-full transition-colors ${activeTab === 'chats' ? 'text-indigo-400' : 'text-gray-600 hover:text-gray-400'}`}
-            >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                <span className="text-[10px] font-bold tracking-wide">Chats</span>
-            </button>
-            <button 
-                onClick={onOpenSettings}
-                className="flex flex-col items-center gap-1 p-2 w-full text-gray-600 hover:text-white transition-colors"
-            >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <span className="text-[10px] font-bold tracking-wide">Settings</span>
-            </button>
-      </div>
+        {activeTab === 'groups' && (
+             <>
+                <div className="px-3 py-2 flex justify-between items-center"><h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Groups</h3><button onClick={createGroup} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition">+ New</button></div>
+                {groups.length === 0 && <div className="p-8 text-center text-gray-500 text-xs">No groups created.</div>}
+                {groups.map(group => (
+                    <button key={group.id} onClick={() => { setActiveId(group.id); navigate(`/conversations/groups/${group.id}`); onSelectGroup(group); }} className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${activeId === group.id ? 'bg-indigo-600/10 border border-indigo-500/30' : 'hover:bg-white/5 border border-transparent'}`}>
+                        {activeId === group.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shrink-0">{group.name[0].toUpperCase()}</div>
+                        <div className="min-w-0"><p className={`text-sm font-medium truncate ${activeId === group.id ? 'text-white' : 'text-gray-200'}`}>{group.name}</p><p className="text-[10px] text-gray-500">Group Chat</p></div>
+                    </button>
+                ))}
+             </>
+        )}
 
-      {/* Desktop Footer */}
-      <div className="hidden md:flex p-4 border-t border-white/5 bg-[#0a0a0f]/50">
-        <button
-            onClick={onOpenSettings}
-            className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 border border-white/5"
-        >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Open Settings
-        </button>
+        {activeTab === 'requests' && (
+            <>
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Pending ({incomingRequests.length})</h3>
+                {incomingRequests.map(req => (
+                    <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">{renderAvatar(req.sender)}<span className="text-sm font-medium truncate text-gray-300">{req.sender?.email}</span></div>
+                        <div className="flex gap-1"><button onClick={() => acceptRequest(req.id)} className="p-2 bg-green-500/20 text-green-400 rounded-lg">✓</button><button onClick={() => cancelRequest(req.id)} className="p-2 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>
+                    </div>
+                ))}
+                
+                {/* Search for new friends here as well */}
+                <div className="mt-4 px-2">
+                    <div className="bg-[#13131a] border border-white/5 rounded-2xl px-4 py-2 flex items-center gap-2 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input className="bg-transparent outline-none w-full" placeholder="Find people..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    </div>
+                    {isSearching && <div className="text-center text-xs text-gray-500 mt-2">Searching...</div>}
+                    {searchResults.length > 0 && searchResults.map(user => (
+                        <div key={user.id} className="flex justify-between items-center p-2 mt-2 bg-white/5 rounded-xl">
+                            <span className="text-sm text-gray-300">{user.email}</span>
+                            <button onClick={() => { sendRequest(user.id); setSearchQuery(''); setSearchResults([]); }} className="text-xs bg-indigo-600 px-2 py-1 rounded text-white">Add</button>
+                        </div>
+                    ))}
+                </div>
+            </>
+        )}
       </div>
     </div>
   );

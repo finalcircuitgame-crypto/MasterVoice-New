@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Message, UserProfile, CallState, Attachment, Group } from '../types';
-import { ICE_SERVERS } from '../constants';
+import { Message, UserProfile, CallState, Attachment } from '../types';
 import { useModal } from './ModalContext';
 
 // --- Confetti Utility ---
@@ -38,8 +37,7 @@ const triggerConfetti = () => {
 
 interface ChatWindowProps {
     currentUser: UserProfile;
-    recipient?: UserProfile | null;
-    selectedGroup?: Group | null;
+    recipient: UserProfile | null;
     onlineUsers: Set<string>;
     channel: any | null; 
     callState: CallState;
@@ -62,22 +60,11 @@ interface MessageItemProps {
     onReaction: (msg: Message, emoji: string) => void;
     onJumpTo: (messageId: string) => void;
     isHighlighted: boolean;
-    isFamily?: boolean;
-    isGroup: boolean;
     availableEmojis: string[];
 }
 
-// Updated Emoji URL to a reliable CDN
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
-
-// Default Fallback List
-const DEFAULT_EMOJI_LIST = [
-    "👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀", 
-    "🚀", "💯", "👋", "🙏", "🤝", "💀", "😭", "😤", "🤬", "🤯", 
-    "🥰", "😍", "🤩", "🥳", "😎", "🤔", "🤫", "🙄", "😬", "😴", 
-    "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", 
-    "🤡", "💩", "👻", "👽", "🤖", "🎃", "😺", "👶", "🧑", "🧓"
-];
+const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 
 const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -93,47 +80,19 @@ const formatDuration = (seconds: number) => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
-// Optimized MessageItem with React.memo to prevent re-renders on parent state changes (like typing)
-const MessageItem = React.memo<MessageItemProps>(({
-    msg,
-    isMe,
-    recipient,
-    currentUser,
-    onEdit,
-    onDelete,
-    onRetry,
-    onReply,
-    onReaction,
-    onJumpTo,
-    isHighlighted,
-    isFamily,
-    isGroup,
-    availableEmojis
-}) => {
+const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, currentUser, onEdit, onDelete, onRetry, onReply, onReaction, onJumpTo, isHighlighted, availableEmojis }) => {
     const [showActions, setShowActions] = useState(false);
-    const [imageLoaded, setImageLoaded] = useState(false);
     const [showReactions, setShowReactions] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const actionsMenuRef = useRef<HTMLDivElement>(null);
 
-    // Check if message was recently edited
-    const isRecentlyEdited = msg.updated_at && msg.created_at &&
-        new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
-
+    const isRecentlyEdited = msg.updated_at && msg.created_at && new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
     const isSending = msg.status === 'sending';
     const isError = msg.status === 'error';
-
-    const hasReacted = (emoji: string) => {
-        return msg.reactions?.[emoji]?.includes(currentUser.id);
-    };
+    const hasReacted = (emoji: string) => msg.reactions?.[emoji]?.includes(currentUser.id);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (
-                containerRef.current &&
-                !containerRef.current.contains(event.target as Node) &&
-                (!actionsMenuRef.current || !actionsMenuRef.current.contains(event.target as Node))
-            ) {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setShowActions(false);
                 setShowReactions(false);
             }
@@ -142,194 +101,76 @@ const MessageItem = React.memo<MessageItemProps>(({
         return () => document.removeEventListener('mousedown', handleClickOutside, true);
     }, []);
 
-    const handleToggleActions = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setShowActions(!showActions);
-    };
-
-    // determine sender details for UI
-    const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
-    const senderAvatar = msg.sender?.avatar_url;
-    const senderInitial = msg.sender?.email ? msg.sender.email[0].toUpperCase() : '?';
-
     const renderAttachment = () => {
         if (!msg.attachment) return null;
-
         if (msg.attachment.type === 'image') {
             return (
-                <div className="mb-2 relative rounded-lg overflow-hidden group/image pointer-events-none">
-                    {!imageLoaded && (
-                        <div className="w-full h-48 bg-gray-800/50 animate-pulse flex items-center justify-center">
-                            <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        </div>
-                    )}
-                    <img
-                        src={msg.attachment.url}
-                        alt="Attachment"
-                        className={`max-w-full rounded-lg max-h-80 object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute top-0 left-0'}`}
-                        onLoad={() => setImageLoaded(true)}
-                    />
-                </div>
+                <div className="mb-2 rounded-lg overflow-hidden"><img src={msg.attachment.url} alt="Attachment" className="max-w-full rounded-lg max-h-80 object-cover" /></div>
             );
         }
-
         if (msg.attachment.type === 'audio') {
             return (
-                <div className={`flex items-center gap-3 p-3 pr-2 rounded-xl mb-2 transition-colors ${isMe ? 'bg-indigo-800/20' : 'bg-black/20'} border border-white/5 min-w-[220px]`}>
-                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isMe ? 'bg-white/10 text-indigo-300' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                     </div>
-                     <div className="flex-1 flex flex-col justify-center min-w-0">
-                        <audio controls src={msg.attachment.url} className="h-8 w-full max-w-[200px] opacity-90 accent-indigo-500" style={{ filter: isMe ? 'invert(1) hue-rotate(180deg)' : 'none' }} />
-                        <span className="text-[10px] text-gray-400 mt-1 ml-1 font-mono">Voice Message</span>
-                     </div>
+                <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 border border-white/5 ${isMe ? 'bg-indigo-800/20' : 'bg-black/20'}`}>
+                     <audio controls src={msg.attachment.url} className="h-8 w-[200px]" style={{ filter: isMe ? 'invert(1) hue-rotate(180deg)' : 'none' }} />
                 </div>
             );
         }
-
         return (
-            <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors ${isMe ? 'bg-white/10' : 'bg-black/20'} border border-white/10`}>
-                <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-indigo-400 shrink-0">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                </div>
-                <div className="min-w-0 overflow-hidden">
-                    <p className="text-sm font-bold truncate text-white">{msg.attachment.name}</p>
-                    <p className="text-xs text-gray-400">{formatFileSize(msg.attachment.size)}</p>
-                </div>
+            <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 border border-white/10 ${isMe ? 'bg-white/10' : 'bg-black/20'}`}>
+                <span className="text-sm font-bold text-white truncate">{msg.attachment.name}</span>
             </div>
         );
     };
 
     return (
-        <div
-            id={`msg-${msg.id}`}
-            ref={containerRef}
-            className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 transition-all duration-500 ${isHighlighted ? 'scale-105' : ''}`}
-        >
+        <div id={`msg-${msg.id}`} ref={containerRef} className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 px-2 group`}>
             <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                    {/* Avatar Logic */}
                     {!isMe && (
-                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden" title={senderName}>
-                            {/* If group chat, prefer message sender info. If DM, prefer recipient info */}
-                            {isGroup ? (
-                                senderAvatar ? <img src={senderAvatar} alt="Sender" className="w-full h-full object-cover" /> : senderInitial
-                            ) : (
-                                recipient?.avatar_url ? <img src={recipient.avatar_url} alt="Avatar" className="w-full h-full object-cover" /> : recipient?.email[0].toUpperCase()
-                            )}
+                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold mb-1 border border-white/10 overflow-hidden">
+                            {recipient?.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient?.email[0].toUpperCase()}
                         </div>
                     )}
-
-                    {/* Message Bubble Wrapper */}
-                    <div
-                        className="flex flex-col min-w-0 cursor-pointer relative group"
-                        onClick={handleToggleActions}
-                    >
-                        {/* Group Chat: Show Sender Name */}
-                        {isGroup && !isMe && (
-                            <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{senderName}</span>
+                    
+                    <div className="flex flex-col min-w-0 cursor-pointer relative" onClick={() => setShowActions(!showActions)}>
+                        {showActions && !isSending && (
+                            <div className={`absolute z-20 -top-10 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-full p-1 flex gap-1 shadow-xl`}>
+                                <button onClick={() => setShowReactions(!showReactions)} className="p-1.5 hover:bg-white/10 rounded-full text-gray-400">😊</button>
+                                {isMe && !msg.attachment && <button onClick={() => onEdit(msg)} className="p-1.5 hover:bg-white/10 rounded-full text-gray-400">✏️</button>}
+                                {isMe && <button onClick={() => onDelete(msg.id)} className="p-1.5 hover:bg-white/10 rounded-full text-red-400">🗑️</button>}
+                            </div>
                         )}
-
-                        {/* Action Menu */}
-                        {showActions && !isSending && !isError && (
-                            <div
-                                ref={actionsMenuRef}
-                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-2xl shadow-2xl animate-scale-in -top-14 ${isMe ? 'right-0' : 'left-0'}`}
-                                onClick={(e) => e.stopPropagation()} 
-                                style={{ minWidth: 'max-content' }}
-                            >
-                                <div className="relative">
-                                    <button
-                                        onClick={() => setShowReactions(!showReactions)}
-                                        className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-indigo-400 transition"
-                                        title="React"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </button>
-                                    {showReactions && (
-                                        <div className="absolute bottom-full left-0 mb-2 bg-[#2a2a30] border border-white/20 rounded-xl p-2 shadow-xl z-50 w-72 max-h-56 overflow-y-auto custom-scrollbar">
-                                            <div className="grid grid-cols-8 gap-1">
-                                                {availableEmojis.map((emoji, index) => (
-                                                    <button
-                                                        key={`${emoji}-${index}`}
-                                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
-                                                        className={`p-1 hover:bg-white/10 rounded-md transition text-lg flex items-center justify-center aspect-square ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
-                                                    >
-                                                        {emoji}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <button onClick={() => { onReply(msg); setShowActions(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition" title="Reply">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                                </button>
-
-                                {isMe && !msg.attachment && (
-                                    <button onClick={() => { onEdit(msg); setShowActions(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition" title="Edit">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                    </button>
-                                )}
-
-                                {isMe && (
-                                    <button onClick={() => { onDelete(msg.id); setShowActions(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-red-500 transition" title="Delete">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
-                                )}
+                        
+                        {showReactions && (
+                            <div className="absolute -top-10 left-0 bg-[#2a2a30] rounded-xl p-2 shadow-xl z-30 flex gap-1">
+                                {availableEmojis.slice(0, 8).map(emoji => (
+                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); }} className="hover:bg-white/10 p-1 rounded">{emoji}</button>
+                                ))}
                             </div>
                         )}
 
-                        {/* Reply Context */}
                         {msg.reply_to && (
-                            <div 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onJumpTo(msg.reply_to!.id);
-                                }}
-                                className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-colors ${isMe ? 'ml-auto' : ''}`}
-                            >
-                                <span className="font-bold text-indigo-400 shrink-0">{msg.reply_to.sender_id === currentUser.id ? 'You' : 'Reply'}</span>
-                                <span className="truncate max-w-[150px]">{msg.reply_to.attachment ? '📷 [Attachment]' : msg.reply_to.content}</span>
+                            <div onClick={(e) => { e.stopPropagation(); onJumpTo(msg.reply_to!.id); }} className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 cursor-pointer ${isMe ? 'ml-auto' : ''}`}>
+                                <span className="font-bold text-indigo-400 mr-2">{msg.reply_to.sender_id === currentUser.id ? 'You' : 'Reply'}</span>
+                                <span className="truncate">{msg.reply_to.content || 'Attachment'}</span>
                             </div>
                         )}
 
-                        <div className={`relative px-5 py-3 shadow-md transition-all duration-300 backdrop-blur-md hover:brightness-110 ${isMe
-                                ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm border border-white/10 shadow-indigo-500/10'
-                                : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5 shadow-black/20'
-                            } ${isRecentlyEdited ? 'animate-message-flash' : ''} ${isHighlighted ? 'ring-2 ring-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)] bg-indigo-500/40' : ''} ${isSending ? 'opacity-70' : ''} ${isError ? 'border-red-500/50 bg-red-900/10' : ''}`}>
-
+                        <div className={`px-5 py-3 shadow-md backdrop-blur-md ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'} ${isHighlighted ? 'ring-2 ring-white/50' : ''} ${isError ? 'border-red-500 bg-red-900/10' : ''}`}>
                             {renderAttachment()}
-
-                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px] select-text pointer-events-none">{msg.content}</p>}
-
-                            <div className={`flex items-center justify-between mt-1.5 gap-3 select-none ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
-                                <div className="flex items-center gap-1.5">
-                                    <p className="text-[10px] font-medium">
-                                        {isSending ? 'Sending...' : isError ? 'Failed' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
-                                {isRecentlyEdited && <span className="text-[9px] opacity-70 italic">edited</span>}
+                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
+                            <div className={`flex items-center justify-between mt-1.5 gap-3 ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
+                                <p className="text-[10px] font-medium">{isSending ? 'Sending...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                {isRecentlyEdited && <span className="text-[9px] italic">edited</span>}
                             </div>
                         </div>
 
-                        {/* Reactions Display */}
                         {msg.reactions && Object.keys(msg.reactions).some(k => msg.reactions![k].length > 0) && (
                             <div className={`flex gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 {Object.entries(msg.reactions).map(([emoji, users]) => (
                                     users.length > 0 && (
-                                        <button
-                                            key={emoji}
-                                            onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); }}
-                                            className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 transition ${hasReacted(emoji)
-                                                    ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
-                                                    : 'bg-gray-800/50 border-white/5 text-gray-400 hover:bg-white/10'
-                                                }`}
-                                        >
-                                            <span>{emoji}</span>
-                                            <span className="font-bold">{users.length}</span>
+                                        <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); }} className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 ${hasReacted(emoji) ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-gray-800/50 border-white/5 text-gray-400'}`}>
+                                            <span>{emoji}</span><span className="font-bold">{users.length}</span>
                                         </button>
                                     )
                                 ))}
@@ -340,953 +181,261 @@ const MessageItem = React.memo<MessageItemProps>(({
             </div>
         </div>
     );
-}, (prev, next) => {
-    // Custom Comparator
-    return (
-        prev.msg === next.msg && 
-        prev.isMe === next.isMe && 
-        prev.isHighlighted === next.isHighlighted && 
-        prev.isFamily === next.isFamily &&
-        prev.isGroup === next.isGroup &&
-        prev.recipient?.id === next.recipient?.id &&
-        prev.recipient?.avatar_url === next.recipient?.avatar_url &&
-        prev.currentUser.id === next.currentUser.id &&
-        prev.availableEmojis === next.availableEmojis
-    );
 });
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({
-    currentUser,
-    recipient,
-    selectedGroup,
-    onlineUsers,
-    callState,
-    onStartCall,
-    onEndCall,
-    onAnswerCall,
-    activeCallContact,
-    onExpandCall
-}) => {
-    // ... existing state ...
+export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, onlineUsers, callState, onStartCall, onEndCall, onAnswerCall, activeCallContact, onExpandCall }) => {
+    if (!recipient) return null;
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [loading, setLoading] = useState(true);
-    const [remoteDrafts, setRemoteDrafts] = useState<Record<string, { content: string, email: string }>>({});
-    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
+    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     
-    // Add Member & View Members State
-    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-    const [showGroupMembersModal, setShowGroupMembersModal] = useState(false);
-    const [friends, setFriends] = useState<UserProfile[]>([]);
-    const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
-    const [addingMember, setAddingMember] = useState(false);
-    
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const lastTypingBroadcast = useRef<number>(0);
+    // Remote Typing Indicators
+    const [remoteDrafts, setRemoteDrafts] = useState<Record<string, string>>({});
     const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const lastTypingBroadcast = useRef<number>(0);
     const [chatChannel, setChatChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
 
-    // File Upload State
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
-
-    // Recording State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingTime, setRecordingTime] = useState(0);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
-
-    // Call Terms & Modals
-    const [showCallTerms, setShowCallTerms] = useState(false);
-    const [pendingAction, setPendingAction] = useState<'start' | 'answer' | null>(null);
-    const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
     const inputRef = useRef<HTMLInputElement>(null);
-    const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+    const { showAlert } = useModal();
 
-    const { showAlert } = useModal(); 
+    const isRecipientOnline = onlineUsers.has(recipient.id);
+    const roomId = [currentUser.id, recipient.id].sort().join('_');
 
-    const isGroup = !!selectedGroup;
-    const isRecipientOnline = recipient ? onlineUsers.has(recipient.id) : false;
-    const isPenguin = recipient?.email === 'cindygaldamez@yahoo.com';
-    const roomId = isGroup ? `group_${selectedGroup.id}` : (recipient ? [currentUser.id, recipient.id].sort().join('_') : 'unknown');
-
-    // Fetch Emojis
+    // Load Emojis
     useEffect(() => {
-        const fetchEmojis = async () => {
-            try {
-                const response = await fetch(EMOJI_SOURCE_URL);
-                if (response.ok) {
-                    const data = await response.json();
-                    let emojis: string[] = [];
-                    if (Array.isArray(data)) {
-                        emojis = data.map((item: any) => {
-                            if (typeof item === 'string') return item;
-                            if (item.unified) return String.fromCodePoint(...item.unified.split('-').map((u: string) => parseInt(u, 16)));
-                            if (item.char) return item.char;
-                            return null;
-                        }).filter(Boolean);
-                    }
-                    
-                    if (emojis.length > 0) {
-                        setEmojiList(Array.from(new Set(emojis)).slice(0, 300));
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to load emojis, using defaults.", error);
-            }
-        };
-        fetchEmojis();
+        fetch(EMOJI_SOURCE_URL).then(res => res.json()).then(data => {
+            if (Array.isArray(data)) setEmojiList(data.map((i:any) => i.char || i).filter(Boolean).slice(0, 100));
+        }).catch(() => {});
     }, []);
 
-    // Fetch Group Members
-    const fetchGroupMembers = async () => {
-        if (!selectedGroup) return;
-        
-        const { data: memberRows } = await supabase
-            .from('group_members')
-            .select('user_id')
-            .eq('group_id', selectedGroup.id);
-            
-        if (memberRows && memberRows.length > 0) {
-            const ids = memberRows.map(m => m.user_id);
-            const { data: profiles } = await supabase
-                .from('profiles')
-                .select('*')
-                .in('id', ids);
-            if (profiles) setGroupMembers(profiles);
-        } else {
-            setGroupMembers([]);
-        }
-    };
-
-    // Fetch Friends for Group Adding (Filtering out existing members)
-    const fetchFriends = async () => {
-        if (!isGroup) return;
-        
-        // 1. Get user's friends
-        const { data: requests } = await supabase
-            .from('friend_requests')
-            .select('sender_id, receiver_id')
-            .eq('status', 'accepted')
-            .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
-            
-        const friendIds = new Set<string>();
-        requests?.forEach(req => {
-            friendIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
-        });
-
-        if (friendIds.size === 0) {
-            setFriends([]);
-            return;
-        }
-
-        // 2. Get current group members to exclude them
-        const { data: currentMembers } = await supabase
-            .from('group_members')
-            .select('user_id')
-            .eq('group_id', selectedGroup!.id);
-            
-        const currentMemberIds = new Set(currentMembers?.map(m => m.user_id));
-
-        const availableFriendIds = Array.from(friendIds).filter(id => !currentMemberIds.has(id));
-
-        if (availableFriendIds.length > 0) {
-            const { data: profiles } = await supabase.from('profiles').select('*').in('id', availableFriendIds);
-            setFriends(profiles || []);
-        } else {
-            setFriends([]);
-        }
-    };
-
-    const handleAddMember = async (userId: string) => {
-        if (!selectedGroup) return;
-        setAddingMember(true);
-        try {
-            await supabase.from('group_members').insert({
-                group_id: selectedGroup.id,
-                user_id: userId
-            });
-            // Remove from local list
-            setFriends(prev => prev.filter(f => f.id !== userId));
-            // Refresh member list if it was open or cached
-            fetchGroupMembers();
-            showAlert("Success", "Member added to group!");
-        } catch (e: any) {
-            showAlert("Error", "Failed to add member: " + e.message);
-        } finally {
-            setAddingMember(false);
-        }
-    };
-
-    // ... subscriptions ...
+    // Subscribe
     useEffect(() => {
-        const newChannel = supabase.channel(`chat_messages:${roomId}`);
+        const channel = supabase.channel(`chat_messages:${roomId}`);
+        channel
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+                const record = (payload.new || payload.old) as any;
+                if (!record) return;
+                // Double check relevance
+                if (!((record.sender_id === currentUser.id && record.receiver_id === recipient.id) || (record.sender_id === recipient.id && record.receiver_id === currentUser.id))) return;
 
-        const filter = isGroup 
-            ? `group_id=eq.${selectedGroup.id}` 
-            : undefined; 
-            
-        newChannel
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'messages', filter },
-                async (payload) => {
-                    const { eventType, new: newRecord, old: oldRecord } = payload;
-                    const record = (newRecord || oldRecord) as any;
-                    if (!record) return;
-                    
-                    if (!isGroup) {
-                        const isRelevant =
-                            (record.sender_id === currentUser.id && record.receiver_id === recipient?.id) ||
-                            (record.sender_id === recipient?.id && record.receiver_id === currentUser.id);
-                        if (!isRelevant) return;
-                    }
-
-                    if (eventType === 'INSERT') {
-                        // For Groups, we need to fetch the sender profile to display avatar
-                        let senderProfile = null;
-                        if (isGroup) {
-                            const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', record.sender_id).single();
-                            senderProfile = data;
-                        }
-
-                        setMessages((prev) => {
-                            if (prev.find(m => m.id === newRecord.id)) return prev;
-                            const completeMsg = { ...newRecord, status: 'sent', sender: senderProfile } as Message;
-                            return [...prev, completeMsg];
-                        });
-                        
-                        // Clear typer indicator if message received from them
-                        if (record.sender_id !== currentUser.id) {
-                            if (typingTimeouts.current[record.sender_id]) {
-                                clearTimeout(typingTimeouts.current[record.sender_id]);
-                                delete typingTimeouts.current[record.sender_id];
-                            }
-                            setRemoteDrafts(prev => {
-                                const next = { ...prev };
-                                delete next[record.sender_id];
-                                return next;
-                            });
-                        }
-                    } else if (eventType === 'UPDATE') {
-                        setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...m, ...newRecord, status: 'sent', reply_to: m.reply_to, sender: m.sender } : m));
-                    } else if (eventType === 'DELETE') {
-                        setMessages((prev) => prev.filter(m => m.id !== oldRecord.id));
-                    }
-                }
-            )
-            .on('broadcast', { event: 'typing' }, (payload) => {
-                const { userId, content, email } = payload.payload;
-                if (userId === currentUser.id) return;
-
-                // Clear existing timeout
-                if (typingTimeouts.current[userId]) {
-                    clearTimeout(typingTimeouts.current[userId]);
-                }
-
-                // If content is empty, remove immediately
-                if (!content) {
-                     setRemoteDrafts(prev => {
-                        const next = { ...prev };
-                        delete next[userId];
-                        return next;
+                if (payload.eventType === 'INSERT') {
+                    setMessages(prev => {
+                        if (prev.find(m => m.id === payload.new.id)) return prev;
+                        return [...prev, { ...payload.new, status: 'sent' } as Message];
                     });
-                    return;
+                    // Clear typing indicator
+                    if (payload.new.sender_id !== currentUser.id) {
+                        setRemoteDrafts({});
+                    }
+                } else if (payload.eventType === 'UPDATE') {
+                    setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } as Message : m));
+                } else if (payload.eventType === 'DELETE') {
+                    setMessages(prev => prev.filter(m => m.id !== payload.old.id));
                 }
-
-                // Update state
-                setRemoteDrafts(prev => ({
-                    ...prev,
-                    [userId]: { content, email }
-                }));
-
-                // Set new timeout to clear if they stop typing
-                typingTimeouts.current[userId] = setTimeout(() => {
-                    setRemoteDrafts(prev => {
-                        const next = { ...prev };
-                        delete next[userId];
-                        return next;
-                    });
-                    delete typingTimeouts.current[userId];
-                }, 3000);
+            })
+            .on('broadcast', { event: 'typing' }, ({ payload }) => {
+                if (payload.userId === currentUser.id) return;
+                if (typingTimeouts.current[payload.userId]) clearTimeout(typingTimeouts.current[payload.userId]);
+                
+                if (payload.content) {
+                    setRemoteDrafts({ [payload.userId]: payload.content });
+                    typingTimeouts.current[payload.userId] = setTimeout(() => setRemoteDrafts({}), 3000);
+                } else {
+                    setRemoteDrafts({});
+                }
             })
             .subscribe();
+        
+        setChatChannel(channel);
+        return () => { supabase.removeChannel(channel); };
+    }, [roomId, recipient.id]);
 
-        setChatChannel(newChannel);
-        return () => { supabase.removeChannel(newChannel); };
-    }, [currentUser.id, recipient?.id, selectedGroup?.id, isGroup, roomId]);
-
+    // Fetch History
     useEffect(() => {
-        const fetchMessages = async () => {
+        const load = async () => {
             setLoading(true);
-            
-            // Basic query with reply join and sender join
-            let query = supabase
-                .from('messages')
-                .select(`
-                    *, 
-                    reply_to:reply_to_id(id, content, sender_id, attachment),
-                    sender:sender_id(email, avatar_url)
-                `)
+            const { data } = await supabase.from('messages')
+                .select('*, reply_to:reply_to_id(id, content, sender_id)')
+                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${recipient.id}),and(sender_id.eq.${recipient.id},receiver_id.eq.${currentUser.id})`)
                 .order('created_at', { ascending: true });
-
-            if (isGroup && selectedGroup) {
-                query = query.eq('group_id', selectedGroup.id);
-            } else if (recipient) {
-                query = query.or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`).or(`sender_id.eq.${recipient.id},receiver_id.eq.${recipient.id}`);
-            } else {
-                setLoading(false);
-                return;
-            }
-
-            const { data, error } = await query;
-
-            if (!error && data) {
-                let conversation = data;
-                if (!isGroup && recipient) {
-                     conversation = data.filter(
-                        (m: any) =>
-                            (m.sender_id === currentUser.id && m.receiver_id === recipient.id) ||
-                            (m.sender_id === recipient.id && m.receiver_id === currentUser.id)
-                    );
-                }
-                setMessages(conversation.map((m: any) => ({ ...m, status: 'sent' })));
-            }
+            
+            if (data) setMessages(data.map(m => ({ ...m, status: 'sent' })));
             setLoading(false);
         };
-        fetchMessages();
-        // Clear drafts on chat switch
-        setRemoteDrafts({});
-    }, [currentUser.id, recipient?.id, selectedGroup?.id, isGroup]);
+        load();
+    }, [recipient.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length, messages.length > 0 ? messages[messages.length - 1].id : null, Object.keys(remoteDrafts).length, replyingTo]);
-
-    // Recording Timer
-    useEffect(() => {
-        let interval: any;
-        if (isRecording) {
-            interval = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
-            }, 1000);
-        } else {
-            setRecordingTime(0);
-        }
-        return () => clearInterval(interval);
-    }, [isRecording]);
+    }, [messages.length, remoteDrafts]);
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setNewMessage(val);
-        
         const now = Date.now();
-        // Throttle broadcast to every 100ms to avoid flooding
-        if (now - lastTypingBroadcast.current > 100) {
-            chatChannel?.send({ 
-                type: 'broadcast', 
-                event: 'typing', 
-                payload: { 
-                    userId: currentUser.id, 
-                    email: currentUser.email,
-                    content: val 
-                } 
-            });
+        if (now - lastTypingBroadcast.current > 200) {
+            chatChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, content: val } });
             lastTypingBroadcast.current = now;
         }
     };
 
-    const handleStartRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Determine supported mimeType
-            let mimeType = 'audio/webm';
-            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                mimeType = 'audio/webm;codecs=opus';
-            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-                mimeType = 'audio/mp4';
-            }
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim()) return;
+        
+        const content = newMessage;
+        setNewMessage('');
+        setRemoteDrafts({}); // Clear remote just in case
+        
+        if (content.toLowerCase().includes('congrats')) triggerConfetti();
 
-            const recorder = new MediaRecorder(stream, { mimeType });
-            mediaRecorderRef.current = recorder;
-            audioChunksRef.current = [];
-
-            recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    audioChunksRef.current.push(e.data);
-                }
-            };
-
-            recorder.start();
-            setIsRecording(true);
-        } catch (err) {
-            console.error("Failed to start recording", err);
-            showAlert("Microphone Error", "Could not access microphone. Please check your browser permissions.");
-        }
-    };
-
-    const handleStopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.onstop = () => {
-                const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-                const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-                const audioFile = new File([audioBlob], `voice_${Date.now()}.${ext}`, { type: mimeType });
-                setSelectedFile(audioFile);
-                
-                // Reset stream tracks
-                mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
-            };
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-        }
-    };
-
-    const handleCancelRecording = () => {
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-            mediaRecorderRef.current = null;
-        }
-        setIsRecording(false);
-        audioChunksRef.current = [];
-    };
-
-    // ... handleSendMessage same as before ...
-    const handleSendMessage = async (e?: React.FormEvent, retryMsg?: Message) => {
-        if (e) e.preventDefault();
-        const content = retryMsg ? retryMsg.content : newMessage;
-        const fileToSend = selectedFile;
-
-        // Easter Egg Check
-        if (['congrats', 'yay', 'party', 'celebrate'].some(word => content.toLowerCase().includes(word))) {
-            triggerConfetti();
-        }
-
-        if (!content.trim() && !fileToSend && !retryMsg) return;
-
-        if (editingId && !retryMsg) {
-            const idToUpdate = editingId;
-            setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, content, status: 'sending', updated_at: new Date().toISOString() } : m));
-            setNewMessage('');
+        if (editingId) {
+            // Edit Mode
+            setMessages(prev => prev.map(m => m.id === editingId ? { ...m, content, updated_at: new Date().toISOString() } : m));
             setEditingId(null);
+            await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', editingId);
+        } else {
+            // New Message
+            const tempId = Math.random().toString();
+            const optimisticMsg: any = {
+                id: tempId,
+                sender_id: currentUser.id,
+                receiver_id: recipient.id,
+                content,
+                created_at: new Date().toISOString(),
+                status: 'sending',
+                reply_to_id: replyingTo?.id,
+                reply_to: replyingTo
+            };
+            setMessages(prev => [...prev, optimisticMsg]);
             setReplyingTo(null);
 
-            const { error } = await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', idToUpdate);
-            if (error) setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, status: 'error' } : m));
-            else setMessages(prev => prev.map(m => m.id === idToUpdate ? { ...m, status: 'sent' } : m));
-        } else {
-            const tempId = retryMsg ? retryMsg.id : Math.random().toString();
-            let attachmentData: Attachment | null = null;
-            let optimisticAttachment = null;
-
-            if (fileToSend) {
-                const isAudio = fileToSend.type.includes('audio');
-                const isImage = fileToSend.type.includes('image');
-                
-                optimisticAttachment = {
-                    url: URL.createObjectURL(fileToSend),
-                    type: isImage ? 'image' : isAudio ? 'audio' : 'file',
-                    name: isAudio ? 'Voice Message' : fileToSend.name,
-                    size: fileToSend.size,
-                    mimeType: fileToSend.type
-                };
-            }
-
-            const optimisticMsg: any = {
+            const { data, error } = await supabase.from('messages').insert({
                 sender_id: currentUser.id,
-                content: content,
-                reply_to_id: replyingTo ? replyingTo.id : null,
-                reply_to: replyingTo,
-                attachment: optimisticAttachment,
-                // Handle Group vs DM
-                receiver_id: isGroup ? null : recipient!.id,
-                group_id: isGroup ? selectedGroup!.id : null,
-            };
+                receiver_id: recipient.id,
+                content,
+                reply_to_id: replyingTo?.id
+            }).select().single();
 
-            if (!retryMsg) {
-                setMessages((prev) => [...prev, { ...optimisticMsg, id: tempId, created_at: new Date().toISOString(), status: 'sending' }]);
-                setNewMessage('');
-                setSelectedFile(null);
-                setReplyingTo(null);
-                // Clear typing indicator instantly on send
-                chatChannel?.send({ 
-                    type: 'broadcast', 
-                    event: 'typing', 
-                    payload: { userId: currentUser.id, email: currentUser.email, content: '' } 
-                });
-                if (fileInputRef.current) fileInputRef.current.value = '';
+            if (error) {
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
             } else {
-                setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m));
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...data, status: 'sent', reply_to: replyingTo } : m));
             }
-
-            if (fileToSend) {
-                setIsUploading(true);
-                const fileExt = fileToSend.name.split('.').pop() || 'webm';
-                const fileName = `${roomId}/${Date.now()}_${Math.random()}.${fileExt}`;
-
-                try {
-                    const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, fileToSend);
-                    if (uploadError) throw uploadError;
-                    const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(fileName);
-                    
-                    attachmentData = {
-                        url: publicUrl,
-                        type: fileToSend.type.startsWith('image/') ? 'image' : fileToSend.type.startsWith('audio/') ? 'audio' : 'file',
-                        name: fileToSend.name,
-                        size: fileToSend.size,
-                        mimeType: fileToSend.type
-                    };
-                } catch (err) {
-                    console.error("Upload failed", err);
-                    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
-                    setIsUploading(false);
-                    return;
-                }
-                setIsUploading(false);
-            }
-
-            const finalMsg = { ...optimisticMsg, attachment: attachmentData };
-            delete finalMsg.reply_to;
-            if (!finalMsg.content) finalMsg.content = "";
-
-            const { data, error } = await supabase.from('messages').insert(finalMsg).select().single();
-            if (error) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
-            else if (data) setMessages((prev) => prev.map(m => m.id === tempId ? { ...data, status: 'sent', reply_to: optimisticMsg.reply_to } : m));
         }
     };
 
     const handleReaction = async (msg: Message, emoji: string) => {
-        const currentReactions = msg.reactions || {};
-        const userIds = currentReactions[emoji] || [];
-        const hasReacted = userIds.includes(currentUser.id);
-
-        let newReactions = { ...currentReactions };
-        if (hasReacted) {
-            newReactions[emoji] = userIds.filter(id => id !== currentUser.id);
-            if (newReactions[emoji].length === 0) delete newReactions[emoji];
-        } else {
-            newReactions[emoji] = [...userIds, currentUser.id];
-        }
+        const current = msg.reactions || {};
+        const users = current[emoji] || [];
+        const updated = users.includes(currentUser.id) ? users.filter(u => u !== currentUser.id) : [...users, currentUser.id];
+        const newReactions = { ...current, [emoji]: updated };
+        if (updated.length === 0) delete newReactions[emoji];
+        
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, reactions: newReactions } : m));
         await supabase.from('messages').update({ reactions: newReactions }).eq('id', msg.id);
     };
 
-    const handleEdit = (msg: Message) => {
-        if (msg.attachment) { 
-            showAlert("Edit Error", "Editing messages with attachments is not supported."); 
-            return; 
-        }
-        setNewMessage(msg.content);
-        setEditingId(msg.id);
-        setReplyingTo(null);
-        inputRef.current?.focus();
+    const handleDelete = async (id: string) => {
+        setMessages(prev => prev.filter(m => m.id !== id));
+        await supabase.from('messages').delete().eq('id', id);
     };
 
-    const handleReply = (msg: Message) => {
-        setReplyingTo(msg);
-        setEditingId(null);
-        inputRef.current?.focus();
-    };
-
-    const handleDeleteClick = (id: string) => { setMessageToDelete(id); };
-
-    const confirmDelete = async () => {
-        if (!messageToDelete) return;
-        setMessages(prev => prev.filter(m => m.id !== messageToDelete));
-        await supabase.from('messages').delete().eq('id', messageToDelete);
-        setMessageToDelete(null);
-    };
-
-    const handleJumpToMessage = (messageId: string) => {
-        const el = document.getElementById(`msg-${messageId}`);
+    const handleJumpTo = (id: string) => {
+        const el = document.getElementById(`msg-${id}`);
         if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setHighlightedMessageId(messageId);
+            setHighlightedMessageId(id);
             setTimeout(() => setHighlightedMessageId(null), 2000);
         }
     };
 
-    const handleStartCallClick = () => {
-        if (isGroup) {
-            showAlert("Not Available", "Group voice calls are a Pro feature coming soon.");
-            return;
-        }
-        if (callState !== CallState.IDLE) return;
-
-        if (hasAcceptedTerms.current) onStartCall();
-        else { setPendingAction('start'); setShowCallTerms(true); }
-    };
-
-    const handleAcceptTerms = () => {
-        localStorage.setItem('mv_call_terms_accepted', 'true');
-        hasAcceptedTerms.current = true;
-        setShowCallTerms(false);
-        if (pendingAction === 'start') onStartCall();
-        if (pendingAction === 'answer') onAnswerCall();
-        setPendingAction(null);
-    };
-    
-    // Determine button state
-    const isCallActiveWithCurrent = recipient && activeCallContact?.id === recipient.id;
-    const isCallActiveWithOther = activeCallContact && (recipient ? activeCallContact.id !== recipient.id : true);
-    const isBusy = isCallActiveWithOther;
-    const isReturnToCall = isCallActiveWithCurrent && callState !== CallState.IDLE;
-
     return (
         <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
-            {/* ... Render Content (same as previous) ... */}
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-
-            {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
-                 <div className="bg-green-500/10 border-b border-green-500/20 py-1.5 px-4 flex justify-between items-center relative z-30 animate-fade-in-up backdrop-blur-md">
-                     <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full animate-pulse ${callState === CallState.RECONNECTING ? 'bg-amber-500' : 'bg-green-500'}`}></span>
-                        <span className={`text-xs font-bold uppercase tracking-wide ${callState === CallState.RECONNECTING ? 'text-amber-400' : 'text-green-400'}`}>
-                            {callState === CallState.RECONNECTING ? 'Connection Unstable...' : 'Call Active'}
-                        </span>
-                     </div>
-                 </div>
-            )}
-
-            <div className="hidden md:flex px-6 py-4 justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
-                <div className="flex items-center space-x-4">
+            {/* Header */}
+            <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm">
+                <div className="flex items-center gap-4">
                     <div className="relative">
-                        {isGroup ? (
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/30">
-                                {selectedGroup?.name[0].toUpperCase()}
-                            </div>
-                        ) : (
-                            <>
-                                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30 overflow-hidden">
-                                    {recipient?.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient?.email[0].toUpperCase()}
-                                </div>
-                                <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#030014] flex items-center justify-center ${isRecipientOnline ? 'bg-green-500' : 'bg-gray-500'}`}>
-                                    {isRecipientOnline && <div className="w-full h-full rounded-full animate-ping bg-green-400 opacity-75"></div>}
-                                </div>
-                            </>
-                        )}
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg overflow-hidden">
+                            {recipient.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient.email[0].toUpperCase()}
+                        </div>
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#030014] ${isRecipientOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                     </div>
                     <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="font-bold text-white text-lg tracking-tight">
-                                {isGroup ? selectedGroup?.name : recipient?.email}
-                            </h2>
-                            {!isGroup && isPenguin && <span className="text-xl animate-wobble">🐧</span>}
-                        </div>
-                        {isGroup ? (
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-indigo-400 cursor-pointer hover:underline" onClick={() => { setShowGroupMembersModal(true); fetchGroupMembers(); }}>
-                                    View Members
-                                </span>
-                                <button 
-                                    onClick={() => { setShowAddMemberModal(true); fetchFriends(); }}
-                                    className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded transition"
-                                >
-                                    + Add Member
-                                </button>
-                            </div>
-                        ) : (
-                            <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-500'}`}>{isRecipientOnline ? 'Active Now' : 'Offline'}</span>
-                        )}
+                        <h2 className="font-bold text-white text-lg tracking-tight">{recipient.email}</h2>
+                        <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-500'}`}>{isRecipientOnline ? 'Active Now' : 'Offline'}</span>
                     </div>
                 </div>
                 
-                {/* Call Button logic (Only for DM for now) */}
-                {!isGroup && (
-                    isReturnToCall ? (
-                        <button 
-                            onClick={onExpandCall} 
-                            className="p-2.5 rounded-full transition-all duration-300 shadow-lg group bg-green-500 hover:bg-green-400 text-white animate-pulse"
-                            title="Return to active call"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleStartCallClick} 
-                            disabled={callState !== CallState.IDLE || isBusy} 
-                            className={`p-2.5 rounded-full transition-all duration-300 shadow-lg group ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 hover:bg-white/20 text-white hover:scale-105 border border-white/10' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
-                            title={isBusy ? "You are in another call" : "Start Voice Call"}
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                        </button>
-                    )
-                )}
-            </div>
-
-            <div className="md:hidden absolute top-4 right-4 z-30">
-                {isGroup && (
-                    <button 
-                        onClick={() => { setShowGroupMembersModal(true); fetchGroupMembers(); }}
-                        className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-md"
-                    >
-                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                {/* Call Button */}
+                {activeCallContact?.id === recipient.id && callState !== CallState.IDLE ? (
+                    <button onClick={onExpandCall} className="p-2.5 rounded-full bg-green-500 text-white animate-pulse shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></button>
+                ) : (
+                    <button onClick={onStartCall} disabled={callState !== CallState.IDLE} className={`p-2.5 rounded-full transition-all shadow-lg ${callState === CallState.IDLE ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                     </button>
                 )}
-                {!isGroup && (
-                    isReturnToCall ? (
-                        <button 
-                            onClick={onExpandCall} 
-                            className="p-2.5 rounded-full transition-all duration-300 shadow-lg bg-green-500 text-white animate-pulse"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleStartCallClick} 
-                            disabled={callState !== CallState.IDLE || isBusy} 
-                            className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 text-white border border-white/10 backdrop-blur-md' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                        </button>
-                    )
-                )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 relative z-10 scroll-smooth space-y-2 no-scrollbar">
-                {/* ... existing message rendering ... */}
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center h-full space-y-4">
-                        <div className="relative w-10 h-10"><div className="absolute inset-0 border-2 border-indigo-500/30 rounded-full"></div><div className="absolute inset-0 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
-                        <span className="text-gray-500 text-xs font-medium tracking-wide">Decryption in progress...</span>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex justify-center mb-8 mt-4">
-                            <span className="text-[10px] text-gray-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/5 tracking-wider uppercase backdrop-blur-md">End-to-End Encrypted</span>
-                        </div>
-                        {messages.map((msg) => (
-                            <MessageItem 
-                                key={msg.id} 
-                                msg={msg} 
-                                isMe={Boolean(currentUser && currentUser.id && msg.sender_id === currentUser.id)} 
-                                recipient={recipient} 
-                                currentUser={currentUser} 
-                                onEdit={handleEdit} 
-                                onDelete={handleDeleteClick} 
-                                onRetry={(m) => handleSendMessage(undefined, m)} 
-                                onReply={handleReply} 
-                                onReaction={handleReaction} 
-                                onJumpTo={handleJumpToMessage} 
-                                isHighlighted={msg.id === highlightedMessageId} 
-                                isFamily={currentUser.is_family}
-                                isGroup={isGroup}
-                                availableEmojis={emojiList}
-                            />
-                        ))}
-                        {Object.entries(remoteDrafts).map(([uid, draft]) => (
-                            <div key={uid} className="flex justify-start mb-4 animate-fade-in-up px-2">
-                                <div className="flex flex-col items-start max-w-[80%]">
-                                    {/* Group Chat: Show name for typer */}
-                                    {isGroup && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{draft.email.split('@')[0]} is typing...</span>}
-                                    
-                                    <div className="bg-white/5 rounded-[1.2rem] rounded-bl-sm px-4 py-3 border border-white/5 text-gray-300 italic flex items-center gap-2 relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent animate-pulse"></div>
-                                        <span className="relative z-10 text-sm">{draft.content}</span>
-                                        <span className="w-1.5 h-4 bg-indigo-500 animate-pulse relative z-10"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar">
+                {loading && <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}
+                
+                {messages.map(msg => (
+                    <MessageItem 
+                        key={msg.id} 
+                        msg={msg} 
+                        isMe={msg.sender_id === currentUser.id} 
+                        recipient={recipient} 
+                        currentUser={currentUser} 
+                        onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }} 
+                        onDelete={handleDelete} 
+                        onRetry={(m) => handleSendMessage({ preventDefault: () => {} } as any)} 
+                        onReply={setReplyingTo} 
+                        onReaction={handleReaction} 
+                        onJumpTo={handleJumpTo} 
+                        isHighlighted={msg.id === highlightedMessageId} 
+                        availableEmojis={emojiList} 
+                    />
+                ))}
+                
+                {Object.keys(remoteDrafts).length > 0 && (
+                    <div className="px-4 py-2 text-xs text-gray-500 italic animate-pulse">{recipient.email.split('@')[0]} is typing...</div>
                 )}
-                <div ref={messagesEndRef} className="h-4" />
+                <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 md:p-6 pt-2 relative z-20 pb-safe">
-                {/* ... existing input area ... */}
+            {/* Input */}
+            <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md relative z-10">
                 <div className="max-w-4xl mx-auto flex flex-col gap-2">
-                    <div className="flex flex-col gap-2">
-                        {selectedFile && (
-                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-3 flex items-center gap-3 animate-slide-up shadow-2xl max-w-[80%] self-start">
-                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-indigo-400">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
-                                    <p className="text-xs text-gray-400">{formatFileSize(selectedFile.size)}</p>
-                                </div>
-                                <button onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        )}
-                        {editingId && (
-                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
-                                <div className="flex items-center gap-2"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="font-semibold">Editing message</span></div>
-                                <button onClick={() => { setNewMessage(''); setEditingId(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition">Cancel</button>
-                            </div>
-                        )}
-                        {replyingTo && (
-                            <div className="bg-gray-900/90 backdrop-blur-xl border border-indigo-500/50 rounded-2xl px-4 py-3 flex justify-between items-center text-xs text-indigo-300 animate-slide-up shadow-2xl">
-                                <div className="flex items-center gap-2 max-w-[80%]"><svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg><span className="font-semibold shrink-0">Replying to:</span><span className="truncate text-gray-400">{replyingTo.content || '[Attachment]'}</span></div>
-                                <button onClick={() => { setReplyingTo(null); }} className="hover:text-white bg-white/10 px-3 py-1 rounded-lg transition shrink-0">Cancel</button>
-                            </div>
-                        )}
-                    </div>
-
-                    {isRecording ? (
-                         <div className="w-full flex items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border border-red-500/30 p-2 pl-4 rounded-full shadow-2xl animate-pulse-glow h-[58px]">
-                             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shrink-0"></div>
-                             
-                             {/* Visualizer */}
-                             <div className="flex items-center gap-0.5 h-8 flex-1 justify-center px-2 opacity-80 overflow-hidden">
-                                {[...Array(20)].map((_, i) => (
-                                    <div 
-                                        key={i} 
-                                        className="w-1 bg-red-500 rounded-full animate-wave" 
-                                        style={{ 
-                                            animationDuration: `${0.6 + Math.random() * 0.4}s`, 
-                                            animationDelay: `${Math.random() * 0.5}s`,
-                                            height: '20%' // Base height handled by animation
-                                        }}
-                                    ></div>
-                                ))}
-                             </div>
-                             
-                             <span className="text-white font-mono font-bold text-sm tracking-widest shrink-0 w-12 text-center">{formatDuration(recordingTime)}</span>
-                             
-                             <button onClick={handleCancelRecording} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition text-xs font-bold uppercase tracking-wider shrink-0">Cancel</button>
-                             <button onClick={handleStopRecording} className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95 shrink-0 flex items-center justify-center w-10 h-10">
-                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-                             </button>
-                         </div>
-                    ) : (
-                        <form onSubmit={(e) => handleSendMessage(e)} className="group w-full flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20 h-[58px]">
-                            <input type="file" ref={fileInputRef} onChange={(e) => { if (e.target.files?.length) setSelectedFile(e.target.files[0]); }} className="hidden" />
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-indigo-400 transition p-1 shrink-0" title="Attach file">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                            </button>
-
-                            <input id="chat-input" ref={inputRef} type="text" className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 font-medium text-[15px] min-w-0" placeholder={editingId ? "Update message..." : replyingTo ? "Type reply..." : "Message..."} value={newMessage} onChange={handleInput} autoComplete="off" />
-                            
-                            {!newMessage.trim() && !selectedFile ? (
-                                <button type="button" onClick={handleStartRecording} className="p-2.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition active:scale-95 shrink-0">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                </button>
-                            ) : (
-                                <button type="submit" disabled={isUploading} className={`p-2.5 rounded-full text-white font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:shadow-indigo-500/25 transform hover:-translate-y-0.5 w-10 h-10`}>
-                                    {isUploading ? (
-                                        <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                    ) : editingId ? <span className="text-xs px-2">Save</span> : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}
-                                </button>
-                            )}
-                        </form>
+                    {(editingId || replyingTo) && (
+                        <div className="flex items-center justify-between bg-gray-800/50 p-2 px-4 rounded-lg text-xs text-gray-300">
+                            <span>{editingId ? 'Editing message' : `Replying to: ${replyingTo?.content?.substring(0, 30)}...`}</span>
+                            <button onClick={() => { setEditingId(null); setReplyingTo(null); setNewMessage(''); }}>Cancel</button>
+                        </div>
                     )}
+                    <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
+                        <input 
+                            ref={inputRef}
+                            type="text" 
+                            value={newMessage} 
+                            onChange={handleInput} 
+                            className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
+                            placeholder="Message..." 
+                        />
+                        <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50">
+                            {editingId ? 'Save' : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}
+                        </button>
+                    </form>
                 </div>
             </div>
-
-            {/* View Members Modal */}
-            {showGroupMembersModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Group Members</h3>
-                            <button onClick={() => setShowGroupMembersModal(false)} className="text-gray-400 hover:text-white transition">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        
-                        <div className="max-h-64 overflow-y-auto space-y-2 mb-4 pr-1 custom-scrollbar">
-                            {groupMembers.length === 0 ? (
-                                <p className="text-center text-gray-500 text-sm py-4">No members found.</p>
-                            ) : (
-                                groupMembers.map(member => (
-                                    <div key={member.id} className="flex items-center p-3 rounded-xl bg-white/5 transition">
-                                        <div className="flex items-center gap-3">
-                                            {member.avatar_url ? (
-                                                <img src={member.avatar_url} className="w-8 h-8 rounded-full object-cover" />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{member.email[0]}</div>
-                                            )}
-                                            <span className="text-sm font-medium">{member.email.split('@')[0]}</span>
-                                            {member.id === currentUser.id && <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded">You</span>}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                        <div className="mt-4">
-                            <button 
-                                onClick={() => { setShowGroupMembersModal(false); setShowAddMemberModal(true); fetchFriends(); }}
-                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition"
-                            >
-                                + Add Member
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Member Modal */}
-            {showAddMemberModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Add Members</h3>
-                            <button onClick={() => setShowAddMemberModal(false)} className="text-gray-400 hover:text-white transition">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        
-                        <div className="max-h-64 overflow-y-auto space-y-2 mb-4 pr-1 custom-scrollbar">
-                            {friends.length === 0 ? (
-                                <p className="text-center text-gray-500 text-sm py-4">No available friends to add.</p>
-                            ) : (
-                                friends.map(friend => (
-                                    <div key={friend.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition">
-                                        <div className="flex items-center gap-3">
-                                            {friend.avatar_url ? (
-                                                <img src={friend.avatar_url} className="w-8 h-8 rounded-full object-cover" />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{friend.email[0]}</div>
-                                            )}
-                                            <span className="text-sm font-medium">{friend.email.split('@')[0]}</span>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleAddMember(friend.id)}
-                                            disabled={addingMember}
-                                            className="p-1.5 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500 hover:text-white transition"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showCallTerms && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#13131a] border border-white/10 rounded-[2rem] p-8 max-w-lg w-full shadow-2xl relative overflow-hidden animate-slide-up">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-fuchsia-500"></div>
-                        <div className="mb-6 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4 border border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-                                <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                            </div>
-                            <h3 className="text-2xl font-bold text-white mb-2">Voice Call Terms</h3>
-                            <p className="text-gray-400 text-sm leading-relaxed">Review technical operating protocols before establishing P2P session.</p>
-                        </div>
-                        <div className="h-64 overflow-y-auto bg-black/20 p-4 rounded-lg border border-white/5 text-[10px] md:text-xs text-gray-400 space-y-4 font-mono mb-6 shadow-inner scrollbar-thin scrollbar-thumb-indigo-900">
-                            <p className="font-bold text-gray-200">1. WEB RTC MESH</p><p>Calls use direct P2P connections where available. Your IP is shared with the peer to establish the tunnel.</p>
-                            <p className="font-bold text-gray-200">2. ICE CANDIDATES</p><p>Authorized STUN/TURN: {ICE_SERVERS[0].urls[0]}</p>
-                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>End-to-end encryption (DTLS-SRTP) is enforced for all media streams. Keys are negotiated via the signaling channel.</p>
-                        </div>
-                        <div className="flex gap-4">
-                            <button onClick={() => { setShowCallTerms(false); setPendingAction(null); }} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl transition">Cancel</button>
-                            <button onClick={handleAcceptTerms} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/20">Accept & Connect</button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
