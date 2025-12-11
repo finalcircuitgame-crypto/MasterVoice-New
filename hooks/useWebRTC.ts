@@ -32,9 +32,11 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const destNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
 
-  // Keep ref for local stream for cleanup
+  // Keep ref for local streams for cleanup to avoid dependency loops
   const localStreamRef = useRef<MediaStream | null>(null);
+  const localVideoStreamRef = useRef<MediaStream | null>(null);
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+  useEffect(() => { localVideoStreamRef.current = localVideoStream; }, [localVideoStream]);
 
   // Handle Input Gain (Mic Volume) changes
   useEffect(() => {
@@ -44,6 +46,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   }, [inputGain]);
 
   // --- Cleanup Function ---
+  // CRITICAL: No dependencies here that change during a call (like localVideoStream)
   const cleanup = useCallback((reason?: string) => {
     console.log('[WebRTC] Cleaning up call resources', reason ? `Reason: ${reason}` : '');
 
@@ -63,8 +66,10 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       setLocalStream(null);
     }
     
-    if (localVideoStream) {
-        localVideoStream.getTracks().forEach(t => t.stop());
+    // Stop video tracks using ref
+    const lvs = localVideoStreamRef.current;
+    if (lvs) {
+        lvs.getTracks().forEach(t => t.stop());
         setLocalVideoStream(null);
     }
 
@@ -103,7 +108,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     isProcessingOfferRef.current = false;
     setConnectionError(null);
     setInputGain(1.0);
-  }, [localVideoStream]); 
+  }, []); 
 
   // --- Signaling Channel Management ---
   useEffect(() => {
@@ -441,7 +446,8 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
           }
           setIsVideoEnabled(false);
           setIsScreenSharing(false);
-          // No need to renegotiate if we just replaceTrack to null
+          // Renegotiate to inform remote to stop video
+          // renegotiate();
       } else {
           // START VIDEO
           try {
@@ -469,6 +475,8 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
                   // Seamless switch
                   await sender.replaceTrack(videoTrack);
                   videoSenderRef.current = sender;
+                  // FORCE Renegotiation to ensure SDP direction flips from recvonly to sendrecv
+                  renegotiate();
               } else {
                   // Must add new track and renegotiate
                   const newSender = pc.current.addTrack(videoTrack, videoStream);
@@ -527,6 +535,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
               if (sender) {
                   await sender.replaceTrack(screenTrack);
                   videoSenderRef.current = sender;
+                  renegotiate();
               } else {
                   const newSender = pc.current.addTrack(screenTrack, screenStream);
                   videoSenderRef.current = newSender;

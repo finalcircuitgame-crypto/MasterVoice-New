@@ -56,12 +56,21 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   const [outputVolume, setOutputVolume] = useState(1.0);
   const [isDeafened, setIsDeafened] = useState(false); // Local state for remote mute
 
-  // Auto-maximize if video is enabled
+  // Auto-maximize ONLY when video state changes (not on every render loop)
+  // We use a ref to track if we've already reacted to the current video stream/state
+  const hasMaximizedForVideoRef = useRef(false);
+  
   useEffect(() => {
-      if ((isVideoEnabled || isScreenSharing || (remoteStream && remoteStream.getVideoTracks().length > 0)) && !isMaximized) {
+      const hasVideo = isVideoEnabled || isScreenSharing || (remoteStream && remoteStream.getVideoTracks().length > 0);
+      
+      if (hasVideo && !hasMaximizedForVideoRef.current) {
           setIsMaximized(true);
+          hasMaximizedForVideoRef.current = true;
+      } else if (!hasVideo) {
+          // Reset flag when video turns off so we can maximize again next time
+          hasMaximizedForVideoRef.current = false;
       }
-  }, [isVideoEnabled, isScreenSharing, remoteStream, isMaximized, setIsMaximized]);
+  }, [isVideoEnabled, isScreenSharing, remoteStream, setIsMaximized]);
 
   // Handle Video Refs
   useEffect(() => {
@@ -137,6 +146,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
       setIsMaximized(false);
       setShowDebug(false);
       setIsDeafened(false);
+      hasMaximizedForVideoRef.current = false; // Reset on call end
     }
     return () => clearInterval(interval);
   }, [callState, setIsMaximized]);
