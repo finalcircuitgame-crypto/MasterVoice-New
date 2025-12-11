@@ -111,12 +111,12 @@ const MessageItem = React.memo<{
                         </div>
 
                         {/* Reactions Display */}
-                        {msg.reactions && Object.keys(msg.reactions).some(k => msg.reactions![k].length > 0) && (
+                        {msg.reactions && Object.keys(msg.reactions).some(k => (msg.reactions![k] as string[]).length > 0) && (
                             <div className={`flex gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 {Object.entries(msg.reactions).map(([emoji, users]) => (
-                                    users.length > 0 && (
+                                    (users as string[]).length > 0 && (
                                         <button key={emoji} className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 ${hasReacted(emoji) ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-gray-800/50 border-white/5 text-gray-400'}`}>
-                                            <span>{emoji}</span><span className="font-bold">{users.length}</span>
+                                            <span>{emoji}</span><span className="font-bold">{(users as string[]).length}</span>
                                         </button>
                                     )
                                 ))}
