@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { UserProfile, CallState } from './types';
+import { UserProfile, CallState, Group } from './types';
 import { Auth } from './components/Auth';
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [showTrialNotification, setShowTrialNotification] = useState(false);
   const [showFamilyNotification, setShowFamilyNotification] = useState(false);
@@ -59,7 +60,7 @@ const App: React.FC = () => {
     endCall: rtcEndCall, 
     answerCall: rtcAnswerCall, 
     toggleMute, 
-    toggleVideo,
+    toggleVideo, 
     toggleScreenShare,
     isMuted,
     isVideoEnabled,
@@ -238,6 +239,7 @@ const App: React.FC = () => {
     if (!currentUser) return;
     
     const userIdParam = query.get('userId');
+    const groupIdParam = query.get('groupId');
     
     if (userIdParam) {
         if (!selectedUser || selectedUser.id !== userIdParam) {
@@ -245,16 +247,27 @@ const App: React.FC = () => {
                 const { data, error } = await supabase.from('profiles').select('*').eq('id', userIdParam).single();
                 if (data && !error) {
                     setSelectedUser(data);
+                    setSelectedGroup(null);
                 }
             };
             fetchUser();
         }
-    } else {
-        if (selectedUser) {
-            setSelectedUser(null);
+    } else if (groupIdParam) {
+        if (!selectedGroup || selectedGroup.id !== groupIdParam) {
+            const fetchGroup = async () => {
+                const { data, error } = await supabase.from('groups').select('*').eq('id', groupIdParam).single();
+                if (data && !error) {
+                    setSelectedGroup(data);
+                    setSelectedUser(null);
+                }
+            };
+            fetchGroup();
         }
+    } else {
+        if (selectedUser) setSelectedUser(null);
+        if (selectedGroup) setSelectedGroup(null);
     }
-  }, [query, currentUser, selectedUser]);
+  }, [query, currentUser, selectedUser, selectedGroup]);
 
   // Check for trial params
   useEffect(() => {
@@ -267,7 +280,13 @@ const App: React.FC = () => {
   }, [path]);
 
   const handleSelectUser = (user: UserProfile) => {
+      setSelectedGroup(null);
       navigate(`/conversations?userId=${user.id}`);
+  };
+
+  const handleSelectGroup = (group: Group) => {
+      setSelectedUser(null);
+      navigate(`/conversations?groupId=${group.id}`);
   };
 
   const handleOpenSettings = () => {
@@ -310,6 +329,8 @@ const App: React.FC = () => {
               return <NotFoundPage onBack={() => navigate('/')} />;
       }
   };
+
+  const isChatOpen = selectedUser || selectedGroup;
 
   if (!showChatInterface) {
       return (
@@ -402,11 +423,12 @@ const App: React.FC = () => {
               </div>
 
               {/* Chat List Column */}
-              {(!isMobile || !selectedUser) && (
-                  <div className={`flex-none w-full md:w-80 h-full ${selectedUser ? 'hidden md:block' : 'block'}`}>
+              {(!isMobile || !isChatOpen) && (
+                  <div className={`flex-none w-full md:w-80 h-full ${isChatOpen ? 'hidden md:block' : 'block'}`}>
                     <ChatList 
                         currentUser={currentUser!} 
                         onSelectUser={handleSelectUser} 
+                        onSelectGroup={handleSelectGroup}
                         onlineUsers={onlineUsers}
                         onOpenSettings={handleOpenSettings}
                     />
@@ -414,13 +436,14 @@ const App: React.FC = () => {
               )}
 
               {/* Chat Window Column */}
-              <div className={`flex-1 h-full flex flex-col relative ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
-                {selectedUser && !isSettingsOpen ? (
+              <div className={`flex-1 h-full flex flex-col relative ${!isChatOpen ? 'hidden md:flex' : 'flex'}`}>
+                {isChatOpen && !isSettingsOpen ? (
                     <>
                         <div className="md:hidden bg-[#060609] p-4 pt-4 border-b border-white/5 flex items-center gap-3">
                             <button 
                                 onClick={() => {
                                     setSelectedUser(null);
+                                    setSelectedGroup(null);
                                     navigate('/conversations');
                                 }} 
                                 className="text-gray-400 hover:text-white p-2 -ml-2 rounded-full hover:bg-white/10 transition"
@@ -428,16 +451,17 @@ const App: React.FC = () => {
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-white">
-                                    {selectedUser.email[0].toUpperCase()}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${selectedGroup ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gray-800'}`}>
+                                    {selectedGroup ? selectedGroup.name[0].toUpperCase() : selectedUser?.email[0].toUpperCase()}
                                 </div>
-                                <span className="font-bold text-white">{selectedUser.email.split('@')[0]}</span>
+                                <span className="font-bold text-white">{selectedGroup ? selectedGroup.name : selectedUser?.email.split('@')[0]}</span>
                             </div>
                         </div>
                         <ChatWindow 
-                            key={selectedUser.id}
+                            key={selectedGroup ? `group_${selectedGroup.id}` : selectedUser!.id}
                             currentUser={currentUser!} 
                             recipient={selectedUser} 
+                            selectedGroup={selectedGroup}
                             onlineUsers={onlineUsers}
                             // Call props hoisted from useWebRTC
                             channel={null} 
@@ -460,7 +484,7 @@ const App: React.FC = () => {
                             </svg>
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2">Your Space is Ready</h3>
-                        <p className="max-w-xs text-center text-gray-400">Select a family member or friend from the sidebar to start a secure conversation.</p>
+                        <p className="max-w-xs text-center text-gray-400">Select a family member, friend, or group from the sidebar to start a secure conversation.</p>
                     </div>
                 )}
               </div>

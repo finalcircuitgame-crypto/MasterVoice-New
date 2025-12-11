@@ -36,13 +36,6 @@ drop policy if exists "Users can update their own avatars" on storage.objects;
 drop policy if exists "Users can delete their own avatars" on storage.objects;
 drop policy if exists "Authenticated users can insert attachments" on storage.objects;
 
--- Drop old table policies to ensure clean slate for groups
-drop policy if exists "View groups if member" on public.groups;
-drop policy if exists "Users can create groups" on public.groups;
-drop policy if exists "View members if in group" on public.group_members;
-drop policy if exists "Creator can add members" on public.group_members;
-drop policy if exists "View own membership" on public.group_members;
-
 -- 2. CREATE ROBUST STORAGE POLICIES (Insert, Select, Update, Delete)
 
 -- Avatars Bucket
@@ -79,16 +72,19 @@ alter table public.messages add column if not exists reactions jsonb default '{}
 alter table public.messages add column if not exists reply_to_id uuid references public.messages(id);
 alter table public.messages add column if not exists updated_at timestamp with time zone default timezone('utc'::text, now());
 
--- 4. ENSURE MESSAGE POLICIES ALLOW REACTIONS
--- Allow users to update messages where they are the sender OR receiver (needed for reactions)
-drop policy if exists "Users can update their own messages or reaction targets." on messages;
-drop policy if exists "Users can update messages they are involved in" on messages;
+-- ============================
+-- === GROUP POLICIES FIX ===
+-- ============================
 
-create policy "Users can update messages they are involved in"
-  on messages for update
-  using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+-- Drop old table policies to ensure clean slate for groups
+drop policy if exists "View groups if member" on public.groups;
+drop policy if exists "View groups if member or creator" on public.groups;
+drop policy if exists "Users can create groups" on public.groups;
+drop policy if exists "View members if in group" on public.group_members;
+drop policy if exists "Creator can add members" on public.group_members;
+drop policy if exists "View own membership" on public.group_members;
 
--- 5. GROUPS FEATURE SCHEMA
+-- (Re)Create Tables if not exist
 create table if not exists public.groups (
   id uuid default gen_random_uuid() primary key,
   name text not null,
@@ -103,13 +99,15 @@ create table if not exists public.group_members (
   primary key (group_id, user_id)
 );
 
--- RLS for Groups
+-- Enable RLS
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 
--- Policy: Users can view groups they are members of
-create policy "View groups if member" on public.groups
+-- 1. View groups (Select)
+-- CRITICAL: Must allow creator to see group immediately after creation (before member row is added)
+create policy "View groups if member or creator" on public.groups
   for select using (
+    created_by = auth.uid() OR
     exists (
       select 1 from public.group_members
       where group_members.group_id = groups.id
@@ -117,17 +115,18 @@ create policy "View groups if member" on public.groups
     )
   );
 
--- Policy: Users can create groups
+-- 2. Create groups (Insert)
 create policy "Users can create groups" on public.groups
-  for insert with check ( auth.role() = 'authenticated' );
+  for insert with check (
+    auth.role() = 'authenticated' AND
+    created_by = auth.uid()
+  );
 
--- Policy: Users can view THEIR OWN memberships
--- NOTE: We restrict this to just the user's own rows to avoid Infinite Recursion with the 'groups' policy
+-- 3. View own membership (Select)
 create policy "View own membership" on public.group_members
   for select using ( user_id = auth.uid() );
 
--- Policy: Users can add members (simplified for demo: anyone can join/add for now or creator only)
--- Allowing creator to add members
+-- 4. Manage members (Insert)
 create policy "Creator can add members" on public.group_members
   for insert with check (
     exists (
@@ -136,6 +135,42 @@ create policy "Creator can add members" on public.group_members
       and groups.created_by = auth.uid()
     )
     or auth.uid() = user_id -- Allow self-join
+  );
+
+-- ============================
+-- === GROUP MESSAGES FIX ===
+-- ============================
+
+-- Add group_id to messages
+alter table public.messages add column if not exists group_id uuid references public.groups(id) on delete cascade;
+
+-- Recreate Message Policies to handle Groups AND DMs
+drop policy if exists "Users can update messages they are involved in" on messages;
+drop policy if exists "Users can insert messages" on messages;
+drop policy if exists "Users can view messages" on messages;
+
+-- 1. Insert Messages
+create policy "Users can insert messages" on messages for insert with check (
+  auth.uid() = sender_id AND (
+    (receiver_id is not null) OR -- Direct Message
+    (group_id is not null AND exists (select 1 from public.group_members where group_id = messages.group_id and user_id = auth.uid())) -- Group Message
+  )
+);
+
+-- 2. Select Messages
+create policy "Users can view messages" on messages for select using (
+  (auth.uid() = sender_id) OR
+  (auth.uid() = receiver_id) OR
+  (group_id is not null AND exists (select 1 from public.group_members where group_id = messages.group_id and user_id = auth.uid()))
+);
+
+-- 3. Update (React/Edit) Messages
+create policy "Users can update messages they are involved in"
+  on messages for update
+  using ( 
+    auth.uid() = sender_id OR 
+    auth.uid() = receiver_id OR
+    (group_id is not null AND exists (select 1 from public.group_members where group_id = messages.group_id and user_id = auth.uid()))
   );
 ```
 

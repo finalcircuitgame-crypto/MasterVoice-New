@@ -6,11 +6,12 @@ import { useModal } from './ModalContext';
 interface ChatListProps {
   currentUser: UserProfile;
   onSelectUser: (user: UserProfile) => void;
+  onSelectGroup: (group: Group) => void; // New prop for group selection
   onlineUsers: Set<string>;
   onOpenSettings: () => void;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onlineUsers, onOpenSettings }) => {
+export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onSelectGroup, onlineUsers, onOpenSettings }) => {
   const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files'>('chats');
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
@@ -72,7 +73,8 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     // 3. Fetch Groups
     const { data: groupData } = await supabase
         .from('groups')
-        .select('*'); 
+        .select('*')
+        .order('created_at', { ascending: false }); 
     
     if (groupData) setGroups(groupData);
   };
@@ -94,7 +96,10 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const userIdParam = params.get('userId');
+      const groupIdParam = params.get('groupId');
+      
       if (userIdParam) setActiveId(userIdParam);
+      else if (groupIdParam) setActiveId(groupIdParam);
   }, [window.location.search]);
 
   // --- Search Logic ---
@@ -183,8 +188,12 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
           if (memberError) throw memberError;
 
-          fetchData();
+          // Optimistic update: Add to list instantly
+          setGroups(prev => [groupData, ...prev]);
           await showAlert("Success", "Group created successfully!");
+          
+          // Background refresh
+          fetchData();
       } catch (e: any) {
           await showAlert("Error", "Could not create group: " + e.message);
       }
@@ -272,7 +281,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
               <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               <input 
                 className="bg-transparent outline-none w-full placeholder-gray-600 text-gray-200" 
-                placeholder={activeTab === 'chats' ? "Find friends..." : "Search..."} 
+                placeholder={activeTab === 'groups' ? "Search groups..." : "Find friends..."} 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -406,19 +415,31 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                         <p className="text-[10px] mt-1 text-gray-600">Create one to start!</p>
                     </div>
                 ) : (
-                    groups.map(group => (
-                        <div key={group.id} className="w-full p-3 flex items-center justify-between rounded-2xl hover:bg-white/5 border border-transparent transition-all group cursor-pointer">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
-                                    {group.name[0].toUpperCase()}
+                    groups.map(group => {
+                        const isActive = activeId === group.id;
+                        return (
+                            <button 
+                                key={group.id} 
+                                onClick={() => { setActiveId(group.id); onSelectGroup(group); }}
+                                className={`w-full p-3 flex items-center space-x-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${
+                                    isActive 
+                                    ? 'bg-indigo-600/10 border border-indigo-500/30' 
+                                    : 'hover:bg-white/5 border border-transparent'
+                                }`}
+                            >
+                                {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l"></div>}
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shrink-0 ${isActive ? 'shadow-indigo-500/30' : ''}`}>
+                                        {group.name[0].toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className={`text-sm font-medium truncate ${isActive ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>{group.name}</p>
+                                        <p className={`text-[10px] ${isActive ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-400'}`}>Group Chat</p>
+                                    </div>
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-200 truncate">{group.name}</p>
-                                    <p className="text-[10px] text-gray-500">Group Chat</p>
-                                </div>
-                            </div>
-                        </div>
-                    ))
+                            </button>
+                        );
+                    })
                 )}
              </>
         ) : activeTab === 'favorites' ? (

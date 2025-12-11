@@ -25,7 +25,8 @@ export interface Attachment {
 export interface Message {
   id: string;
   sender_id: string;
-  receiver_id: string;
+  receiver_id?: string | null; // Optional now (null for groups)
+  group_id?: string | null;    // New field for groups
   content: string;
   created_at: string;
   updated_at?: string; // Important for edit detection
@@ -39,6 +40,10 @@ export interface Message {
     sender_id: string;
     attachment?: Attachment | null;
   } | null;
+  sender?: { // Joined sender profile for UI
+      email: string;
+      avatar_url?: string | null;
+  };
 }
 
 export interface FriendRequest {

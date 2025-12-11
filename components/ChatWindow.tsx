@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Message, UserProfile, CallState, Attachment } from '../types';
+import { Message, UserProfile, CallState, Attachment, Group } from '../types';
 import { ICE_SERVERS } from '../constants';
 import { useModal } from './ModalContext';
 
@@ -38,7 +38,8 @@ const triggerConfetti = () => {
 
 interface ChatWindowProps {
     currentUser: UserProfile;
-    recipient: UserProfile;
+    recipient?: UserProfile | null;
+    selectedGroup?: Group | null;
     onlineUsers: Set<string>;
     channel: any | null; 
     callState: CallState;
@@ -52,7 +53,7 @@ interface ChatWindowProps {
 interface MessageItemProps {
     msg: Message;
     isMe: boolean;
-    recipient: UserProfile;
+    recipient?: UserProfile | null;
     currentUser: UserProfile;
     onEdit: (msg: Message) => void;
     onDelete: (id: string) => void;
@@ -62,9 +63,24 @@ interface MessageItemProps {
     onJumpTo: (messageId: string) => void;
     isHighlighted: boolean;
     isFamily?: boolean;
+    isGroup: boolean;
 }
 
-const COMMON_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
+// Expanded Emoji List
+const EMOJI_LIST = [
+    "👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀", 
+    "🚀", "💯", "👋", "🙏", "🤝", "💀", "😭", "😤", "🤬", "🤯", 
+    "🥰", "😍", "🤩", "🥳", "😎", "🤔", "🤫", "🙄", "😬", "😴", 
+    "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", 
+    "🤡", "💩", "👻", "👽", "🤖", "🎃", "😺", "👶", "🧑", "🧓", 
+    "👮", "🕵️", "💂", "👷", "🤴", "👸", "🧙", "🧚", "🧛", "🧜", 
+    "🧞", "🧟", "🧘", "🧗", "🏃", "💃", "🕺", "👯", "🕴️", "🗣️",
+    "🧠", "🦷", "🦴", "👀", "👁️", "👄", "🫦", "👅", "👂", "👃",
+    "🍉", "🍇", "🍓", "🫐", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝",
+    "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🎱", "🏓",
+    "🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚐",
+    "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨"
+];
 
 const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -93,7 +109,8 @@ const MessageItem = React.memo<MessageItemProps>(({
     onReaction,
     onJumpTo,
     isHighlighted,
-    isFamily
+    isFamily,
+    isGroup
 }) => {
     const [showActions, setShowActions] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
@@ -132,6 +149,11 @@ const MessageItem = React.memo<MessageItemProps>(({
         e.stopPropagation();
         setShowActions(!showActions);
     };
+
+    // determine sender details for UI
+    const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
+    const senderAvatar = msg.sender?.avatar_url;
+    const senderInitial = msg.sender?.email ? msg.sender.email[0].toUpperCase() : '?';
 
     const renderAttachment = () => {
         if (!msg.attachment) return null;
@@ -189,13 +211,14 @@ const MessageItem = React.memo<MessageItemProps>(({
         >
             <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                    {/* Avatar for Recipient */}
+                    {/* Avatar Logic */}
                     {!isMe && (
-                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden">
-                            {recipient.avatar_url ? (
-                                <img src={recipient.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                        <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden" title={senderName}>
+                            {/* If group chat, prefer message sender info. If DM, prefer recipient info */}
+                            {isGroup ? (
+                                senderAvatar ? <img src={senderAvatar} alt="Sender" className="w-full h-full object-cover" /> : senderInitial
                             ) : (
-                                recipient.email[0].toUpperCase()
+                                recipient?.avatar_url ? <img src={recipient.avatar_url} alt="Avatar" className="w-full h-full object-cover" /> : recipient?.email[0].toUpperCase()
                             )}
                         </div>
                     )}
@@ -205,11 +228,16 @@ const MessageItem = React.memo<MessageItemProps>(({
                         className="flex flex-col min-w-0 cursor-pointer relative group"
                         onClick={handleToggleActions}
                     >
+                        {/* Group Chat: Show Sender Name */}
+                        {isGroup && !isMe && (
+                            <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{senderName}</span>
+                        )}
+
                         {/* Action Menu */}
                         {showActions && !isSending && !isError && (
                             <div
                                 ref={actionsMenuRef}
-                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-full shadow-2xl animate-scale-in -top-12 ${isMe ? 'right-0' : 'left-0'}`}
+                                className={`absolute z-50 flex items-center gap-1 p-1.5 bg-[#1a1a20] border border-white/10 rounded-2xl shadow-2xl animate-scale-in -top-14 ${isMe ? 'right-0' : 'left-0'}`}
                                 onClick={(e) => e.stopPropagation()} 
                                 style={{ minWidth: 'max-content' }}
                             >
@@ -222,16 +250,18 @@ const MessageItem = React.memo<MessageItemProps>(({
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     </button>
                                     {showReactions && (
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex bg-[#2a2a30] border border-white/20 rounded-full p-1 shadow-xl z-50 min-w-max">
-                                            {COMMON_REACTIONS.map(emoji => (
-                                                <button
-                                                    key={emoji}
-                                                    onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
-                                                    className={`p-2 hover:bg-white/10 rounded-full transition text-lg ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
+                                        <div className="absolute bottom-full left-0 mb-2 bg-[#2a2a30] border border-white/20 rounded-xl p-2 shadow-xl z-50 w-64 max-h-48 overflow-y-auto custom-scrollbar">
+                                            <div className="grid grid-cols-6 gap-1">
+                                                {EMOJI_LIST.map(emoji => (
+                                                    <button
+                                                        key={emoji}
+                                                        onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
+                                                        className={`p-1.5 hover:bg-white/10 rounded-lg transition text-lg flex items-center justify-center ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -263,7 +293,7 @@ const MessageItem = React.memo<MessageItemProps>(({
                                 }}
                                 className={`mb-1 px-3 py-1.5 rounded-lg bg-white/5 border-l-2 border-indigo-500 text-xs text-gray-400 max-w-full truncate opacity-80 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-colors ${isMe ? 'ml-auto' : ''}`}
                             >
-                                <span className="font-bold text-indigo-400 shrink-0">{msg.reply_to.sender_id === currentUser.id ? 'You' : (recipient.id === msg.reply_to.sender_id ? recipient.email.split('@')[0] : 'Unknown')}</span>
+                                <span className="font-bold text-indigo-400 shrink-0">{msg.reply_to.sender_id === currentUser.id ? 'You' : 'Reply'}</span>
                                 <span className="truncate max-w-[150px]">{msg.reply_to.attachment ? '📷 [Attachment]' : msg.reply_to.content}</span>
                             </div>
                         )}
@@ -319,8 +349,9 @@ const MessageItem = React.memo<MessageItemProps>(({
         prev.isMe === next.isMe && 
         prev.isHighlighted === next.isHighlighted && 
         prev.isFamily === next.isFamily &&
-        prev.recipient.id === next.recipient.id &&
-        prev.recipient.avatar_url === next.recipient.avatar_url &&
+        prev.isGroup === next.isGroup &&
+        prev.recipient?.id === next.recipient?.id &&
+        prev.recipient?.avatar_url === next.recipient?.avatar_url &&
         prev.currentUser.id === next.currentUser.id
     );
 });
@@ -328,6 +359,7 @@ const MessageItem = React.memo<MessageItemProps>(({
 export const ChatWindow: React.FC<ChatWindowProps> = ({
     currentUser,
     recipient,
+    selectedGroup,
     onlineUsers,
     callState,
     onStartCall,
@@ -342,10 +374,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isTyping, setIsTyping] = useState(false);
+    const [remoteDrafts, setRemoteDrafts] = useState<Record<string, { content: string, email: string }>>({});
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+    
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const typingTimeoutRef = useRef<any>(null);
+    const lastTypingBroadcast = useRef<number>(0);
+    const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
     const [chatChannel, setChatChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
 
     // File Upload State
@@ -368,83 +402,155 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const { showAlert } = useModal(); // Use Modal Hook
 
-    const isRecipientOnline = onlineUsers.has(recipient.id);
-    const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
-    const roomId = [currentUser.id, recipient.id].sort().join('_');
+    const isGroup = !!selectedGroup;
+    const isRecipientOnline = recipient ? onlineUsers.has(recipient.id) : false;
+    const isPenguin = recipient?.email === 'cindygaldamez@yahoo.com';
+    const roomId = isGroup ? `group_${selectedGroup.id}` : (recipient ? [currentUser.id, recipient.id].sort().join('_') : 'unknown');
 
     // ... subscriptions ...
     useEffect(() => {
-        const chatRoomId = [currentUser.id, recipient.id].sort().join('_');
-        const newChannel = supabase.channel(`chat_messages:${chatRoomId}`);
+        const newChannel = supabase.channel(`chat_messages:${roomId}`);
 
+        const filter = isGroup 
+            ? `group_id=eq.${selectedGroup.id}` 
+            : undefined; 
+            
         newChannel
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'messages' },
-                (payload) => {
+                { event: '*', schema: 'public', table: 'messages', filter },
+                async (payload) => {
                     const { eventType, new: newRecord, old: oldRecord } = payload;
                     const record = (newRecord || oldRecord) as any;
                     if (!record) return;
-                    const isRelevant =
-                        (record.sender_id === currentUser.id && record.receiver_id === recipient.id) ||
-                        (record.sender_id === recipient.id && record.receiver_id === currentUser.id);
-                    if (!isRelevant) return;
+                    
+                    if (!isGroup) {
+                        const isRelevant =
+                            (record.sender_id === currentUser.id && record.receiver_id === recipient?.id) ||
+                            (record.sender_id === recipient?.id && record.receiver_id === currentUser.id);
+                        if (!isRelevant) return;
+                    }
 
                     if (eventType === 'INSERT') {
+                        // For Groups, we need to fetch the sender profile to display avatar
+                        let senderProfile = null;
+                        if (isGroup) {
+                            const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', record.sender_id).single();
+                            senderProfile = data;
+                        }
+
                         setMessages((prev) => {
                             if (prev.find(m => m.id === newRecord.id)) return prev;
-                            return [...prev, { ...newRecord, status: 'sent' } as Message];
+                            const completeMsg = { ...newRecord, status: 'sent', sender: senderProfile } as Message;
+                            return [...prev, completeMsg];
                         });
-                        if (record.sender_id === recipient.id) {
-                            setIsTyping(false);
-                            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                        
+                        // Clear typer indicator if message received from them
+                        if (record.sender_id !== currentUser.id) {
+                            if (typingTimeouts.current[record.sender_id]) {
+                                clearTimeout(typingTimeouts.current[record.sender_id]);
+                                delete typingTimeouts.current[record.sender_id];
+                            }
+                            setRemoteDrafts(prev => {
+                                const next = { ...prev };
+                                delete next[record.sender_id];
+                                return next;
+                            });
                         }
                     } else if (eventType === 'UPDATE') {
-                        setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...m, ...newRecord, status: 'sent', reply_to: m.reply_to } : m));
+                        setMessages((prev) => prev.map(m => m.id === newRecord.id ? { ...m, ...newRecord, status: 'sent', reply_to: m.reply_to, sender: m.sender } : m));
                     } else if (eventType === 'DELETE') {
                         setMessages((prev) => prev.filter(m => m.id !== oldRecord.id));
                     }
                 }
             )
             .on('broadcast', { event: 'typing' }, (payload) => {
-                if (payload.payload.userId === recipient.id) {
-                    setIsTyping(true);
-                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                    typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
+                const { userId, content, email } = payload.payload;
+                if (userId === currentUser.id) return;
+
+                // Clear existing timeout
+                if (typingTimeouts.current[userId]) {
+                    clearTimeout(typingTimeouts.current[userId]);
                 }
+
+                // If content is empty, remove immediately
+                if (!content) {
+                     setRemoteDrafts(prev => {
+                        const next = { ...prev };
+                        delete next[userId];
+                        return next;
+                    });
+                    return;
+                }
+
+                // Update state
+                setRemoteDrafts(prev => ({
+                    ...prev,
+                    [userId]: { content, email }
+                }));
+
+                // Set new timeout to clear if they stop typing
+                typingTimeouts.current[userId] = setTimeout(() => {
+                    setRemoteDrafts(prev => {
+                        const next = { ...prev };
+                        delete next[userId];
+                        return next;
+                    });
+                    delete typingTimeouts.current[userId];
+                }, 3000);
             })
             .subscribe();
 
         setChatChannel(newChannel);
         return () => { supabase.removeChannel(newChannel); };
-    }, [currentUser.id, recipient.id]);
+    }, [currentUser.id, recipient?.id, selectedGroup?.id, isGroup, roomId]);
 
     useEffect(() => {
         const fetchMessages = async () => {
             setLoading(true);
-            const { data, error } = await supabase
+            
+            // Basic query with reply join and sender join
+            let query = supabase
                 .from('messages')
-                .select(`*, reply_to:reply_to_id(id, content, sender_id, attachment)`)
-                .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
-                .or(`sender_id.eq.${recipient.id},receiver_id.eq.${recipient.id}`)
+                .select(`
+                    *, 
+                    reply_to:reply_to_id(id, content, sender_id, attachment),
+                    sender:sender_id(email, avatar_url)
+                `)
                 .order('created_at', { ascending: true });
 
+            if (isGroup && selectedGroup) {
+                query = query.eq('group_id', selectedGroup.id);
+            } else if (recipient) {
+                query = query.or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`).or(`sender_id.eq.${recipient.id},receiver_id.eq.${recipient.id}`);
+            } else {
+                setLoading(false);
+                return;
+            }
+
+            const { data, error } = await query;
+
             if (!error && data) {
-                const conversation = data.filter(
-                    (m: any) =>
-                        (m.sender_id === currentUser.id && m.receiver_id === recipient.id) ||
-                        (m.sender_id === recipient.id && m.receiver_id === currentUser.id)
-                );
+                let conversation = data;
+                if (!isGroup && recipient) {
+                     conversation = data.filter(
+                        (m: any) =>
+                            (m.sender_id === currentUser.id && m.receiver_id === recipient.id) ||
+                            (m.sender_id === recipient.id && m.receiver_id === currentUser.id)
+                    );
+                }
                 setMessages(conversation.map((m: any) => ({ ...m, status: 'sent' })));
             }
             setLoading(false);
         };
         fetchMessages();
-    }, [currentUser.id, recipient.id]);
+        // Clear drafts on chat switch
+        setRemoteDrafts({});
+    }, [currentUser.id, recipient?.id, selectedGroup?.id, isGroup]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length, messages.length > 0 ? messages[messages.length - 1].id : null, isTyping, replyingTo]);
+    }, [messages.length, messages.length > 0 ? messages[messages.length - 1].id : null, Object.keys(remoteDrafts).length, replyingTo]);
 
     // Recording Timer
     useEffect(() => {
@@ -460,8 +566,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }, [isRecording]);
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setNewMessage(e.target.value);
-        chatChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id } });
+        const val = e.target.value;
+        setNewMessage(val);
+        
+        const now = Date.now();
+        // Throttle broadcast to every 100ms to avoid flooding
+        if (now - lastTypingBroadcast.current > 100) {
+            chatChannel?.send({ 
+                type: 'broadcast', 
+                event: 'typing', 
+                payload: { 
+                    userId: currentUser.id, 
+                    email: currentUser.email,
+                    content: val 
+                } 
+            });
+            lastTypingBroadcast.current = now;
+        }
     };
 
     const handleStartRecording = async () => {
@@ -563,11 +684,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             const optimisticMsg: any = {
                 sender_id: currentUser.id,
-                receiver_id: recipient.id,
                 content: content,
                 reply_to_id: replyingTo ? replyingTo.id : null,
                 reply_to: replyingTo,
-                attachment: optimisticAttachment
+                attachment: optimisticAttachment,
+                // Handle Group vs DM
+                receiver_id: isGroup ? null : recipient!.id,
+                group_id: isGroup ? selectedGroup!.id : null,
             };
 
             if (!retryMsg) {
@@ -575,6 +698,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 setNewMessage('');
                 setSelectedFile(null);
                 setReplyingTo(null);
+                // Clear typing indicator instantly on send
+                chatChannel?.send({ 
+                    type: 'broadcast', 
+                    event: 'typing', 
+                    payload: { userId: currentUser.id, email: currentUser.email, content: '' } 
+                });
                 if (fileInputRef.current) fileInputRef.current.value = '';
             } else {
                 setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m));
@@ -668,6 +797,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
 
     const handleStartCallClick = () => {
+        if (isGroup) {
+            showAlert("Not Available", "Group voice calls are a Pro feature coming soon.");
+            return;
+        }
         if (callState !== CallState.IDLE) return;
 
         if (hasAcceptedTerms.current) onStartCall();
@@ -684,8 +817,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
     
     // Determine button state
-    const isCallActiveWithCurrent = activeCallContact?.id === recipient.id;
-    const isCallActiveWithOther = activeCallContact && activeCallContact.id !== recipient.id;
+    const isCallActiveWithCurrent = recipient && activeCallContact?.id === recipient.id;
+    const isCallActiveWithOther = activeCallContact && (recipient ? activeCallContact.id !== recipient.id : true);
     const isBusy = isCallActiveWithOther;
     const isReturnToCall = isCallActiveWithCurrent && callState !== CallState.IDLE;
 
@@ -709,58 +842,77 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="hidden md:flex px-6 py-4 justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 z-20 sticky top-0 shadow-sm">
                 <div className="flex items-center space-x-4">
                     <div className="relative">
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30 overflow-hidden">
-                            {recipient.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient.email[0].toUpperCase()}
-                        </div>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#030014] flex items-center justify-center ${isRecipientOnline ? 'bg-green-500' : 'bg-gray-500'}`}>
-                            {isRecipientOnline && <div className="w-full h-full rounded-full animate-ping bg-green-400 opacity-75"></div>}
-                        </div>
+                        {isGroup ? (
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/30">
+                                {selectedGroup?.name[0].toUpperCase()}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30 overflow-hidden">
+                                    {recipient?.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient?.email[0].toUpperCase()}
+                                </div>
+                                <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#030014] flex items-center justify-center ${isRecipientOnline ? 'bg-green-500' : 'bg-gray-500'}`}>
+                                    {isRecipientOnline && <div className="w-full h-full rounded-full animate-ping bg-green-400 opacity-75"></div>}
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
-                            <h2 className="font-bold text-white text-lg tracking-tight">{recipient.email}</h2>
-                            {isPenguin && <span className="text-xl animate-wobble">🐧</span>}
+                            <h2 className="font-bold text-white text-lg tracking-tight">
+                                {isGroup ? selectedGroup?.name : recipient?.email}
+                            </h2>
+                            {!isGroup && isPenguin && <span className="text-xl animate-wobble">🐧</span>}
                         </div>
-                        <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-500'}`}>{isRecipientOnline ? 'Active Now' : 'Offline'}</span>
+                        {isGroup ? (
+                            <span className="text-xs font-medium text-indigo-400">Group Chat</span>
+                        ) : (
+                            <span className={`text-xs font-medium ${isRecipientOnline ? 'text-green-400' : 'text-gray-500'}`}>{isRecipientOnline ? 'Active Now' : 'Offline'}</span>
+                        )}
                     </div>
                 </div>
                 
-                {isReturnToCall ? (
-                    <button 
-                        onClick={onExpandCall} 
-                        className="p-2.5 rounded-full transition-all duration-300 shadow-lg group bg-green-500 hover:bg-green-400 text-white animate-pulse"
-                        title="Return to active call"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    </button>
-                ) : (
-                    <button 
-                        onClick={handleStartCallClick} 
-                        disabled={callState !== CallState.IDLE || isBusy} 
-                        className={`p-2.5 rounded-full transition-all duration-300 shadow-lg group ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 hover:bg-white/20 text-white hover:scale-105 border border-white/10' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
-                        title={isBusy ? "You are in another call" : "Start Voice Call"}
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                    </button>
+                {/* Call Button logic (Only for DM for now) */}
+                {!isGroup && (
+                    isReturnToCall ? (
+                        <button 
+                            onClick={onExpandCall} 
+                            className="p-2.5 rounded-full transition-all duration-300 shadow-lg group bg-green-500 hover:bg-green-400 text-white animate-pulse"
+                            title="Return to active call"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleStartCallClick} 
+                            disabled={callState !== CallState.IDLE || isBusy} 
+                            className={`p-2.5 rounded-full transition-all duration-300 shadow-lg group ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 hover:bg-white/20 text-white hover:scale-105 border border-white/10' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
+                            title={isBusy ? "You are in another call" : "Start Voice Call"}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        </button>
+                    )
                 )}
             </div>
 
             <div className="md:hidden absolute top-4 right-4 z-30">
-                {isReturnToCall ? (
-                    <button 
-                        onClick={onExpandCall} 
-                        className="p-2.5 rounded-full transition-all duration-300 shadow-lg bg-green-500 text-white animate-pulse"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    </button>
-                ) : (
-                    <button 
-                        onClick={handleStartCallClick} 
-                        disabled={callState !== CallState.IDLE || isBusy} 
-                        className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 text-white border border-white/10 backdrop-blur-md' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                    </button>
+                {!isGroup && (
+                    isReturnToCall ? (
+                        <button 
+                            onClick={onExpandCall} 
+                            className="p-2.5 rounded-full transition-all duration-300 shadow-lg bg-green-500 text-white animate-pulse"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleStartCallClick} 
+                            disabled={callState !== CallState.IDLE || isBusy} 
+                            className={`p-2.5 rounded-full transition-all duration-300 shadow-lg ${callState === CallState.IDLE && !isBusy ? 'bg-white/10 text-white border border-white/10 backdrop-blur-md' : 'bg-gray-800 text-gray-500 border border-white/5 cursor-not-allowed opacity-50'}`}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        </button>
+                    )
                 )}
             </div>
 
@@ -776,15 +928,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             <span className="text-[10px] text-gray-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/5 tracking-wider uppercase backdrop-blur-md">End-to-End Encrypted</span>
                         </div>
                         {messages.map((msg) => (
-                            <MessageItem key={msg.id} msg={msg} isMe={Boolean(currentUser && currentUser.id && msg.sender_id === currentUser.id)} recipient={recipient} currentUser={currentUser} onEdit={handleEdit} onDelete={handleDeleteClick} onRetry={(m) => handleSendMessage(undefined, m)} onReply={handleReply} onReaction={handleReaction} onJumpTo={handleJumpToMessage} isHighlighted={msg.id === highlightedMessageId} isFamily={currentUser.is_family} />
+                            <MessageItem 
+                                key={msg.id} 
+                                msg={msg} 
+                                isMe={Boolean(currentUser && currentUser.id && msg.sender_id === currentUser.id)} 
+                                recipient={recipient} 
+                                currentUser={currentUser} 
+                                onEdit={handleEdit} 
+                                onDelete={handleDeleteClick} 
+                                onRetry={(m) => handleSendMessage(undefined, m)} 
+                                onReply={handleReply} 
+                                onReaction={handleReaction} 
+                                onJumpTo={handleJumpToMessage} 
+                                isHighlighted={msg.id === highlightedMessageId} 
+                                isFamily={currentUser.is_family}
+                                isGroup={isGroup}
+                            />
                         ))}
-                        {isTyping && (
-                            <div className="flex justify-start mb-4 animate-fade-in-up px-2">
-                                <div className="bg-white/5 rounded-[1.2rem] rounded-bl-sm px-4 py-3 flex space-x-1.5 items-center border border-white/5">
-                                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-typing-bounce"></div><div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-typing-bounce" style={{ animationDelay: '0.15s' }}></div><div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-typing-bounce" style={{ animationDelay: '0.3s' }}></div>
+                        {Object.entries(remoteDrafts).map(([uid, draft]) => (
+                            <div key={uid} className="flex justify-start mb-4 animate-fade-in-up px-2">
+                                <div className="flex flex-col items-start max-w-[80%]">
+                                    {/* Group Chat: Show name for typer */}
+                                    {isGroup && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{draft.email.split('@')[0]} is typing...</span>}
+                                    
+                                    <div className="bg-white/5 rounded-[1.2rem] rounded-bl-sm px-4 py-3 border border-white/5 text-gray-300 italic flex items-center gap-2 relative overflow-hidden">
+                                        {/* Animated Gradient Border/Overlay for "Ghost" effect */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent animate-pulse"></div>
+                                        <span className="relative z-10 text-sm">{draft.content}</span>
+                                        <span className="w-1.5 h-4 bg-indigo-500 animate-pulse relative z-10"></span> {/* Cursor */}
+                                    </div>
                                 </div>
                             </div>
-                        )}
+                        ))}
                     </>
                 )}
                 <div ref={messagesEndRef} className="h-4" />
