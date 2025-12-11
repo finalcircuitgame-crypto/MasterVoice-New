@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
 interface AuthProps {
@@ -14,25 +14,54 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
   const [authStep, setAuthStep] = useState<'credentials' | 'verify'>('credentials');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  
+  // Mounted Ref to prevent state updates on unmounted component
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     setAuthStep('credentials');
     setError(null);
+    return () => { isMounted.current = false; };
   }, [mode]);
+
+  // Resend Timer
+  useEffect(() => {
+      let interval: any;
+      if (resendCooldown > 0) {
+          interval = setInterval(() => {
+              setResendCooldown(prev => prev - 1);
+          }, 1000);
+      }
+      return () => clearInterval(interval);
+  }, [resendCooldown]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    
     setLoading(true);
     setError(null);
+    
+    // Safety timeout
+    const safetyTimeout = setTimeout(() => {
+        if (isMounted.current) {
+            setLoading(false);
+            setError("Request timed out. Please check your connection and try again.");
+        }
+    }, 15000);
+
     try {
       if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         
         if (data.session) {
-          return; // Auto-logged in
+          // Auto-logged in (no verification needed setting)
+          return; 
         }
-        setAuthStep('verify');
+        if (isMounted.current) setAuthStep('verify');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
@@ -42,37 +71,88 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
                      type: 'signup',
                      email: email,
                  });
-                 setAuthStep('verify');
-                 setError("Your email is not verified. We've sent you a new code.");
-                 setLoading(false);
+                 if (isMounted.current) {
+                    setAuthStep('verify');
+                    setError("Your email is not verified. We've sent you a new code.");
+                 }
                  return;
              }
              throw error;
         }
       }
     } catch (err: any) {
-      setError(err.message);
+      if (isMounted.current) setError(err.message);
     } finally {
-      setLoading(false);
+      clearTimeout(safetyTimeout);
+      if (isMounted.current) setLoading(false);
     }
   };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
+
+    // Safety timeout for Verification
+    const safetyTimeout = setTimeout(() => {
+        if (isMounted.current) {
+            setLoading(false);
+            setError("Verification timed out. Check connection.");
+        }
+    }, 15000);
+    
     try {
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
             email,
             token: otp,
             type: 'signup'
         });
+        
         if (error) throw error;
-        // Success will trigger session change in App.tsx
+
+        // If we have a session, we are good. 
+        // App.tsx *should* pick this up automatically via onAuthStateChange.
+        // However, if it hangs, we force a reload/redirect after a short delay.
+        if (data.session) {
+            setTimeout(() => {
+                if (isMounted.current) {
+                    // Fallback force navigation if App.tsx doesn't react fast enough
+                    window.location.href = '/conversations';
+                }
+            }, 1000);
+        }
+
     } catch (err: any) {
-        setError(err.message);
-        setLoading(false);
+        if (isMounted.current) {
+            setError(err.message);
+            setLoading(false);
+        }
+    } finally {
+        clearTimeout(safetyTimeout);
+        // Note: We don't strictly set loading(false) on success immediately 
+        // to prevent UI flash before redirect
     }
+  };
+
+  const handleResendCode = async () => {
+      if (resendCooldown > 0) return;
+      
+      setResendCooldown(60);
+      setError(null);
+      
+      try {
+          const { error } = await supabase.auth.resend({
+              type: 'signup',
+              email,
+          });
+          if (error) throw error;
+          setError("New code sent! Check your inbox."); // Re-using error display for success msg briefly
+      } catch (err: any) {
+          setError(err.message);
+          setResendCooldown(0);
+      }
   };
 
   return (
@@ -215,18 +295,28 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg shadow-emerald-600/25"
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg shadow-emerald-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Verifying...' : 'Verify Email'}
               </button>
             </form>
 
-            <button
-               onClick={() => setAuthStep('credentials')}
-               className="w-full mt-6 text-sm text-gray-500 hover:text-gray-300 transition-colors"
-            >
-               &larr; Back to details
-            </button>
+            <div className="flex flex-col gap-3 mt-6">
+                <button
+                    onClick={handleResendCode}
+                    disabled={resendCooldown > 0}
+                    className={`w-full text-sm font-medium transition-colors ${resendCooldown > 0 ? 'text-gray-600 cursor-not-allowed' : 'text-indigo-400 hover:text-indigo-300 hover:underline'}`}
+                >
+                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Code'}
+                </button>
+
+                <button
+                onClick={() => setAuthStep('credentials')}
+                className="w-full text-sm text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                &larr; Back to details
+                </button>
+            </div>
           </div>
         )}
       </div>

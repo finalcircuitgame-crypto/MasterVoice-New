@@ -108,10 +108,14 @@ const App: React.FC = () => {
   // Auth & User Setup Logic
   useEffect(() => {
     const setupUser = async (sessionUser: any) => {
-        // CRITICAL: Prevent processing the same user multiple times to stop infinite loops
-        if (lastUserIdRef.current === sessionUser.id) {
+        const onAuthPage = ['/login', '/register'].includes(window.location.pathname);
+
+        // If we have already processed this user AND we aren't trying to leave an auth page, skip.
+        // If we ARE on an auth page, we allow this to run again to ensure redirect happens.
+        if (lastUserIdRef.current === sessionUser.id && !onAuthPage) {
             return;
         }
+        
         lastUserIdRef.current = sessionUser.id;
 
         let isFamily = false;
@@ -136,12 +140,21 @@ const App: React.FC = () => {
             is_family: isFamily, 
         };
         
-        setCurrentUser(userProfile);
+        // Use functional state update to prevent redundant renders if deep equal
+        setCurrentUser(prev => {
+            if (prev && prev.id === userProfile.id && prev.is_family === userProfile.is_family) return prev;
+            return userProfile;
+        });
         
         if (userProfile.is_family && !hasWelcomedRef.current) {
              setShowFamilyNotification(true);
              hasWelcomedRef.current = true;
              setTimeout(() => setShowFamilyNotification(false), 6000);
+        }
+
+        // Force redirect if on auth pages
+        if (onAuthPage) {
+             navigateRef.current('/conversations');
         }
     };
 
@@ -153,10 +166,6 @@ const App: React.FC = () => {
             setSession(data.session);
             if (data.session?.user) {
                 await setupUser(data.session.user);
-                // Redirect if on auth pages
-                if (['/login', '/register'].includes(window.location.pathname)) {
-                    navigateRef.current('/conversations');
-                }
             }
         } catch (err: any) {
             console.error("Session init error:", err.message);
@@ -173,20 +182,16 @@ const App: React.FC = () => {
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // console.log("Auth State Change:", event);
       setSession(session);
       
       if (session?.user) {
           await setupUser(session.user);
-          if (['/login', '/register'].includes(window.location.pathname)) {
-             navigateRef.current('/conversations');
-          }
       } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
           setSelectedUser(null);
           setOnlineUsers(new Set());
           hasWelcomedRef.current = false;
-          lastUserIdRef.current = null;
+          lastUserIdRef.current = null; // Important: Reset processed ID
           
           if (['/conversations', '/settings'].includes(window.location.pathname)) {
             navigateRef.current('/login');
