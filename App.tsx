@@ -27,10 +27,14 @@ const App: React.FC = () => {
   const hasWelcomedRef = useRef(false);
   
   const { path, navigate, query } = useRouter();
+  
+  // Create a ref for navigate to use in effects without triggering re-runs
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   // Resize Listener
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <768);
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -126,7 +130,14 @@ const App: React.FC = () => {
             email: sessionUser.email || 'No Email',
             is_family: isFamily, 
         };
-        setCurrentUser(userProfile);
+        
+        // Prevent unnecessary state updates if data hasn't changed
+        setCurrentUser(prev => {
+            if (prev && prev.id === userProfile.id && prev.is_family === userProfile.is_family) {
+                return prev;
+            }
+            return userProfile;
+        });
         
         // Show notification once per session load using ref to prevent spam
         if (userProfile.is_family && !hasWelcomedRef.current) {
@@ -146,7 +157,7 @@ const App: React.FC = () => {
             if (data.session?.user) {
                 await setupUser(data.session.user);
                 if (['/login', '/register'].includes(window.location.pathname)) {
-                    navigate('/conversations');
+                    navigateRef.current('/conversations');
                 }
             }
         } catch (err: any) {
@@ -156,7 +167,7 @@ const App: React.FC = () => {
                 await supabase.auth.signOut();
                 setSession(null);
                 setCurrentUser(null);
-                navigate('/login');
+                navigateRef.current('/login');
             }
         }
     };
@@ -171,7 +182,7 @@ const App: React.FC = () => {
           await setupUser(session.user);
           // Only redirect from auth pages
           if (['/login', '/register'].includes(window.location.pathname)) {
-             navigate('/conversations');
+             navigateRef.current('/conversations');
           }
       } else {
           setCurrentUser(null);
@@ -181,13 +192,13 @@ const App: React.FC = () => {
           
           // If on protected route, kick to login
           if (['/conversations', '/settings'].includes(window.location.pathname)) {
-            navigate('/login');
+            navigateRef.current('/login');
           }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []); // Empty dependency array effectively prevents the infinite loop
 
   // Handle URL-based Chat Selection (Deep Linking)
   useEffect(() => {
