@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export const useRouter = () => {
   const [path, setPath] = useState(window.location.pathname);
@@ -13,7 +13,7 @@ export const useRouter = () => {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const navigate = (url: string) => {
+  const navigate = useCallback((url: string) => {
     try {
       window.history.pushState({}, '', url);
     } catch (e) {
@@ -26,7 +26,7 @@ export const useRouter = () => {
     setQuery(urlObj.searchParams);
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
   return { path, query, navigate };
 };
