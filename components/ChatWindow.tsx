@@ -446,7 +446,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const handleStartRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+            
+            // Determine supported mimeType
+            let mimeType = 'audio/webm';
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                mimeType = 'audio/webm;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            }
+
+            const recorder = new MediaRecorder(stream, { mimeType });
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
 
@@ -467,8 +476,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const handleStopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+                const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                const audioFile = new File([audioBlob], `voice_${Date.now()}.${ext}`, { type: mimeType });
                 setSelectedFile(audioFile);
                 
                 // Reset stream tracks
@@ -759,29 +770,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
 
                     {isRecording ? (
-                         <div className="flex items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border border-red-500/30 p-2 pl-4 rounded-full shadow-2xl animate-pulse-glow">
-                             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                             <span className="text-white font-mono font-bold flex-1">{formatDuration(recordingTime)}</span>
-                             <button onClick={handleCancelRecording} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition text-xs font-bold uppercase tracking-wider">Cancel</button>
-                             <button onClick={handleStopRecording} className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95">
-                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                         <div className="w-full flex items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border border-red-500/30 p-2 pl-4 rounded-full shadow-2xl animate-pulse-glow h-[58px]">
+                             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shrink-0"></div>
+                             <span className="text-white font-mono font-bold flex-1 text-sm tracking-widest">{formatDuration(recordingTime)} <span className="opacity-50 text-[10px] ml-2">RECORDING</span></span>
+                             
+                             <button onClick={handleCancelRecording} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition text-xs font-bold uppercase tracking-wider shrink-0">Cancel</button>
+                             <button onClick={handleStopRecording} className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95 shrink-0 flex items-center justify-center w-10 h-10">
+                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                              </button>
                          </div>
                     ) : (
-                        <form onSubmit={(e) => handleSendMessage(e)} className="group flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20">
+                        <form onSubmit={(e) => handleSendMessage(e)} className="group w-full flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20 h-[58px]">
                             <input type="file" ref={fileInputRef} onChange={(e) => { if (e.target.files?.length) setSelectedFile(e.target.files[0]); }} className="hidden" />
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-indigo-400 transition p-1" title="Attach file">
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-indigo-400 transition p-1 shrink-0" title="Attach file">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                             </button>
 
-                            <input id="chat-input" ref={inputRef} type="text" className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 font-medium text-[15px]" placeholder={editingId ? "Update message..." : replyingTo ? "Type reply..." : "Message..."} value={newMessage} onChange={handleInput} autoComplete="off" />
+                            <input id="chat-input" ref={inputRef} type="text" className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 font-medium text-[15px] min-w-0" placeholder={editingId ? "Update message..." : replyingTo ? "Type reply..." : "Message..."} value={newMessage} onChange={handleInput} autoComplete="off" />
                             
                             {!newMessage.trim() && !selectedFile ? (
-                                <button type="button" onClick={handleStartRecording} className="p-2.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition active:scale-95">
+                                <button type="button" onClick={handleStartRecording} className="p-2.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition active:scale-95 shrink-0">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                 </button>
                             ) : (
-                                <button type="submit" disabled={isUploading} className={`p-2.5 rounded-full text-white font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:shadow-indigo-500/25 transform hover:-translate-y-0.5`}>
+                                <button type="submit" disabled={isUploading} className={`p-2.5 rounded-full text-white font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:shadow-indigo-500/25 transform hover:-translate-y-0.5 w-10 h-10`}>
                                     {isUploading ? (
                                         <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                     ) : editingId ? <span className="text-xs px-2">Save</span> : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}

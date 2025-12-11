@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CallState, UserProfile } from '../types';
 
@@ -28,6 +27,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const ringtoneOscillators = useRef<any[]>([]);
 
   // --- AUDIO HANDLING ---
   // Ensure Audio Element always has the stream and plays
@@ -54,6 +54,84 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
       playAudio();
     }
   }, [remoteStream, callState]); // Re-check if callState changes (e.g. connected)
+
+  // --- RINGTONE LOGIC (Oscillator) ---
+  useEffect(() => {
+      // Cleanup previous ringtones
+      const stopRingtone = () => {
+          ringtoneOscillators.current.forEach(o => {
+              try { o.stop(); o.disconnect(); } catch (e) {}
+          });
+          ringtoneOscillators.current = [];
+      };
+
+      if (callState === CallState.OFFERING) {
+          // OUTGOING RING (Long Beep... Silence...)
+          stopRingtone();
+          try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(440, ctx.currentTime);
+              gain.gain.setValueAtTime(0.1, ctx.currentTime);
+              
+              // Pulsing effect for dial tone
+              const pulse = 4; // seconds
+              for (let i = 0; i < 10; i++) {
+                  gain.gain.setValueAtTime(0.1, ctx.currentTime + i * pulse);
+                  gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i * pulse + 2);
+                  gain.gain.linearRampToValueAtTime(0, ctx.currentTime + i * pulse + 2.1);
+              }
+
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              ringtoneOscillators.current.push(osc);
+          } catch (e) {
+              console.warn("Could not play ringtone", e);
+          }
+      } else if (callState === CallState.RECEIVING) {
+          // INCOMING RING (Electronic Ringer)
+          stopRingtone();
+          try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              
+              const playTone = (freq: number, start: number, dur: number) => {
+                  const osc = ctx.createOscillator();
+                  const gain = ctx.createGain();
+                  osc.type = 'square';
+                  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                  gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                  
+                  osc.connect(gain);
+                  gain.connect(ctx.destination);
+                  osc.start(ctx.currentTime + start);
+                  osc.stop(ctx.currentTime + start + dur);
+                  ringtoneOscillators.current.push(osc);
+              };
+
+              // Simple pattern loop
+              const pattern = () => {
+                  const now = ctx.currentTime;
+                  // Ring-Ring... Ring-Ring...
+                  for(let i=0; i<30; i+=4) { // Repeat every 4 seconds
+                      playTone(880, i, 0.4);
+                      playTone(880, i+0.6, 0.4);
+                  }
+              };
+              pattern();
+
+          } catch (e) {
+              console.warn("Could not play ringtone", e);
+          }
+      } else {
+          // Stop if Connected/Idle
+          stopRingtone();
+      }
+
+      return () => stopRingtone();
+  }, [callState]);
 
   // Timer Logic
   useEffect(() => {
