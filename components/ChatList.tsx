@@ -13,7 +13,7 @@ interface ChatListProps {
 }
 
 export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onSelectGroup, onlineUsers, onOpenSettings }) => {
-  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups'>('chats');
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
@@ -121,6 +121,8 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const sendRequest = async (targetId: string) => {
       // Optimistic UI update could go here, but realtime is fast enough usually
       await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' });
+      setSearchQuery(''); 
+      setSearchResults([]);
   };
   
   const acceptRequest = async (id: string) => {
@@ -165,7 +167,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
       {/* Tabs */}
       <div className="flex px-4 pt-4 gap-4 overflow-x-auto no-scrollbar shrink-0 border-b border-white/5 pb-0">
           {[{ id: 'chats', label: 'Chats' }, { id: 'groups', label: 'Groups' }, { id: 'requests', label: 'Requests', count: incomingRequests.length }].map((tab: any) => (
-             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearchQuery(''); }} className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+             <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSearchQuery(''); }} className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                   {tab.label}
                   {tab.count > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{tab.count}</span>}
              </button>
@@ -173,7 +175,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-20 md:pb-0 pt-2">
+      <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-20 md:pb-0 pt-2 custom-scrollbar">
         {activeTab === 'chats' && (
             <>
                 <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Friends</h3>
@@ -203,37 +205,91 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         )}
 
         {activeTab === 'requests' && (
-            <>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Pending ({incomingRequests.length})</h3>
-                {incomingRequests.map(req => (
-                    <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">{renderAvatar(req.sender)}<span className="text-sm font-medium truncate text-gray-300">{req.sender?.email}</span></div>
-                        <div className="flex gap-1"><button onClick={() => acceptRequest(req.id)} className="p-2 bg-green-500/20 text-green-400 rounded-lg">✓</button><button onClick={() => cancelRequest(req.id)} className="p-2 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>
-                    </div>
-                ))}
-                
-                {/* Search for new friends here as well */}
-                <div className="mt-4 px-2">
-                    <div className="bg-[#13131a] border border-white/5 rounded-2xl px-4 py-2 flex items-center gap-2 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input className="bg-transparent outline-none w-full" placeholder="Find people..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                    </div>
-                    {isSearching && <div className="text-center text-xs text-gray-500 mt-2">Searching...</div>}
-                    {searchResults.length > 0 && searchResults.map(user => (
-                        <div key={user.id} className="flex justify-between items-center p-2 mt-2 bg-white/5 rounded-xl">
-                            <span className="text-sm text-gray-300">{user.email}</span>
-                            {/* Check if already friend or pending */}
-                            {friends.find(f => f.id === user.id) ? (
-                                <span className="text-xs text-gray-500">Added</span>
-                            ) : incomingRequests.find(r => r.sender_id === user.id) || outgoingRequests.find(r => r.receiver_id === user.id) ? (
-                                <span className="text-xs text-gray-500">Pending</span>
-                            ) : (
-                                <button onClick={() => { sendRequest(user.id); setSearchQuery(''); setSearchResults([]); }} className="text-xs bg-indigo-600 px-2 py-1 rounded text-white">Add</button>
-                            )}
+            <div className="space-y-6 pt-2">
+                {/* Incoming Section */}
+                <div>
+                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 flex items-center gap-2">
+                        Incoming <span className="bg-indigo-500 text-white text-[9px] px-1.5 rounded-full">{incomingRequests.length}</span>
+                    </h3>
+                    {incomingRequests.length === 0 && <div className="px-4 text-xs text-gray-600 italic py-2">No pending requests</div>}
+                    {incomingRequests.map(req => (
+                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 mx-2 hover:bg-white/10 transition animate-fade-in-up">
+                            <div className="flex items-center gap-3 min-w-0">
+                                {renderAvatar(req.sender)}
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-bold truncate text-gray-200">{req.sender?.email.split('@')[0]}</span>
+                                    <span className="text-[10px] text-gray-500">Wants to connect</span>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => acceptRequest(req.id)} className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500 hover:text-white transition shadow-lg" title="Accept">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                </button>
+                                <button onClick={() => cancelRequest(req.id)} className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition shadow-lg" title="Decline">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
-            </>
+
+                {/* Outgoing Section */}
+                <div>
+                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 flex items-center gap-2">
+                        Outgoing <span className="bg-gray-700 text-gray-300 text-[9px] px-1.5 rounded-full">{outgoingRequests.length}</span>
+                    </h3>
+                    {outgoingRequests.length === 0 && <div className="px-4 text-xs text-gray-600 italic py-2">No sent requests</div>}
+                    {outgoingRequests.map(req => (
+                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 mx-2 opacity-80 hover:opacity-100 transition animate-fade-in-up">
+                            <div className="flex items-center gap-3 min-w-0">
+                                {renderAvatar(req.receiver)}
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-medium truncate text-gray-300">{req.receiver?.email.split('@')[0]}</span>
+                                    <span className="text-[10px] text-gray-500">Request Sent</span>
+                                </div>
+                            </div>
+                            <button onClick={() => cancelRequest(req.id)} className="p-2 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg transition" title="Cancel Request">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Search / Add Friend Section */}
+                <div className="px-3 pt-6 pb-20">
+                    <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3 ml-1">Add New Connection</h3>
+                    <div className="bg-[#13131a] border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50 shadow-inner">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <input className="bg-transparent outline-none w-full placeholder-gray-600" placeholder="Search email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    </div>
+                    
+                    {isSearching && <div className="text-center text-xs text-gray-500 mt-4 flex items-center justify-center gap-2"><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div> Searching...</div>}
+                    
+                    <div className="mt-2 space-y-2">
+                        {searchResults.length > 0 && searchResults.map(user => (
+                            <div key={user.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition animate-scale-in">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-xs font-bold text-white">{user.email[0].toUpperCase()}</div>
+                                    <span className="text-sm text-gray-200 font-medium">{user.email.split('@')[0]}</span>
+                                </div>
+                                {/* Check if already friend or pending */}
+                                {friends.find(f => f.id === user.id) ? (
+                                    <span className="text-xs text-green-500 font-bold px-2 py-1 bg-green-500/10 rounded-lg">Friend</span>
+                                ) : incomingRequests.find(r => r.sender_id === user.id) ? (
+                                    <span className="text-xs text-indigo-400 font-bold px-2 py-1 bg-indigo-500/10 rounded-lg">Pending</span>
+                                ) : outgoingRequests.find(r => r.receiver_id === user.id) ? (
+                                    <span className="text-xs text-gray-500 font-bold px-2 py-1 bg-white/5 rounded-lg">Sent</span>
+                                ) : (
+                                    <button onClick={() => sendRequest(user.id)} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition shadow-lg shadow-indigo-600/20">Add +</button>
+                                )}
+                            </div>
+                        ))}
+                        {searchQuery && !isSearching && searchResults.length === 0 && (
+                            <div className="text-center text-xs text-gray-600 mt-2">No users found.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
         )}
       </div>
     </div>
