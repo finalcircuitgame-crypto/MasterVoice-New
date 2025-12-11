@@ -23,7 +23,7 @@
 
 ## 2. SQL Schema (Run in Supabase SQL Editor)
 
-**CRITICAL: Run this ENTIRE block to fix "Row-Level Security" errors and "Avatar" issues:**
+**CRITICAL: Run this ENTIRE block to fix "Row-Level Security" errors, "Avatar" issues, and Enable Groups:**
 
 ```sql
 -- 1. DROP OLD POLICIES TO PREVENT CONFLICTS
@@ -80,6 +80,61 @@ drop policy if exists "Users can update messages they are involved in" on messag
 create policy "Users can update messages they are involved in"
   on messages for update
   using ( auth.uid() = sender_id or auth.uid() = receiver_id );
+
+-- 5. GROUPS FEATURE SCHEMA
+create table if not exists public.groups (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  created_by uuid references auth.users not null,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+create table if not exists public.group_members (
+  group_id uuid references public.groups(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete cascade,
+  joined_at timestamp with time zone default timezone('utc'::text, now()),
+  primary key (group_id, user_id)
+);
+
+-- RLS for Groups
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+
+-- Policy: Users can view groups they are members of
+create policy "View groups if member" on public.groups
+  for select using (
+    exists (
+      select 1 from public.group_members
+      where group_members.group_id = groups.id
+      and group_members.user_id = auth.uid()
+    )
+  );
+
+-- Policy: Users can create groups
+create policy "Users can create groups" on public.groups
+  for insert with check ( auth.role() = 'authenticated' );
+
+-- Policy: Users can view members of groups they are in
+create policy "View members if in group" on public.group_members
+  for select using (
+    exists (
+      select 1 from public.group_members gm
+      where gm.group_id = group_members.group_id
+      and gm.user_id = auth.uid()
+    )
+  );
+
+-- Policy: Users can add members (simplified for demo: anyone can join/add for now or creator only)
+-- Allowing creator to add members
+create policy "Creator can add members" on public.group_members
+  for insert with check (
+    exists (
+      select 1 from public.groups
+      where groups.id = group_members.group_id
+      and groups.created_by = auth.uid()
+    )
+    or auth.uid() = user_id -- Allow self-join if we implement invite codes later
+  );
 ```
 
 ---

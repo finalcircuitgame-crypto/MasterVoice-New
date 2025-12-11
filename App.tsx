@@ -49,7 +49,9 @@ const App: React.FC = () => {
     answerCall, 
     toggleMute, 
     isMuted,
-    rtcStats
+    rtcStats,
+    setInputGain,
+    inputGain
   } = useWebRTC(roomId, currentUser?.id || '');
 
   // Detect navigation to Landing Page while in call
@@ -297,6 +299,8 @@ const App: React.FC = () => {
                 isMuted={isMuted}
                 recipient={selectedUser || undefined}
                 rtcStats={rtcStats}
+                setInputGain={setInputGain}
+                inputGain={inputGain}
             />
           </>
       );
@@ -414,6 +418,8 @@ const App: React.FC = () => {
             isMuted={isMuted}
             recipient={selectedUser || undefined}
             rtcStats={rtcStats}
+            setInputGain={setInputGain}
+            inputGain={inputGain}
         />
     </div>
   );

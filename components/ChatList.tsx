@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { UserProfile, FriendRequest, FriendshipStatus } from '../types';
+import { UserProfile, FriendRequest, FriendshipStatus, Group } from '../types';
 
 interface ChatListProps {
   currentUser: UserProfile;
@@ -13,7 +13,8 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups' | 'favorites' | 'archived' | 'files'>('chats');
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,7 +28,11 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     // 1. Fetch all requests involving me
     const { data: requestsData, error: reqError } = await supabase
         .from('friend_requests')
-        .select('*')
+        .select(`
+            *,
+            sender:sender_id(id, email, avatar_url),
+            receiver:receiver_id(id, email, avatar_url)
+        `)
         .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
 
     if (reqError || !requestsData) return;
@@ -35,9 +40,9 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
     // Split into categories
     const acceptedIds = new Set<string>();
     const incoming: any[] = [];
-    const outgoing: FriendRequest[] = [];
+    const outgoing: any[] = [];
 
-    requestsData.forEach((req: FriendRequest) => {
+    requestsData.forEach((req: any) => {
         if (req.status === 'accepted') {
             acceptedIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id);
         } else if (req.status === 'pending') {
@@ -46,6 +51,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         }
     });
 
+    setIncomingRequests(incoming);
     setOutgoingRequests(outgoing);
 
     // 2. Fetch Profiles for Accepted Friends
@@ -59,25 +65,16 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         setFriends([]);
     }
 
-    // 3. Fetch Profiles for Incoming Requests
-    if (incoming.length > 0) {
-        const senderIds = incoming.map(r => r.sender_id);
-        const { data: sendersData } = await supabase
-            .from('profiles')
-            .select('*')
-            .in('id', senderIds);
-        
-        if (sendersData) {
-            // Map profile data to request object
-            const enrichedIncoming = incoming.map(req => ({
-                ...req,
-                sender: sendersData.find(u => u.id === req.sender_id)
-            })).filter(r => r.sender); // ensure sender exists
-            setIncomingRequests(enrichedIncoming);
-        }
-    } else {
-        setIncomingRequests([]);
-    }
+    // 3. Fetch Groups
+    const { data: groupData } = await supabase
+        .from('groups')
+        .select('*'); 
+    // Note: In real app, we'd join group_members to only show groups user is in
+    // But for this demo we might fetch all if RLS allows or just fetch my groups
+    // The RLS policy I gave allows selecting groups you are a member of.
+    // However, if we just created a group, we should be in it.
+    
+    if (groupData) setGroups(groupData);
   };
 
   useEffect(() => {
@@ -145,70 +142,75 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
 
   const sendRequest = async (targetUserId: string) => {
       // 1. Check local state to see if a relationship already exists
-      // This prevents 409 Conflicts and handles the UX gracefully
       const isFriend = friends.some(f => f.id === targetUserId);
       const isOutgoing = outgoingRequests.some(r => r.receiver_id === targetUserId);
       const incomingReq = incomingRequests.find(r => r.sender_id === targetUserId);
 
-      if (isFriend) {
-          // Already friends, just select them or do nothing
-          return;
-      }
-
-      if (isOutgoing) {
-          // Already sent a request, do nothing
-          return;
-      }
+      if (isFriend || isOutgoing) return;
 
       if (incomingReq) {
-          // They already sent me a request, just accept it!
           await acceptRequest(incomingReq.id);
           return;
       }
 
-      // 2. If no existing relationship, create new request
       const { error } = await supabase.from('friend_requests').insert({
           sender_id: currentUser.id,
           receiver_id: targetUserId,
           status: 'pending'
       });
       
-      if (!error) {
-          fetchData(); // Force refresh
+      if (!error) fetchData(); 
+  };
+
+  const createGroup = async () => {
+      const name = prompt("Enter group name:");
+      if (!name) return;
+
+      try {
+          // 1. Create Group
+          const { data: groupData, error: groupError } = await supabase
+              .from('groups')
+              .insert({ name, created_by: currentUser.id })
+              .select()
+              .single();
+          
+          if (groupError) throw groupError;
+
+          // 2. Add creator as member
+          const { error: memberError } = await supabase
+              .from('group_members')
+              .insert({ group_id: groupData.id, user_id: currentUser.id });
+
+          if (memberError) throw memberError;
+
+          fetchData();
+          alert("Group created!");
+      } catch (e: any) {
+          alert("Error creating group: " + e.message);
       }
   };
 
   // Helper to determine relationship status for a searched user
   const getRelationshipStatus = (targetId: string): { status: FriendshipStatus, reqId?: string } => {
-      // Check friends
       if (friends.some(f => f.id === targetId)) return { status: 'friends' };
-      
-      // Check outgoing
       const out = outgoingRequests.find(r => r.receiver_id === targetId);
       if (out) return { status: 'pending_sent', reqId: out.id };
-
-      // Check incoming
       const inc = incomingRequests.find(r => r.sender_id === targetId);
       if (inc) return { status: 'pending_received', reqId: inc.id };
-
       return { status: 'none' };
   };
 
   const isPenguinUser = (email: string) => email === 'cindygaldamez@yahoo.com';
 
-  const renderAvatar = (user: UserProfile, sizeClasses: string = "w-10 h-10") => {
-      if (user.avatar_url) {
-          return (
-              <img 
-                src={user.avatar_url} 
-                alt={user.email} 
-                className={`${sizeClasses} rounded-full object-cover border border-white/10`} 
-              />
-          );
+  const renderAvatar = (user: any, sizeClasses: string = "w-10 h-10") => {
+      // Handle cases where user object might be partial from join
+      if (user?.avatar_url) {
+          return <img src={user.avatar_url} alt={user.email} className={`${sizeClasses} rounded-full object-cover border border-white/10`} />;
       }
+      const initial = user?.email ? user.email[0].toUpperCase() : '?';
       return (
         <div className={`${sizeClasses} rounded-full bg-gray-800 flex items-center justify-center text-white text-sm font-bold border border-white/5`}>
-            {user.email[0].toUpperCase()}
+            {initial}
         </div>
       );
   };
@@ -336,13 +338,13 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                 )}
             </>
         ) : activeTab === 'requests' ? (
-            /* --- INCOMING REQUESTS MODE --- */
+            /* --- INCOMING & OUTGOING REQUESTS MODE --- */
             <>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Incoming Requests</h3>
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-2">Incoming</h3>
                 {incomingRequests.length === 0 ? (
-                    <div className="p-8 text-center">
-                        <div className="w-12 h-12 bg-white/5 rounded-full mx-auto mb-3 flex items-center justify-center text-xl grayscale opacity-50">📫</div>
-                        <p className="text-gray-500 text-sm">No pending requests.</p>
+                    <div className="p-6 text-center border border-dashed border-white/5 rounded-xl mx-2 mb-4">
+                        <div className="w-8 h-8 bg-white/5 rounded-full mx-auto mb-2 flex items-center justify-center text-lg grayscale opacity-50">📫</div>
+                        <p className="text-gray-500 text-xs">No pending incoming requests.</p>
                     </div>
                 ) : (
                     incomingRequests.map(req => (
@@ -350,7 +352,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                             <div className="flex items-center gap-3 min-w-0">
                                 {renderAvatar(req.sender, "w-10 h-10")}
                                 <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-200 truncate">{req.sender.email}</p>
+                                    <p className="text-sm font-medium text-gray-200 truncate">{req.sender?.email || 'Unknown'}</p>
                                     <p className="text-[10px] text-gray-500">{new Date(req.created_at).toLocaleDateString()}</p>
                                 </div>
                             </div>
@@ -366,17 +368,59 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                     ))
                 )}
                 
-                {outgoingRequests.length > 0 && (
-                    <>
-                         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-4">Sent Requests</h3>
-                         <div className="px-4 text-xs text-gray-500 italic">
-                             You have {outgoingRequests.length} pending sent request{outgoingRequests.length !== 1 ? 's' : ''}.
-                         </div>
-                    </>
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 mt-4">Outgoing</h3>
+                {outgoingRequests.length === 0 ? (
+                    <div className="p-6 text-center border border-dashed border-white/5 rounded-xl mx-2">
+                        <p className="text-gray-500 text-xs">No pending outgoing requests.</p>
+                    </div>
+                ) : (
+                    outgoingRequests.map(req => (
+                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 hover:bg-white/10 transition-colors opacity-70 hover:opacity-100">
+                            <div className="flex items-center gap-3 min-w-0">
+                                {renderAvatar(req.receiver, "w-10 h-10")}
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-200 truncate">{req.receiver?.email || 'Unknown'}</p>
+                                    <p className="text-[10px] text-gray-500">Sent: {new Date(req.created_at).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => cancelOrRejectRequest(req.id)} className="p-2.5 bg-gray-700 text-gray-400 hover:bg-red-500 hover:text-white rounded-xl transition" title="Cancel">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    ))
                 )}
             </>
         ) : activeTab === 'groups' ? (
-             <EmptyTab label="groups" icon="👥" />
+             <>
+                <div className="px-3 py-2 flex justify-between items-center">
+                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">My Groups</h3>
+                    <button onClick={createGroup} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition">
+                        + New
+                    </button>
+                </div>
+                
+                {groups.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-gray-500 animate-fade-in border border-dashed border-white/5 m-3 rounded-2xl">
+                        <div className="text-4xl mb-2 opacity-30">👥</div>
+                        <p className="text-xs">No groups yet</p>
+                        <p className="text-[10px] mt-1 text-gray-600">Create one to start!</p>
+                    </div>
+                ) : (
+                    groups.map(group => (
+                        <div key={group.id} className="w-full p-3 flex items-center justify-between rounded-2xl hover:bg-white/5 border border-transparent transition-all group cursor-pointer">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
+                                    {group.name[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-200 truncate">{group.name}</p>
+                                    <p className="text-[10px] text-gray-500">Group Chat</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+             </>
         ) : activeTab === 'favorites' ? (
              <EmptyTab label="favorites" icon="⭐" />
         ) : activeTab === 'archived' ? (

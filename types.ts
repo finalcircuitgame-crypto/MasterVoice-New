@@ -7,6 +7,13 @@ export interface UserProfile {
   avatar_url?: string | null;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface Attachment {
   url: string;
   type: 'image' | 'video' | 'file' | 'audio';

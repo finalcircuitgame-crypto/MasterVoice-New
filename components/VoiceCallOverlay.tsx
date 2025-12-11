@@ -10,6 +10,8 @@ interface VoiceCallOverlayProps {
   isMuted?: boolean;
   recipient?: UserProfile;
   rtcStats?: any;
+  setInputGain?: (gain: number) => void;
+  inputGain?: number;
 }
 
 export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
@@ -20,7 +22,9 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   toggleMute,
   isMuted,
   recipient,
-  rtcStats
+  rtcStats,
+  setInputGain,
+  inputGain = 1.0
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
@@ -28,36 +32,88 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
   const [isMaximized, setIsMaximized] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const ringtoneOscillators = useRef<any[]>([]);
+  
+  // Output Audio Context Refs (For Friend's Volume)
+  const outputCtxRef = useRef<AudioContext | null>(null);
+  const outputGainRef = useRef<GainNode | null>(null);
+  const outputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const [outputVolume, setOutputVolume] = useState(1.0);
 
-  // --- AUDIO HANDLING ---
-  // Ensure Audio Element always has the stream and plays
-  useEffect(() => {
-    if (audioRef.current && remoteStream) {
-      console.log("[VoiceCallOverlay] Attaching remote stream to audio element", remoteStream.getTracks());
-      
-      // Explicitly set srcObject
-      if (audioRef.current.srcObject !== remoteStream) {
-        audioRef.current.srcObject = remoteStream;
+  const handleManualPlay = () => {
+      if (audioRef.current) {
+          audioRef.current.play()
+              .then(() => setAutoplayBlocked(false))
+              .catch(e => console.error("Manual play failed", e));
       }
-      
-      const playAudio = async () => {
-          try {
-              await audioRef.current?.play();
-              console.log("[VoiceCallOverlay] Audio playing successfully");
-              setAutoplayBlocked(false);
-          } catch (error) {
-              console.warn("[VoiceCallOverlay] Autoplay blocked or failed:", error);
-              setAutoplayBlocked(true);
-          }
-      };
-      
-      playAudio();
-    }
-  }, [remoteStream, callState]); // Re-check if callState changes (e.g. connected)
+      if (outputCtxRef.current && outputCtxRef.current.state === 'suspended') {
+          outputCtxRef.current.resume();
+      }
+  };
 
-  // --- RINGTONE LOGIC (Oscillator) ---
+  // --- AUDIO HANDLING & OUTPUT VOLUME ---
   useEffect(() => {
-      // Cleanup previous ringtones
+    if (remoteStream && callState === CallState.CONNECTED) {
+        // Ensure audio element has source
+        if (audioRef.current) {
+            audioRef.current.srcObject = remoteStream;
+            // Attempt autoplay detection
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.warn("Autoplay prevented:", error);
+                    setAutoplayBlocked(true);
+                });
+            }
+        }
+
+        try {
+            // Setup Web Audio for output volume control (Amplification)
+            if (!outputCtxRef.current) {
+                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                const ctx = new AudioContext();
+                const source = ctx.createMediaStreamSource(remoteStream);
+                const gainNode = ctx.createGain();
+                
+                source.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                
+                outputCtxRef.current = ctx;
+                outputSourceRef.current = source;
+                outputGainRef.current = gainNode;
+                gainNode.gain.value = outputVolume;
+                
+                console.log("[VoiceCallOverlay] Output Gain Node created");
+            }
+        } catch (e) {
+            console.error("Failed to set up web audio for output gain", e);
+            // Fallback: If Web Audio fails, ensure standard audio tag works
+            if (audioRef.current) {
+                audioRef.current.volume = 1.0; 
+            }
+        }
+    } else {
+        // Cleanup output audio context on disconnect
+        if (outputCtxRef.current) {
+            outputCtxRef.current.close();
+            outputCtxRef.current = null;
+            outputGainRef.current = null;
+            outputSourceRef.current = null;
+        }
+    }
+  }, [remoteStream, callState]);
+
+  // Update Output Gain
+  useEffect(() => {
+      if (outputGainRef.current) {
+          outputGainRef.current.gain.value = outputVolume;
+      } else if (audioRef.current) {
+          // Fallback to standard volume (clamped 0-1)
+          audioRef.current.volume = Math.min(outputVolume, 1);
+      }
+  }, [outputVolume]);
+
+  // Handle Ringtones & Autoplay
+  useEffect(() => {
       const stopRingtone = () => {
           ringtoneOscillators.current.forEach(o => {
               try { o.stop(); o.disconnect(); } catch (e) {}
@@ -66,7 +122,6 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
       };
 
       if (callState === CallState.OFFERING) {
-          // OUTGOING RING (Long Beep... Silence...)
           stopRingtone();
           try {
               const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -76,8 +131,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
               osc.frequency.setValueAtTime(440, ctx.currentTime);
               gain.gain.setValueAtTime(0.1, ctx.currentTime);
               
-              // Pulsing effect for dial tone
-              const pulse = 4; // seconds
+              const pulse = 4;
               for (let i = 0; i < 10; i++) {
                   gain.gain.setValueAtTime(0.1, ctx.currentTime + i * pulse);
                   gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i * pulse + 2);
@@ -92,48 +146,37 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
               console.warn("Could not play ringtone", e);
           }
       } else if (callState === CallState.RECEIVING) {
-          // INCOMING RING (Electronic Ringer)
           stopRingtone();
           try {
               const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-              
               const playTone = (freq: number, start: number, dur: number) => {
                   const osc = ctx.createOscillator();
                   const gain = ctx.createGain();
                   osc.type = 'square';
                   osc.frequency.setValueAtTime(freq, ctx.currentTime);
                   gain.gain.setValueAtTime(0.05, ctx.currentTime);
-                  
                   osc.connect(gain);
                   gain.connect(ctx.destination);
                   osc.start(ctx.currentTime + start);
                   osc.stop(ctx.currentTime + start + dur);
                   ringtoneOscillators.current.push(osc);
               };
-
-              // Simple pattern loop
               const pattern = () => {
-                  const now = ctx.currentTime;
-                  // Ring-Ring... Ring-Ring...
-                  for(let i=0; i<30; i+=4) { // Repeat every 4 seconds
+                  for(let i=0; i<30; i+=4) {
                       playTone(880, i, 0.4);
                       playTone(880, i+0.6, 0.4);
                   }
               };
               pattern();
-
           } catch (e) {
               console.warn("Could not play ringtone", e);
           }
       } else {
-          // Stop if Connected/Idle
           stopRingtone();
       }
-
       return () => stopRingtone();
   }, [callState]);
 
-  // Timer Logic
   useEffect(() => {
     let interval: number;
     if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
@@ -147,14 +190,6 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
     }
     return () => clearInterval(interval);
   }, [callState]);
-
-  const handleManualPlay = () => {
-      if (audioRef.current) {
-          audioRef.current.play()
-            .then(() => setAutoplayBlocked(false))
-            .catch(e => console.error("Manual play failed", e));
-      }
-  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -184,10 +219,10 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
 
   return (
     <>
-        {/* Persistent Audio Element - outside conditional rendering to prevent unmounting */}
+        {/* If using Web Audio for output, we don't strictly need this audio tag, but keeping it for ringtones logic context or fallback */}
         <audio ref={audioRef} autoPlay playsInline controls={false} style={{ display: 'none' }} />
 
-        {/* --- INCOMING / OFFERING / CONNECTING STATE (Full Screen Overlay) --- */}
+        {/* --- INCOMING / OFFERING / CONNECTING --- */}
         {(callState === CallState.OFFERING || callState === CallState.RECEIVING || callState === CallState.CONNECTING) && (
             <div className="fixed inset-0 h-[100dvh] w-screen bg-black/90 flex flex-col items-center justify-center z-[9999] backdrop-blur-md animate-fade-in touch-action-none overflow-hidden">
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -222,20 +257,14 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                     <div className="flex items-center justify-center gap-12 pb-8 w-full">
                         {callState === CallState.RECEIVING && (
                             <>
-                                <button
-                                    onClick={onEndCall}
-                                    className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
-                                >
+                                <button onClick={onEndCall} className="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
                                     <div className="w-16 h-16 md:w-20 md:h-20 bg-red-500/20 group-hover:bg-red-500 text-red-500 group-hover:text-white rounded-full flex items-center justify-center transition-all duration-300 border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
                                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                     </div>
                                     <span className="text-xs font-bold text-gray-400 group-hover:text-red-400 transition tracking-wider">DECLINE</span>
                                 </button>
 
-                                <button
-                                    onClick={onAnswer}
-                                    className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
-                                >
+                                <button onClick={onAnswer} className="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
                                     <div className="w-16 h-16 md:w-20 md:h-20 bg-green-500 group-hover:bg-green-400 text-white rounded-full flex items-center justify-center transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.4)] animate-bounce">
                                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                                     </div>
@@ -245,10 +274,7 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                         )}
 
                         {(callState === CallState.OFFERING || callState === CallState.CONNECTING) && (
-                            <button
-                                onClick={onEndCall}
-                                className="group flex flex-col items-center gap-3 active:scale-95 transition-transform"
-                            >
+                            <button onClick={onEndCall} className="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
                                 <div className="w-16 h-16 md:w-20 md:h-20 bg-red-500 text-white rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-[0_0_30px_rgba(239,68,68,0.4)]">
                                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                 </div>
@@ -260,10 +286,10 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
             </div>
         )}
 
-        {/* --- CONNECTED / RECONNECTING STATE --- */}
+        {/* --- CONNECTED / RECONNECTING --- */}
         {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
             isMaximized ? (
-                // FULLSCREEN CONNECTED VIEW
+                // FULLSCREEN
                 <div className="fixed inset-0 h-[100dvh] w-screen bg-[#080808] flex flex-col items-center z-[9999] animate-fade-in overflow-hidden">
                     {/* Header */}
                     <div className="w-full flex justify-between items-center p-6 pt-safe-top z-20">
@@ -295,10 +321,44 @@ export const VoiceCallOverlay: React.FC<VoiceCallOverlayProps> = ({
                         <p className={`text-xl font-mono ${callState === CallState.RECONNECTING ? 'text-amber-400 animate-pulse' : 'text-indigo-300'}`}>
                             {callState === CallState.RECONNECTING ? 'Connection Lost' : formatTime(duration)}
                         </p>
-                        {callState === CallState.RECONNECTING && <p className="text-xs text-gray-500 mt-2">Waiting for peer...</p>}
 
+                        {/* Volume Controls */}
+                        <div className="mt-8 w-full max-w-xs space-y-4 relative z-20 px-6">
+                            {/* Input Gain */}
+                            <div className="bg-black/40 backdrop-blur-md rounded-xl p-3 border border-white/5">
+                                <div className="flex justify-between text-xs text-gray-400 mb-2 font-bold uppercase tracking-wider">
+                                    <span>My Mic</span>
+                                    <span>{Math.round(inputGain * 100)}%</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="3" 
+                                    step="0.1" 
+                                    value={inputGain} 
+                                    onChange={(e) => setInputGain && setInputGain(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                />
+                            </div>
 
-                        {/* Debug Stats Overlay */}
+                            {/* Output Gain */}
+                            <div className="bg-black/40 backdrop-blur-md rounded-xl p-3 border border-white/5">
+                                <div className="flex justify-between text-xs text-gray-400 mb-2 font-bold uppercase tracking-wider">
+                                    <span>Friend's Vol</span>
+                                    <span>{Math.round(outputVolume * 100)}%</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="3" 
+                                    step="0.1" 
+                                    value={outputVolume} 
+                                    onChange={(e) => setOutputVolume(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-fuchsia-500"
+                                />
+                            </div>
+                        </div>
+
                         {showDebug && rtcStats && (
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl p-4 w-64 text-xs font-mono text-green-400 shadow-2xl animate-fade-in-up z-30">
                                 <div className="flex justify-between mb-1"><span>RTT:</span> <span>{rtcStats.rtt} ms</span></div>

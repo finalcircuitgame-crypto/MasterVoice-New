@@ -11,6 +11,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   const [isMuted, setIsMuted] = useState(false);
   const [rtcStats, setRtcStats] = useState<any>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [inputGain, setInputGain] = useState(1.0); // Mic Volume
 
   const pc = useRef<RTCPeerConnection | null>(null);
   const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
@@ -21,9 +22,22 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
   const isProcessingOfferRef = useRef<boolean>(false);
   const iceGatheringTimeoutRef = useRef<number | null>(null);
 
+  // Audio Processing Refs
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const destNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+
   // Keep ref for local stream for cleanup
   const localStreamRef = useRef<MediaStream | null>(null);
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+
+  // Handle Input Gain (Mic Volume) changes
+  useEffect(() => {
+      if (gainNodeRef.current) {
+          gainNodeRef.current.gain.value = inputGain;
+      }
+  }, [inputGain]);
 
   // --- Cleanup Function ---
   const cleanup = useCallback((reason?: string) => {
@@ -43,6 +57,15 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     if (ls) {
       ls.getTracks().forEach(t => t.stop());
       setLocalStream(null);
+    }
+
+    // Clean up Audio Context
+    if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+        gainNodeRef.current = null;
+        sourceNodeRef.current = null;
+        destNodeRef.current = null;
     }
 
     if (pc.current) {
@@ -67,6 +90,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     setIsMuted(false);
     isProcessingOfferRef.current = false;
     setConnectionError(null);
+    setInputGain(1.0);
   }, []);
 
   // --- Signaling Channel Management ---
@@ -172,9 +196,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
       } else if (newPc.connectionState === 'failed' || newPc.connectionState === 'closed') {
         setConnectionError('Connection failed. Please try again.');
-        // Don't auto cleanup on failed immediately in grace period logic, 
-        // but traditionally failed means ICE gave up.
-        // For now we clean up on failed.
         cleanup('connection failed');
       }
     };
@@ -255,39 +276,26 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
 
     if (payload.type === 'hangup') {
       console.log('[WebRTC] Remote signal hangup received - entering grace period');
-      
-      // Instead of killing the call immediately, we enter RECONNECTING state.
-      // This allows the peer to "rejoin" if it was a mistake or they refresh, 
-      // or simply provides a softer exit UX.
       setCallState(CallState.RECONNECTING);
       
-      // We start a shorter timeout for explicit hangups than for network disconnects
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = window.setTimeout(() => {
         cleanup('grace period expired (hangup)');
-      }, 5000); // 5 seconds grace for explicit hangup before actual close, just in case
+      }, 5000);
       
       return;
     }
 
-    // Handle offer - both for initial call and reconnection
     if (payload.type === 'offer') {
-      // Prevent processing the same offer multiple times
-      if (isProcessingOfferRef.current) {
-        console.log('[WebRTC] Already processing an offer, ignoring');
-        return;
-      }
-
+      if (isProcessingOfferRef.current) return;
       isProcessingOfferRef.current = true;
 
-      // If we're already in a call and receive a new offer, it's likely a reconnection attempt
       if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
         console.log('[WebRTC] Reconnection offer received');
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
         }
-        // Clean up old connection
         if (pc.current) {
           pc.current.close();
           pc.current = null;
@@ -302,10 +310,8 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       return;
     }
 
-    // For answer and candidate, we need an active peer connection
     if (!pc.current) {
       console.log('[WebRTC] No peer connection for signal:', payload.type);
-      // Queue candidates if we don't have a PC yet (shouldn't happen often)
       if (payload.type === 'candidate' && payload.candidate) {
         iceCandidateQueue.current.push(payload.candidate);
       }
@@ -318,7 +324,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         if (pc.current.signalingState === 'have-local-offer') {
           await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
 
-          // Process queued candidates for Caller
           while (iceCandidateQueue.current.length > 0) {
             const c = iceCandidateQueue.current.shift();
             if (c) {
@@ -332,11 +337,9 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         }
       } else if (payload.type === 'candidate' && payload.candidate) {
         try {
-          // Only add candidates if we have a remote description
           if (pc.current.remoteDescription && pc.current.remoteDescription.type) {
             await pc.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
           } else {
-            // Queue candidates if remote description isn't set yet
             console.log('[WebRTC] Queueing candidate, no remote description yet');
             iceCandidateQueue.current.push(payload.candidate);
           }
@@ -350,9 +353,44 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     }
   }, [callState, cleanup]);
 
-  // Keep the ref updated for the channel listener
   useEffect(() => { handleSignalRef.current = handleSignal; }, [handleSignal]);
 
+
+  // --- Helper to process Audio with Gain ---
+  const getProcessedStream = async () => {
+      // 1. Get raw media
+      const rawStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      });
+
+      // 2. Setup Web Audio API
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = ctx.createMediaStreamSource(rawStream);
+      const gainNode = ctx.createGain();
+      const dest = ctx.createMediaStreamDestination();
+
+      // 3. Connect nodes
+      source.connect(gainNode);
+      gainNode.connect(dest);
+
+      // 4. Store refs for volume control and cleanup
+      audioContextRef.current = ctx;
+      sourceNodeRef.current = source;
+      gainNodeRef.current = gainNode;
+      destNodeRef.current = dest;
+      
+      // Default gain
+      gainNode.gain.value = inputGain;
+
+      // 5. Return the PROCESSED stream (from destination) but keep raw track for muting if needed
+      // Note: We need to hang onto the original stream to stop tracks later.
+      return { rawStream, processedStream: dest.stream };
+  };
 
   // --- User Actions ---
 
@@ -369,37 +407,28 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       console.log('[WebRTC] Starting Call (Caller)...');
       setCallState(CallState.CONNECTING);
 
-      // Get local media first
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      }).catch(err => {
+      // Get processed stream (with gain)
+      const { rawStream, processedStream } = await getProcessedStream().catch(err => {
         console.error('[WebRTC] Failed to get media:', err);
         setConnectionError('Microphone access denied. Please check permissions.');
         throw err;
       });
 
-      setLocalStream(stream);
-      localStreamRef.current = stream;
+      setLocalStream(rawStream); // Store raw stream for simple track cleanup
+      localStreamRef.current = rawStream;
 
-      // Create peer connection after we have media
+      // Create peer connection
       const peer = createPeerConnection();
 
-      // Add all tracks to the connection
-      stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
+      // Add the PROCESSED tracks to the connection
+      processedStream.getTracks().forEach(track => {
+        peer.addTrack(track, processedStream);
       });
 
-      // Set timeout for ICE gathering
       iceGatheringTimeoutRef.current = window.setTimeout(() => {
         console.log('[WebRTC] ICE gathering timeout - proceeding with available candidates');
       }, 5000);
 
-      // Create and send offer
       const offer = await peer.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false,
@@ -409,7 +438,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       await peer.setLocalDescription(offer);
       setCallState(CallState.OFFERING);
 
-      // Wait a bit for ICE candidates to gather before sending offer
       await new Promise(resolve => setTimeout(resolve, 100));
 
       await channelRef.current.send({
@@ -429,7 +457,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       setConnectionError('Failed to start call. Please try again.');
       cleanup('start call failed');
     }
-  }, [createPeerConnection, cleanup, userId]);
+  }, [createPeerConnection, cleanup, userId, inputGain]);
 
   const answerCall = useCallback(async () => {
     if (!incomingOfferRef.current || !channelRef.current) {
@@ -442,35 +470,24 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       console.log('[WebRTC] Answering Call (Callee)...');
       setCallState(CallState.CONNECTING);
 
-      // Get local media first
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      }).catch(err => {
+      const { rawStream, processedStream } = await getProcessedStream().catch(err => {
         console.error('[WebRTC] Failed to get media:', err);
         setConnectionError('Microphone access denied. Please check permissions.');
         throw err;
       });
 
-      setLocalStream(stream);
-      localStreamRef.current = stream;
+      setLocalStream(rawStream);
+      localStreamRef.current = rawStream;
 
-      // Create peer connection
       const peer = createPeerConnection();
 
-      // Add local tracks
-      stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
+      // Add processed tracks
+      processedStream.getTracks().forEach(track => {
+        peer.addTrack(track, processedStream);
       });
 
-      // Set remote description (the offer)
       await peer.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
 
-      // Process any queued candidates
       while (iceCandidateQueue.current.length > 0) {
         const c = iceCandidateQueue.current.shift();
         if (c) {
@@ -482,7 +499,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         }
       }
 
-      // Create and send answer
       const answer = await peer.createAnswer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
@@ -517,46 +533,13 @@ const endCall = useCallback(() => {
 }, [cleanup]);
 
 const toggleMute = useCallback(() => {
+  // Mute at the source level
   if (localStreamRef.current) {
     const audioTrack = localStreamRef.current.getAudioTracks()[0];
     if (audioTrack) {
       audioTrack.enabled = !audioTrack.enabled;
       setIsMuted(!audioTrack.enabled);
     }
-  }
-}, []);
-
-// Debug function to check ICE servers
-const checkICEServers = useCallback(async () => {
-  if (!pc.current) return;
-
-  try {
-    const stats = await pc.current.getStats();
-    const iceCandidatePairs: any[] = [];
-    const localCandidates: any[] = [];
-    const remoteCandidates: any[] = [];
-
-    stats.forEach(report => {
-      if (report.type === 'candidate-pair') {
-        iceCandidatePairs.push(report);
-      }
-      if (report.type === 'local-candidate') {
-        localCandidates.push(report);
-      }
-      if (report.type === 'remote-candidate') {
-        remoteCandidates.push(report);
-      }
-    });
-
-    console.log('[WebRTC] ICE Debug:', {
-      candidatePairs: iceCandidatePairs.length,
-      localCandidates: localCandidates.length,
-      remoteCandidates: remoteCandidates.length,
-      localCandidateTypes: localCandidates.map(c => c.candidateType),
-      remoteCandidateTypes: remoteCandidates.map(c => c.candidateType)
-    });
-  } catch (e) {
-    console.error('[WebRTC] ICE debug failed:', e);
   }
 }, []);
 
@@ -571,6 +554,7 @@ return {
   isMuted,
   rtcStats,
   connectionError,
-  checkICEServers // Optional debug function
+  setInputGain,
+  inputGain
 };
 };
