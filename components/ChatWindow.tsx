@@ -62,7 +62,12 @@ interface MessageItemProps {
     isFamily?: boolean;
 }
 
-const COMMON_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
+// FAMILY FEATURE: Exclusive emoji for family members
+const getAvailableReactions = (isFamily: boolean) => {
+    const base = ["👍", "❤️", "😂", "😮", "😢"];
+    if (isFamily) base.push("👑"); // Family Feature
+    return base;
+};
 
 const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -109,6 +114,8 @@ const MessageItem = React.memo<MessageItemProps>(({
     const hasReacted = (emoji: string) => {
         return msg.reactions?.[emoji]?.includes(currentUser.id);
     };
+
+    const reactionsList = getAvailableReactions(!!isFamily);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -221,7 +228,7 @@ const MessageItem = React.memo<MessageItemProps>(({
                                     </button>
                                     {showReactions && (
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex bg-[#2a2a30] border border-white/20 rounded-full p-1 shadow-xl z-50 min-w-max">
-                                            {COMMON_REACTIONS.map(emoji => (
+                                            {reactionsList.map(emoji => (
                                                 <button
                                                     key={emoji}
                                                     onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
@@ -332,7 +339,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     onEndCall,
     onAnswerCall
 }) => {
-    // ... existing state ...
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -360,15 +366,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [pendingAction, setPendingAction] = useState<'start' | 'answer' | null>(null);
     const hasAcceptedTerms = useRef(localStorage.getItem('mv_call_terms_accepted') === 'true');
     const inputRef = useRef<HTMLInputElement>(null);
-    const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
 
-    const { showAlert } = useModal(); // Use Modal Hook
+    const { showAlert, showConfirm } = useModal();
 
     const isRecipientOnline = onlineUsers.has(recipient.id);
     const isPenguin = recipient.email === 'cindygaldamez@yahoo.com';
     const roomId = [currentUser.id, recipient.id].sort().join('_');
 
-    // ... subscriptions ...
     useEffect(() => {
         const chatRoomId = [currentUser.id, recipient.id].sort().join('_');
         const newChannel = supabase.channel(`chat_messages:${chatRoomId}`);
@@ -486,7 +490,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setIsRecording(true);
         } catch (err) {
             console.error("Failed to start recording", err);
-            showAlert("Microphone Error", "Could not access microphone. Please check your browser permissions.");
+            await showAlert("Microphone Error", "Could not access microphone.");
         }
     };
 
@@ -516,7 +520,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         audioChunksRef.current = [];
     };
 
-    // ... handleSendMessage same as before ...
     const handleSendMessage = async (e?: React.FormEvent, retryMsg?: Message) => {
         if (e) e.preventDefault();
         const content = retryMsg ? retryMsg.content : newMessage;
@@ -645,13 +648,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         inputRef.current?.focus();
     };
 
-    const handleDeleteClick = (id: string) => { setMessageToDelete(id); };
-
-    const confirmDelete = async () => {
-        if (!messageToDelete) return;
-        setMessages(prev => prev.filter(m => m.id !== messageToDelete));
-        await supabase.from('messages').delete().eq('id', messageToDelete);
-        setMessageToDelete(null);
+    const handleDeleteClick = async (id: string) => {
+        const confirmed = await showConfirm(
+            "Delete Message?", 
+            "Are you sure you want to delete this message? This cannot be undone.",
+            "Delete",
+            "Cancel"
+        );
+        
+        if (confirmed) {
+            setMessages(prev => prev.filter(m => m.id !== id));
+            await supabase.from('messages').delete().eq('id', id);
+        }
     };
 
     const handleJumpToMessage = (messageId: string) => {
@@ -681,7 +689,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
-            {/* ... Render Content (same as previous) ... */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] pointer-events-none mix-blend-overlay"></div>
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -817,7 +824,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                              </button>
                          </div>
                     ) : (
-                        <form onSubmit={(e) => handleSendMessage(e)} className="group w-full flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 hover:border-white/20 h-[58px]">
+                        <form onSubmit={(e) => handleSendMessage(e)} className={`group w-full flex items-center gap-2 bg-[#13131a]/90 backdrop-blur-xl border p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500/50 transition-all duration-300 h-[58px] ${currentUser.is_family ? 'border-amber-500/50 shadow-amber-500/10' : 'border-white/10 hover:border-white/20'}`}>
                             <input type="file" ref={fileInputRef} onChange={(e) => { if (e.target.files?.length) setSelectedFile(e.target.files[0]); }} className="hidden" />
                             <button type="button" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-indigo-400 transition p-1 shrink-0" title="Attach file">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
@@ -855,4 +862,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <div className="h-64 overflow-y-auto bg-black/20 p-4 rounded-lg border border-white/5 text-[10px] md:text-xs text-gray-400 space-y-4 font-mono mb-6 shadow-inner scrollbar-thin scrollbar-thumb-indigo-900">
                             <p className="font-bold text-gray-200">1. WEB RTC MESH</p><p>Calls use direct P2P connections where available. Your IP is shared with the peer to establish the tunnel.</p>
                             <p className="font-bold text-gray-200">2. ICE CANDIDATES</p><p>Authorized STUN/TURN: {ICE_SERVERS[0].urls[0]}</p>
-                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>
+                            <p className="font-bold text-gray-200">3. ENCRYPTION</p><p>DTLS-SRTP mandated for all audio streams.</p>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                            <button onClick={handleAcceptTerms} className="w-full py-3.5 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg active:scale-95 text-sm uppercase tracking-wide">I Accept</button>
+                            <button onClick={() => { setShowCallTerms(false); setPendingAction(null); }} className="w-full py-3.5 text-gray-500 font-medium hover:text-white transition-colors text-sm">Decline</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

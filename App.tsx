@@ -30,7 +30,7 @@ const App: React.FC = () => {
 
   // Resize Listener
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth <768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -103,11 +103,28 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Helper to set user with Family logic
-    const setupUser = (sessionUser: any) => {
+    const setupUser = async (sessionUser: any) => {
+        let isFamily = false;
+        
+        try {
+            // Fetch profile data to get real is_family status
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('is_family')
+                .eq('id', sessionUser.id)
+                .single();
+            
+            if (data && !error) {
+                isFamily = data.is_family || false;
+            }
+        } catch (e) {
+            console.error("Error fetching profile:", e);
+        }
+
         const userProfile: UserProfile = {
             id: sessionUser.id,
             email: sessionUser.email || 'No Email',
-            is_family: true, 
+            is_family: isFamily, 
         };
         setCurrentUser(userProfile);
         
@@ -127,7 +144,7 @@ const App: React.FC = () => {
             
             setSession(data.session);
             if (data.session?.user) {
-                setupUser(data.session.user);
+                await setupUser(data.session.user);
                 if (['/login', '/register'].includes(window.location.pathname)) {
                     navigate('/conversations');
                 }
@@ -151,7 +168,7 @@ const App: React.FC = () => {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-          setupUser(session.user);
+          await setupUser(session.user);
           // Only redirect from auth pages
           if (['/login', '/register'].includes(window.location.pathname)) {
              navigate('/conversations');
@@ -217,9 +234,6 @@ const App: React.FC = () => {
   const showChatInterface = (path === '/conversations' || isSettingsOpen) && session && currentUser;
 
   const renderPublicView = () => {
-      // If we are showing the confirmation modal, just render a background placeholder or the landing page blurred
-      // But we will overlay the modal in the main return
-      
       switch (path) {
           case '/login':
               return (

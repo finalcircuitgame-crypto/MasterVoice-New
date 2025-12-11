@@ -236,7 +236,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         
         <button 
             onClick={onOpenSettings}
-            className="rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg overflow-hidden"
+            className={`rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-lg overflow-hidden ${currentUser.is_family ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-[#060609]' : ''}`}
             aria-label="Settings"
         >
             {renderAvatar(currentUser, "w-10 h-10")}

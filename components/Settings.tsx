@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
+import { useModal } from './ModalContext';
 
 interface SettingsProps {
   currentUser: UserProfile;
@@ -17,7 +18,8 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   
   // Modals State
   const [showKeysModal, setShowKeysModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  const { showAlert, showConfirm } = useModal();
 
   useEffect(() => {
       // Apply dark mode on mount
@@ -46,16 +48,23 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   };
   
   const handleDeleteAccount = async () => {
-      // In a real app, call a backend function. 
-      // Here we will sign out and pretend, as client-side user deletion is restricted.
-      try {
-          const { error } = await supabase.from('profiles').delete().eq('id', currentUser.id);
-          if (error) throw error;
-          await supabase.auth.signOut();
-          window.location.href = '/';
-      } catch (err) {
-          console.error("Delete failed", err);
-          alert("Could not delete account. Please contact support.");
+      const confirmed = await showConfirm(
+          "Delete Account?",
+          "This action is permanent and cannot be undone. All your messages, keys, and profile data will be wiped immediately.",
+          "Delete Forever",
+          "Cancel"
+      );
+
+      if (confirmed) {
+          try {
+              const { error } = await supabase.from('profiles').delete().eq('id', currentUser.id);
+              if (error) throw error;
+              await supabase.auth.signOut();
+              window.location.href = '/';
+          } catch (err) {
+              console.error("Delete failed", err);
+              showAlert("Error", "Could not delete account. Please contact support.");
+          }
       }
   };
 
@@ -85,17 +94,13 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
               .getPublicUrl(filePath);
 
           // 3. Attempt Upload with upsert: FALSE
-          // We do NOT want to overwrite if it exists (deduplication).
-          // If it exists, Supabase throws an error. We catch it and ignore it if it's a duplicate.
           const { error: uploadError } = await supabase.storage
               .from('avatars')
               .upload(filePath, file, {
-                  upsert: false // CRITICAL: Do not try to overwrite files owned by others
+                  upsert: false 
               });
 
           if (uploadError) {
-              // If the error is because it exists, that's GOOD! We use the existing one.
-              // Error message varies, usually "The resource already exists" or RLS violation if owned by someone else.
               const isExisting = uploadError.message.includes('already exists') || 
                                  uploadError.message.includes('violates row-level security') ||
                                  (uploadError as any).statusCode === '409'; // Conflict
@@ -119,7 +124,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
 
       } catch (error: any) {
           console.error('Error uploading avatar:', error.message);
-          alert('Failed to update avatar. ' + error.message);
+          await showAlert('Upload Failed', 'Failed to update avatar. ' + error.message);
       } finally {
           setUploading(false);
       }
@@ -146,7 +151,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              
              {/* Avatar Circle */}
              <div className="relative z-10 -mt-2 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden">
+                 <div className={`w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden ${currentUser.is_family ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-[#13131a]' : ''}`}>
                      {currentUser.avatar_url ? (
                          <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                      ) : (
@@ -159,7 +164,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
                      </div>
 
                      {currentUser.is_family && (
-                        <div className="absolute bottom-0 right-0 bg-amber-500 text-white p-1.5 rounded-full border-4 border-[#13131a] shadow-lg z-20">
+                        <div className="absolute bottom-0 right-0 bg-amber-500 text-white p-1.5 rounded-full border-4 border-[#13131a] shadow-lg z-20" title="Family Member">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
                         </div>
                      )}
@@ -176,8 +181,29 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              />
 
              <h2 className="text-xl font-bold text-white">{currentUser.email}</h2>
-             <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.is_family ? 'Family Plan' : 'Free Plan'}</p>
+             <p className={`text-sm font-medium mt-1 tracking-wide uppercase px-3 py-1 rounded-full ${currentUser.is_family ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-indigo-500/10 text-indigo-400'}`}>
+                 {currentUser.is_family ? 'Family Plan' : 'Free Plan'}
+             </p>
          </div>
+
+         {/* Family Features Section */}
+         {currentUser.is_family && (
+             <div className="bg-gradient-to-br from-amber-900/20 to-orange-900/20 border border-amber-500/20 rounded-[1.5rem] p-5">
+                 <div className="flex items-center gap-3 mb-3">
+                     <span className="text-2xl">👑</span>
+                     <div>
+                         <h3 className="text-amber-200 font-bold">Family Benefits Active</h3>
+                         <p className="text-amber-200/60 text-xs">You have access to exclusive features.</p>
+                     </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3 text-xs text-amber-100/80">
+                     <div className="bg-black/20 p-2 rounded-lg flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>Golden Avatar</div>
+                     <div className="bg-black/20 p-2 rounded-lg flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>Priority Support</div>
+                     <div className="bg-black/20 p-2 rounded-lg flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>Exclusive Reactions</div>
+                     <div className="bg-black/20 p-2 rounded-lg flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>Pro UI Theme</div>
+                 </div>
+             </div>
+         )}
 
          {/* General Settings */}
          <div className="space-y-3">
@@ -216,7 +242,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
                      </div>
                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                  </button>
-                 <button onClick={() => setShowDeleteModal(true)} className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition">
+                 <button onClick={handleDeleteAccount} className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition">
                      <div className="flex items-center gap-4">
                          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></div>
                          <span className="text-gray-200 text-base font-medium">Delete Account</span>
@@ -244,23 +270,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
                   </div>
                   <p className="text-gray-400 text-sm mb-6">This fingerprint is unique to your current session identity keys. Verify this with peers to ensure no Man-in-the-Middle attacks.</p>
                   <button onClick={() => setShowKeysModal(false)} className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Close</button>
-              </div>
-          </div>
-      )}
-
-      {/* Delete Account Modal */}
-      {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-fade-in">
-              <div className="bg-[#1a1a20] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl animate-scale-in border-red-500/20">
-                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 mx-auto">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2 text-center">Delete Account?</h3>
-                  <p className="text-gray-400 text-sm mb-6 text-center">This action is permanent and cannot be undone. All your messages, keys, and profile data will be wiped immediately.</p>
-                  <div className="flex gap-3">
-                      <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-white/5 text-white font-bold rounded-xl hover:bg-white/10 transition">Cancel</button>
-                      <button onClick={handleDeleteAccount} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition shadow-lg shadow-red-600/20">Delete Forever</button>
-                  </div>
               </div>
           </div>
       )}
