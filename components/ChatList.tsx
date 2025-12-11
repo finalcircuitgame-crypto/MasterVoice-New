@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { UserProfile, FriendRequest, FriendshipStatus, Group } from '../types';
+import { UserProfile, Group } from '../types';
 import { useModal } from './ModalContext';
 import { useRouter } from '../hooks/useRouter';
 
@@ -11,6 +11,22 @@ interface ChatListProps {
   onlineUsers: Set<string>;
   onOpenSettings: () => void;
 }
+
+// Simple time ago formatter
+const timeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+};
 
 export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, onSelectGroup, onlineUsers, onOpenSettings }) => {
   const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'groups'>('chats');
@@ -23,9 +39,19 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   const { showPrompt, showAlert } = useModal();
   const { navigate } = useRouter();
+
+  // --- Initial Tab based on URL ---
+  useEffect(() => {
+      if (window.location.pathname.includes('/requests')) {
+          setActiveTab('requests');
+      } else if (window.location.pathname.includes('/groups/')) {
+          setActiveTab('groups');
+      }
+  }, []);
 
   // --- Data Fetching ---
   const fetchData = async () => {
@@ -67,21 +93,19 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   useEffect(() => {
     fetchData();
     
-    // Subscribe to Friend Requests (Both incoming and outgoing events)
+    // Subscribe to Friend Requests
     const requestsChannel = supabase.channel('realtime:friend_requests')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, () => {
-            console.log("Friend request update detected, refreshing...");
             fetchData();
         })
         .subscribe();
 
-    // Subscribe to Groups (New groups added)
+    // Subscribe to Groups
     const groupsChannel = supabase.channel('realtime:groups_list')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'groups' }, (payload) => {
-            if (payload.new.created_by === currentUser.id) fetchData(); // We already add optimistic, but this confirms
+            if (payload.new.created_by === currentUser.id) fetchData(); 
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `user_id=eq.${currentUser.id}` }, () => {
-            // Someone added me to a group
             fetchData();
         })
         .subscribe();
@@ -96,12 +120,11 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const userIdParam = params.get('userId');
-      // For groups, we check the path
       const isGroupPath = window.location.pathname.startsWith('/conversations/groups/');
       const groupIdPath = isGroupPath ? window.location.pathname.split('/').pop() : null;
 
       if (userIdParam) setActiveId(userIdParam);
-      else if (groupIdPath) setActiveId(groupIdPath);
+      else if (groupIdPath) { setActiveId(groupIdPath); setActiveTab('groups'); }
       else setActiveId(null);
   }, [window.location.search, window.location.pathname]);
 
@@ -118,8 +141,15 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
   }, [searchQuery, currentUser.id]);
 
   // --- Actions ---
+  const handleTabChange = (tab: 'chats' | 'requests' | 'groups') => {
+      setActiveTab(tab);
+      setSearchQuery('');
+      if (tab === 'requests') navigate('/conversations/requests');
+      else if (tab === 'chats') navigate('/conversations');
+      else if (tab === 'groups') navigate('/conversations');
+  };
+
   const sendRequest = async (targetId: string) => {
-      // Optimistic UI update could go here, but realtime is fast enough usually
       await supabase.from('friend_requests').insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' });
       setSearchQuery(''); 
       setSearchResults([]);
@@ -137,18 +167,20 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
       const name = await showPrompt("New Group", "Enter a name for your group:", "e.g. Project Alpha");
       if (!name) return;
       try {
-          // RLS ensures we can only create if auth.uid is sent as created_by
           const { data: group, error } = await supabase.from('groups').insert({ name, created_by: currentUser.id }).select().single();
           if (error) throw error;
-          
-          // Add self as member
           await supabase.from('group_members').insert({ group_id: group.id, user_id: currentUser.id });
-          
           setGroups(prev => [group, ...prev]);
           showAlert("Success", "Group created!");
       } catch (e: any) {
           showAlert("Error", e.message);
       }
+  };
+
+  const copyMyId = () => {
+      navigator.clipboard.writeText(currentUser.email);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
   };
 
   const renderAvatar = (user: any) => {
@@ -167,7 +199,7 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
       {/* Tabs */}
       <div className="flex px-4 pt-4 gap-4 overflow-x-auto no-scrollbar shrink-0 border-b border-white/5 pb-0">
           {[{ id: 'chats', label: 'Chats' }, { id: 'groups', label: 'Groups' }, { id: 'requests', label: 'Requests', count: incomingRequests.length }].map((tab: any) => (
-             <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSearchQuery(''); }} className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+             <button key={tab.id} onClick={() => handleTabChange(tab.id)} className={`pb-3 text-sm font-bold tracking-wide border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                   {tab.label}
                   {tab.count > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold animate-pulse">{tab.count}</span>}
              </button>
@@ -205,27 +237,47 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
         )}
 
         {activeTab === 'requests' && (
-            <div className="space-y-6 pt-2">
-                {/* Incoming Section */}
+            <div className="space-y-6 pt-2 pb-10">
+                {/* 1. Share Profile Section */}
+                <div className="mx-2 mb-4 p-4 rounded-2xl bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-500/20 text-center relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <p className="text-xs text-indigo-300 font-bold mb-1">Your ID</p>
+                    <p className="text-white text-sm font-mono truncate mb-2">{currentUser.email}</p>
+                    <button onClick={copyMyId} className="text-[10px] bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full text-white transition flex items-center gap-1 mx-auto border border-white/5">
+                        {copiedId ? <span>✓ Copied</span> : <span>Copy to Share</span>}
+                    </button>
+                </div>
+
+                {/* 2. Incoming Requests */}
                 <div>
                     <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 flex items-center gap-2">
-                        Incoming <span className="bg-indigo-500 text-white text-[9px] px-1.5 rounded-full">{incomingRequests.length}</span>
+                        Incoming <span className={`text-[9px] px-1.5 rounded-full ${incomingRequests.length > 0 ? 'bg-indigo-500 text-white animate-pulse' : 'bg-gray-800 text-gray-500'}`}>{incomingRequests.length}</span>
                     </h3>
-                    {incomingRequests.length === 0 && <div className="px-4 text-xs text-gray-600 italic py-2">No pending requests</div>}
+                    {incomingRequests.length === 0 && (
+                        <div className="px-4 py-6 text-center">
+                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-2 text-gray-600">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                            </div>
+                            <p className="text-xs text-gray-500">No pending requests</p>
+                        </div>
+                    )}
                     {incomingRequests.map(req => (
-                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 mx-2 hover:bg-white/10 transition animate-fade-in-up">
+                        <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 mx-2 hover:bg-white/10 transition animate-fade-in-up group">
                             <div className="flex items-center gap-3 min-w-0">
                                 {renderAvatar(req.sender)}
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-sm font-bold truncate text-gray-200">{req.sender?.email.split('@')[0]}</span>
-                                    <span className="text-[10px] text-gray-500">Wants to connect</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-indigo-400 font-medium">Wants to connect</span>
+                                        <span className="text-[9px] text-gray-600">• {timeAgo(req.created_at)}</span>
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => acceptRequest(req.id)} className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500 hover:text-white transition shadow-lg" title="Accept">
+                                <button onClick={() => acceptRequest(req.id)} className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500 hover:text-white transition shadow-lg transform hover:scale-110" title="Accept">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                                 </button>
-                                <button onClick={() => cancelRequest(req.id)} className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition shadow-lg" title="Decline">
+                                <button onClick={() => cancelRequest(req.id)} className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition shadow-lg transform hover:scale-110" title="Decline">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
                             </div>
@@ -233,39 +285,47 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                     ))}
                 </div>
 
-                {/* Outgoing Section */}
+                {/* 3. Outgoing Requests */}
                 <div>
                     <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2 flex items-center gap-2">
-                        Outgoing <span className="bg-gray-700 text-gray-300 text-[9px] px-1.5 rounded-full">{outgoingRequests.length}</span>
+                        Outgoing <span className="bg-gray-800 text-gray-500 text-[9px] px-1.5 rounded-full">{outgoingRequests.length}</span>
                     </h3>
                     {outgoingRequests.length === 0 && <div className="px-4 text-xs text-gray-600 italic py-2">No sent requests</div>}
                     {outgoingRequests.map(req => (
                         <div key={req.id} className="w-full p-3 flex items-center justify-between rounded-2xl bg-white/5 border border-white/5 mb-2 mx-2 opacity-80 hover:opacity-100 transition animate-fade-in-up">
                             <div className="flex items-center gap-3 min-w-0">
-                                {renderAvatar(req.receiver)}
+                                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-gray-500 border border-dashed border-gray-600">
+                                    {req.receiver?.email?.[0]?.toUpperCase()}
+                                </div>
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-sm font-medium truncate text-gray-300">{req.receiver?.email.split('@')[0]}</span>
-                                    <span className="text-[10px] text-gray-500">Request Sent</span>
+                                    <span className="text-[10px] text-gray-500">Sent {timeAgo(req.created_at)}</span>
                                 </div>
                             </div>
-                            <button onClick={() => cancelRequest(req.id)} className="p-2 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg transition" title="Cancel Request">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <button onClick={() => cancelRequest(req.id)} className="px-3 py-1.5 bg-white/5 hover:bg-red-500/20 text-xs text-gray-400 hover:text-red-400 rounded-lg transition border border-white/5" title="Cancel Request">
+                                Cancel
                             </button>
                         </div>
                     ))}
                 </div>
                 
-                {/* Search / Add Friend Section */}
-                <div className="px-3 pt-6 pb-20">
-                    <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3 ml-1">Add New Connection</h3>
-                    <div className="bg-[#13131a] border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50 shadow-inner">
+                {/* 4. Add Friend Search Section */}
+                <div className="px-3 pt-6">
+                    <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-2">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+                        Add New Connection
+                    </h3>
+                    <div className="bg-[#13131a] border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-gray-400 focus-within:ring-2 focus-within:ring-indigo-500/50 shadow-inner relative transition-all group focus-within:bg-black/40">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input className="bg-transparent outline-none w-full placeholder-gray-600" placeholder="Search email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <input className="bg-transparent outline-none w-full placeholder-gray-600" placeholder="Search by email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="text-gray-600 hover:text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        )}
                     </div>
                     
-                    {isSearching && <div className="text-center text-xs text-gray-500 mt-4 flex items-center justify-center gap-2"><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div> Searching...</div>}
+                    {isSearching && <div className="text-center text-xs text-gray-500 mt-4 flex items-center justify-center gap-2"><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div> Searching directory...</div>}
                     
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-3 space-y-2">
                         {searchResults.length > 0 && searchResults.map(user => (
                             <div key={user.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition animate-scale-in">
                                 <div className="flex items-center gap-3">
@@ -274,18 +334,18 @@ export const ChatList: React.FC<ChatListProps> = ({ currentUser, onSelectUser, o
                                 </div>
                                 {/* Check if already friend or pending */}
                                 {friends.find(f => f.id === user.id) ? (
-                                    <span className="text-xs text-green-500 font-bold px-2 py-1 bg-green-500/10 rounded-lg">Friend</span>
+                                    <span className="text-[10px] text-green-500 font-bold px-2 py-1 bg-green-500/10 rounded-lg flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Connected</span>
                                 ) : incomingRequests.find(r => r.sender_id === user.id) ? (
-                                    <span className="text-xs text-indigo-400 font-bold px-2 py-1 bg-indigo-500/10 rounded-lg">Pending</span>
+                                    <span className="text-[10px] text-indigo-400 font-bold px-2 py-1 bg-indigo-500/10 rounded-lg">Check Incoming</span>
                                 ) : outgoingRequests.find(r => r.receiver_id === user.id) ? (
-                                    <span className="text-xs text-gray-500 font-bold px-2 py-1 bg-white/5 rounded-lg">Sent</span>
+                                    <span className="text-[10px] text-gray-500 font-bold px-2 py-1 bg-white/5 rounded-lg border border-white/5">Pending</span>
                                 ) : (
-                                    <button onClick={() => sendRequest(user.id)} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition shadow-lg shadow-indigo-600/20">Add +</button>
+                                    <button onClick={() => sendRequest(user.id)} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-white font-bold transition shadow-lg shadow-indigo-600/20 active:scale-95">Add +</button>
                                 )}
                             </div>
                         ))}
                         {searchQuery && !isSearching && searchResults.length === 0 && (
-                            <div className="text-center text-xs text-gray-600 mt-2">No users found.</div>
+                            <div className="text-center text-xs text-gray-600 mt-2 py-4">No users found.</div>
                         )}
                     </div>
                 </div>
