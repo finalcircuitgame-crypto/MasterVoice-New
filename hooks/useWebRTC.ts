@@ -103,7 +103,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     isProcessingOfferRef.current = false;
     setConnectionError(null);
     setInputGain(1.0);
-  }, [localVideoStream]); // Added localVideoStream dependency to ensure it cleans up if ref logic misses it
+  }, [localVideoStream]); 
 
   // --- Signaling Channel Management ---
   useEffect(() => {
@@ -153,7 +153,6 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     });
 
     newPc.onicecandidate = (event) => {
-      // console.log('[WebRTC] ICE candidate:', event.candidate ? event.candidate.type : 'null (gathering complete)');
       if (event.candidate && channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -201,7 +200,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           console.log('[WebRTC] Reconnection timed out. Ending call.');
           cleanup('reconnection timeout');
-        }, 3 * 60 * 1000); // 3 minutes
+        }, 15 * 60 * 1000); // Extended to 15 minutes as per user request to "prevent ending no matter what"
 
       } else if (newPc.connectionState === 'failed' || newPc.connectionState === 'closed') {
         setConnectionError('Connection failed. Please try again.');
@@ -275,13 +274,8 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
     // console.log('[WebRTC] Received signal:', payload.type);
 
     if (payload.type === 'hangup') {
-      console.log('[WebRTC] Remote signal hangup received - entering grace period');
-      setCallState(CallState.RECONNECTING);
-      
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        cleanup('grace period expired (hangup)');
-      }, 2000); // Short timeout for explicit hangup
+      console.log('[WebRTC] Remote signal hangup received');
+      cleanup('remote user ended call'); // Explicit hangup kills it immediately
       return;
     }
 
@@ -289,26 +283,39 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       if (isProcessingOfferRef.current) return;
       isProcessingOfferRef.current = true;
 
-      // Handle Renegotiation if connected
-      if (callState === CallState.CONNECTED) {
-          console.log('[WebRTC] Processing Renegotiation Offer');
-          if (!pc.current) return;
-          try {
-              await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
-              const answer = await pc.current.createAnswer();
-              await pc.current.setLocalDescription(answer);
-              
-              channelRef.current?.send({
-                  type: 'broadcast',
-                  event: 'signal',
-                  payload: { type: 'answer', sdp: answer } as SignalingPayload,
-              });
-          } catch (e) {
-              console.error("[WebRTC] Renegotiation failed", e);
-          } finally {
-              isProcessingOfferRef.current = false;
+      // Handle Renegotiation OR Recovery (if Reconnecting)
+      if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
+          console.log('[WebRTC] Processing Offer (Renegotiation/Recovery)');
+          if (!pc.current) {
+              // If we are in RECONNECTING but pc is null/closed, we treat as initial offer (recovery)
+              // But createPeerConnection should have been called if we were connected.
+              // If pc is null, we create it.
+              createPeerConnection(); 
           }
-          return;
+          
+          if (pc.current) {
+            try {
+                await pc.current.setRemoteDescription(new RTCSessionDescription(payload.sdp!));
+                const answer = await pc.current.createAnswer();
+                await pc.current.setLocalDescription(answer);
+                
+                channelRef.current?.send({
+                    type: 'broadcast',
+                    event: 'signal',
+                    payload: { type: 'answer', sdp: answer } as SignalingPayload,
+                });
+                
+                // If we were reconnecting, receiving an offer and answering it puts us back in receiving/connecting flow
+                if (callState === CallState.RECONNECTING) {
+                    setCallState(CallState.CONNECTED); 
+                }
+            } catch (e) {
+                console.error("[WebRTC] Offer processing failed", e);
+            } finally {
+                isProcessingOfferRef.current = false;
+            }
+            return;
+          }
       }
 
       // Initial Offer Handling
@@ -359,7 +366,7 @@ export const useWebRTC = (roomId: string | null, userId: string) => {
       console.error("Signaling error", err);
       isProcessingOfferRef.current = false;
     }
-  }, [callState, cleanup]);
+  }, [callState, cleanup, createPeerConnection]);
 
   useEffect(() => { handleSignalRef.current = handleSignal; }, [handleSignal]);
 

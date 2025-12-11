@@ -70,6 +70,53 @@ const App: React.FC = () => {
     inputGain
   } = useWebRTC(rtcRoomId, currentUser?.id || '');
 
+  // --- PERSISTENCE RESTORATION ---
+  useEffect(() => {
+      const restoreCall = async () => {
+          const stored = localStorage.getItem('mv_active_call');
+          if (stored && !activeCallContact) {
+              try {
+                  const { partnerId, isGroup } = JSON.parse(stored);
+                  // Only restore DM calls for now
+                  if (!isGroup && partnerId) {
+                      const { data } = await supabase.from('profiles').select('*').eq('id', partnerId).single();
+                      if (data) {
+                          console.log('Restoring previous call session with:', data.email);
+                          setActiveCallContact(data);
+                          setIsCallMaximized(true);
+                      }
+                  }
+              } catch (e) {
+                  console.error("Failed to restore call", e);
+                  localStorage.removeItem('mv_active_call');
+              }
+          }
+      };
+      restoreCall();
+  }, []);
+
+  // Auto-rejoin effect: If we have an active contact but state is IDLE, assume we just refreshed and need to reconnect
+  useEffect(() => {
+      if (activeCallContact && callState === CallState.IDLE && localStorage.getItem('mv_active_call')) {
+           // Small delay to ensure signaling channel is ready
+           const t = setTimeout(() => {
+               console.log('Auto-rejoining call...');
+               rtcStartCall();
+           }, 1000);
+           return () => clearTimeout(t);
+      }
+  }, [activeCallContact, callState, rtcStartCall]);
+
+  // Persist State Logic
+  useEffect(() => {
+      if (callState === CallState.CONNECTED) {
+          if (activeCallContact) {
+              localStorage.setItem('mv_active_call', JSON.stringify({ partnerId: activeCallContact.id, isGroup: false }));
+          }
+      }
+  }, [callState, activeCallContact]);
+
+
   // Wrappers to manage Active Call State
   const handleStartCall = () => {
       if (selectedUser) {
@@ -83,6 +130,7 @@ const App: React.FC = () => {
       rtcEndCall();
       setActiveCallContact(null);
       setIsCallMaximized(false);
+      localStorage.removeItem('mv_active_call'); // Clear persistence on explicit end
   };
 
   const handleAnswerCall = () => {
@@ -108,10 +156,19 @@ const App: React.FC = () => {
   }, [callState, selectedUser, activeCallContact]);
 
   // Cleanup active call contact if call goes idle
+  // NOTE: We modified this to NOT cleanup if we are refreshing (checking localStorage logic)
   useEffect(() => {
       if (callState === CallState.IDLE && activeCallContact) {
-          setActiveCallContact(null);
-          setIsCallMaximized(false);
+          // Only clear if we don't have persistence set (meaning it finished naturally or failed)
+          // Actually, handleEndCall clears persistence. If persistence exists, it means we crashed/refreshed.
+          // But if callState goes to IDLE while running, it usually means 'disconnected' -> 'failed'.
+          // The 'disconnected' state goes to 'RECONNECTING', not IDLE.
+          // So IDLE usually means truly over.
+          // However, on mount, callState IS IDLE. We must not clear activeCallContact then.
+          if (!localStorage.getItem('mv_active_call')) {
+              setActiveCallContact(null);
+              setIsCallMaximized(false);
+          }
       }
   }, [callState, activeCallContact]);
 

@@ -64,22 +64,18 @@ interface MessageItemProps {
     isHighlighted: boolean;
     isFamily?: boolean;
     isGroup: boolean;
+    availableEmojis: string[];
 }
 
-// Expanded Emoji List
-const EMOJI_LIST = [
+const EMOJI_SOURCE_URL = 'https://raw.githubusercontent.com/hassankhan/emojis/master/lib/data/emojis.json';
+
+// Default Fallback List
+const DEFAULT_EMOJI_LIST = [
     "👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀", 
     "🚀", "💯", "👋", "🙏", "🤝", "💀", "😭", "😤", "🤬", "🤯", 
     "🥰", "😍", "🤩", "🥳", "😎", "🤔", "🤫", "🙄", "😬", "😴", 
     "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", 
-    "🤡", "💩", "👻", "👽", "🤖", "🎃", "😺", "👶", "🧑", "🧓", 
-    "👮", "🕵️", "💂", "👷", "🤴", "👸", "🧙", "🧚", "🧛", "🧜", 
-    "🧞", "🧟", "🧘", "🧗", "🏃", "💃", "🕺", "👯", "🕴️", "🗣️",
-    "🧠", "🦷", "🦴", "👀", "👁️", "👄", "🫦", "👅", "👂", "👃",
-    "🍉", "🍇", "🍓", "🫐", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝",
-    "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🎱", "🏓",
-    "🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚐",
-    "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨"
+    "🤡", "💩", "👻", "👽", "🤖", "🎃", "😺", "👶", "🧑", "🧓"
 ];
 
 const formatFileSize = (bytes: number) => {
@@ -110,7 +106,8 @@ const MessageItem = React.memo<MessageItemProps>(({
     onJumpTo,
     isHighlighted,
     isFamily,
-    isGroup
+    isGroup,
+    availableEmojis
 }) => {
     const [showActions, setShowActions] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
@@ -250,13 +247,13 @@ const MessageItem = React.memo<MessageItemProps>(({
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     </button>
                                     {showReactions && (
-                                        <div className="absolute bottom-full left-0 mb-2 bg-[#2a2a30] border border-white/20 rounded-xl p-2 shadow-xl z-50 w-64 max-h-48 overflow-y-auto custom-scrollbar">
-                                            <div className="grid grid-cols-6 gap-1">
-                                                {EMOJI_LIST.map(emoji => (
+                                        <div className="absolute bottom-full left-0 mb-2 bg-[#2a2a30] border border-white/20 rounded-xl p-2 shadow-xl z-50 w-72 max-h-56 overflow-y-auto custom-scrollbar">
+                                            <div className="grid grid-cols-8 gap-1">
+                                                {availableEmojis.map((emoji, index) => (
                                                     <button
-                                                        key={emoji}
+                                                        key={`${emoji}-${index}`}
                                                         onClick={() => { onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }}
-                                                        className={`p-1.5 hover:bg-white/10 rounded-lg transition text-lg flex items-center justify-center ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
+                                                        className={`p-1 hover:bg-white/10 rounded-md transition text-lg flex items-center justify-center aspect-square ${hasReacted(emoji) ? 'bg-indigo-500/20' : ''}`}
                                                     >
                                                         {emoji}
                                                     </button>
@@ -344,6 +341,9 @@ const MessageItem = React.memo<MessageItemProps>(({
     );
 }, (prev, next) => {
     // Custom Comparator to ignore constant function prop recreation on parent re-render
+    // Note: We deliberately exclude 'availableEmojis' from shallow comparison here assuming the list
+    // settles quickly after mount. If we compare full array, every fetch update re-renders all messages.
+    // The list ref changes only once usually.
     return (
         prev.msg === next.msg && 
         prev.isMe === next.isMe && 
@@ -352,7 +352,8 @@ const MessageItem = React.memo<MessageItemProps>(({
         prev.isGroup === next.isGroup &&
         prev.recipient?.id === next.recipient?.id &&
         prev.recipient?.avatar_url === next.recipient?.avatar_url &&
-        prev.currentUser.id === next.currentUser.id
+        prev.currentUser.id === next.currentUser.id &&
+        prev.availableEmojis === next.availableEmojis
     );
 });
 
@@ -376,6 +377,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [loading, setLoading] = useState(true);
     const [remoteDrafts, setRemoteDrafts] = useState<Record<string, { content: string, email: string }>>({});
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+    const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST); // Emoji State
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const lastTypingBroadcast = useRef<number>(0);
@@ -406,6 +408,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const isRecipientOnline = recipient ? onlineUsers.has(recipient.id) : false;
     const isPenguin = recipient?.email === 'cindygaldamez@yahoo.com';
     const roomId = isGroup ? `group_${selectedGroup.id}` : (recipient ? [currentUser.id, recipient.id].sort().join('_') : 'unknown');
+
+    // Fetch Emojis
+    useEffect(() => {
+        const fetchEmojis = async () => {
+            try {
+                const response = await fetch(EMOJI_SOURCE_URL);
+                if (response.ok) {
+                    const data = await response.json();
+                    // The data is object { "name": "emoji_char" }
+                    const emojis = Array.from(new Set(Object.values(data) as string[]));
+                    setEmojiList(emojis);
+                }
+            } catch (error) {
+                console.error("Failed to load emojis, using defaults.", error);
+            }
+        };
+        fetchEmojis();
+    }, []);
 
     // ... subscriptions ...
     useEffect(() => {
@@ -943,6 +963,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 isHighlighted={msg.id === highlightedMessageId} 
                                 isFamily={currentUser.is_family}
                                 isGroup={isGroup}
+                                availableEmojis={emojiList}
                             />
                         ))}
                         {Object.entries(remoteDrafts).map(([uid, draft]) => (
