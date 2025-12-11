@@ -5,6 +5,7 @@ export interface UserProfile {
   updated_at?: string;
   is_family?: boolean; // New feature flag
   avatar_url?: string | null;
+  plan?: 'free' | 'pro' | 'team'; // Added plan field
 }
 
 export interface Group {

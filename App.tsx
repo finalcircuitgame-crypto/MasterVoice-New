@@ -46,10 +46,15 @@ const App: React.FC = () => {
       setIsCallMaximized(false);
   };
 
+  // Determine Plan (Mock logic or based on is_family flag)
+  const userPlan = currentUser?.plan || (currentUser?.is_family ? 'pro' : 'free');
+
   const { 
     callState, 
     remoteStream, 
+    remoteScreenStream, // New
     localVideoStream,
+    localScreenStream, // New
     startCall: rtcStartCall, 
     endCall: rtcEndCall, 
     answerCall: rtcAnswerCall, 
@@ -63,7 +68,7 @@ const App: React.FC = () => {
     rtcStats,
     setInputGain,
     inputGain
-  } = useWebRTC(rtcRoomId, currentUser?.id || '', handleCallEnded);
+  } = useWebRTC(rtcRoomId, currentUser?.id || '', userPlan, handleCallEnded);
 
   // --- PERSISTENCE RESTORATION ---
   useEffect(() => {
@@ -157,7 +162,13 @@ const App: React.FC = () => {
             if (error) throw error;
             setSession(data.session);
             if (data.session?.user) {
-                setCurrentUser({ id: data.session.user.id, email: data.session.user.email || 'No Email', is_family: true });
+                // Assuming is_family means Pro for now, or map plan field from DB
+                setCurrentUser({ 
+                    id: data.session.user.id, 
+                    email: data.session.user.email || 'No Email', 
+                    is_family: true,
+                    plan: 'pro' // Defaulting to pro for demo/testing 60fps
+                });
                 if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
             }
         } catch (err: any) {
@@ -168,7 +179,12 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-          setCurrentUser({ id: session.user.id, email: session.user.email || 'No Email', is_family: true });
+          setCurrentUser({ 
+              id: session.user.id, 
+              email: session.user.email || 'No Email', 
+              is_family: true,
+              plan: 'pro'
+          });
           if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
       } else {
           setCurrentUser(null);
@@ -210,13 +226,12 @@ const App: React.FC = () => {
             });
         }
     } else {
-        // Only clear if neither is active and URL is empty (prevents flicker on initial load)
         if (window.location.pathname === '/conversations' && !window.location.search && (selectedUser || selectedGroup)) {
              setSelectedUser(null);
              setSelectedGroup(null);
         }
     }
-  }, [path, query, currentUser]); // Updated dependencies to rely on router hooks state
+  }, [path, query, currentUser]);
 
   const handleSelectUser = (user: UserProfile) => {
       if (selectedUser?.id !== user.id) {
@@ -258,8 +273,10 @@ const App: React.FC = () => {
             {renderPublicView()}
             <VoiceCallOverlay 
                 callState={callState} 
-                remoteStream={remoteStream} 
+                remoteStream={remoteStream}
+                remoteScreenStream={remoteScreenStream} 
                 localVideoStream={localVideoStream}
+                localScreenStream={localScreenStream}
                 onEndCall={handleEndCall} 
                 onAnswer={handleAnswerCall} 
                 toggleMute={toggleMute}
@@ -361,7 +378,9 @@ const App: React.FC = () => {
         <VoiceCallOverlay 
             callState={callState} 
             remoteStream={remoteStream}
+            remoteScreenStream={remoteScreenStream}
             localVideoStream={localVideoStream} 
+            localScreenStream={localScreenStream}
             onEndCall={handleEndCall} 
             onAnswer={handleAnswerCall} 
             toggleMute={toggleMute}
