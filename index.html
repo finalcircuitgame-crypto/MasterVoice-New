@@ -96,6 +96,17 @@
         75% { transform: rotate(10deg); }
       }
 
+      /* Audio Visualizers */
+      @keyframes wave {
+        0%, 100% { height: 10%; }
+        50% { height: 100%; }
+      }
+
+      @keyframes music {
+        0%, 100% { transform: scaleY(0.3); }
+        50% { transform: scaleY(1); }
+      }
+
       .animate-float {
         animation: float 15s ease-in-out infinite;
       }
@@ -146,6 +157,15 @@
       .animate-wobble {
         animation: wobble 2s ease-in-out infinite;
         display: inline-block;
+      }
+
+      .animate-wave {
+        animation: wave 1s ease-in-out infinite;
+      }
+
+      .animate-music {
+        animation: music 1s ease-in-out infinite;
+        transform-origin: bottom;
       }
 
       .glass-panel {

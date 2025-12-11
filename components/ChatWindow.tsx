@@ -772,7 +772,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {isRecording ? (
                          <div className="w-full flex items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border border-red-500/30 p-2 pl-4 rounded-full shadow-2xl animate-pulse-glow h-[58px]">
                              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shrink-0"></div>
-                             <span className="text-white font-mono font-bold flex-1 text-sm tracking-widest">{formatDuration(recordingTime)} <span className="opacity-50 text-[10px] ml-2">RECORDING</span></span>
+                             
+                             {/* Visualizer */}
+                             <div className="flex items-center gap-0.5 h-8 flex-1 justify-center px-2 opacity-80 overflow-hidden">
+                                {[...Array(20)].map((_, i) => (
+                                    <div 
+                                        key={i} 
+                                        className="w-1 bg-red-500 rounded-full animate-wave" 
+                                        style={{ 
+                                            animationDuration: `${0.6 + Math.random() * 0.4}s`, 
+                                            animationDelay: `${Math.random() * 0.5}s`,
+                                            height: '20%' // Base height handled by animation
+                                        }}
+                                    ></div>
+                                ))}
+                             </div>
+                             
+                             <span className="text-white font-mono font-bold text-sm tracking-widest shrink-0 w-12 text-center">{formatDuration(recordingTime)}</span>
                              
                              <button onClick={handleCancelRecording} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition text-xs font-bold uppercase tracking-wider shrink-0">Cancel</button>
                              <button onClick={handleStopRecording} className="p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95 shrink-0 flex items-center justify-center w-10 h-10">
