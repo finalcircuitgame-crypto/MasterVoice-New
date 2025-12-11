@@ -23,15 +23,10 @@ const App: React.FC = () => {
   // Call Navigation Guard
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
-  // Refs to prevent loops and duplicate toasts
+  // Ref to prevent duplicate welcome toasts
   const hasWelcomedRef = useRef(false);
-  const lastUserIdRef = useRef<string | null>(null);
   
   const { path, navigate, query } = useRouter();
-  
-  // Create a ref for navigate to use in effects safely
-  const navigateRef = useRef(navigate);
-  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   // Resize Listener
   useEffect(() => {
@@ -41,6 +36,7 @@ const App: React.FC = () => {
   }, []);
 
   // --- HOISTED WEBRTC LOGIC ---
+  // Calculate Room ID for P2P signaling
   const roomId = (currentUser && selectedUser) 
     ? [currentUser.id, selectedUser.id].sort().join('_') 
     : null;
@@ -105,59 +101,25 @@ const App: React.FC = () => {
     };
   }, [currentUser?.id]);
 
-  // Auth & User Setup Logic
   useEffect(() => {
-    const setupUser = async (sessionUser: any) => {
-        const onAuthPage = ['/login', '/register'].includes(window.location.pathname);
-
-        // If we have already processed this user AND we aren't trying to leave an auth page, skip.
-        // If we ARE on an auth page, we allow this to run again to ensure redirect happens.
-        if (lastUserIdRef.current === sessionUser.id && !onAuthPage) {
-            return;
-        }
-        
-        lastUserIdRef.current = sessionUser.id;
-
-        let isFamily = false;
-        
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('is_family')
-                .eq('id', sessionUser.id)
-                .single();
-            
-            if (data && !error) {
-                isFamily = data.is_family || false;
-            }
-        } catch (e) {
-            console.error("Error fetching profile:", e);
-        }
-
+    // Helper to set user with Family logic
+    const setupUser = (sessionUser: any) => {
         const userProfile: UserProfile = {
             id: sessionUser.id,
             email: sessionUser.email || 'No Email',
-            is_family: isFamily, 
+            is_family: true, 
         };
+        setCurrentUser(userProfile);
         
-        // Use functional state update to prevent redundant renders if deep equal
-        setCurrentUser(prev => {
-            if (prev && prev.id === userProfile.id && prev.is_family === userProfile.is_family) return prev;
-            return userProfile;
-        });
-        
+        // Show notification once per session load using ref to prevent spam
         if (userProfile.is_family && !hasWelcomedRef.current) {
              setShowFamilyNotification(true);
              hasWelcomedRef.current = true;
              setTimeout(() => setShowFamilyNotification(false), 6000);
         }
-
-        // Force redirect if on auth pages
-        if (onAuthPage) {
-             navigateRef.current('/conversations');
-        }
     };
 
+    // Check active session safely
     const initSession = async () => {
         try {
             const { data, error } = await supabase.auth.getSession();
@@ -165,42 +127,50 @@ const App: React.FC = () => {
             
             setSession(data.session);
             if (data.session?.user) {
-                await setupUser(data.session.user);
+                setupUser(data.session.user);
+                if (['/login', '/register'].includes(window.location.pathname)) {
+                    navigate('/conversations');
+                }
             }
         } catch (err: any) {
             console.error("Session init error:", err.message);
+            // Handle Invalid Refresh Token specifically
             if (err.message?.includes("Refresh Token") || err.message?.includes("refresh_token")) {
                 await supabase.auth.signOut();
                 setSession(null);
                 setCurrentUser(null);
-                lastUserIdRef.current = null;
-                navigateRef.current('/login');
+                navigate('/login');
             }
         }
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
-      
       if (session?.user) {
-          await setupUser(session.user);
-      } else if (event === 'SIGNED_OUT') {
+          setupUser(session.user);
+          // Only redirect from auth pages
+          if (['/login', '/register'].includes(window.location.pathname)) {
+             navigate('/conversations');
+          }
+      } else {
           setCurrentUser(null);
           setSelectedUser(null);
           setOnlineUsers(new Set());
-          hasWelcomedRef.current = false;
-          lastUserIdRef.current = null; // Important: Reset processed ID
+          hasWelcomedRef.current = false; // Reset welcome ref on logout
           
+          // If on protected route, kick to login
           if (['/conversations', '/settings'].includes(window.location.pathname)) {
-            navigateRef.current('/login');
+            navigate('/login');
           }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   // Handle URL-based Chat Selection (Deep Linking)
   useEffect(() => {
@@ -247,6 +217,9 @@ const App: React.FC = () => {
   const showChatInterface = (path === '/conversations' || isSettingsOpen) && session && currentUser;
 
   const renderPublicView = () => {
+      // If we are showing the confirmation modal, just render a background placeholder or the landing page blurred
+      // But we will overlay the modal in the main return
+      
       switch (path) {
           case '/login':
               return (
