@@ -7,11 +7,21 @@ import { ChatWindow } from './components/ChatWindow';
 import { GroupWindow } from './components/GroupWindow';
 import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
-import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage, Documentation } from './components/Pages';
+import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage, Documentation, ApiKeyPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
 
+// --- SDK MIGRATION NOTE ---
+// To use the new SDK defined in /sdk/index.ts:
+// 1. import { MasterVoice, MasterVoiceProvider } from './sdk';
+// 2. const client = new MasterVoice({ 
+//      apiKey: 'mv_pro_test_123', 
+//      supabaseUrl: '...', 
+//      supabaseKey: '...' 
+//    });
+// 3. Wrap <App /> with <MasterVoiceProvider client={client}> ...
+// --------------------------
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -289,7 +299,8 @@ const App: React.FC = () => {
           case '/terms': return <TermsOfService onBack={() => navigate('/')} />;
           case '/contact': return <ContactSupport onBack={() => navigate('/')} />;
           case '/docs': return <Documentation onBack={() => navigate('/')} />;
-          case '/plans/show-more': return <PlansPage onBack={() => navigate('/')} />;
+          case '/plans/show-more': return <PlansPage onBack={() => navigate('/')} onNavigate={navigate} />;
+          case '/api_key': return <ApiKeyPage onBack={() => navigate('/')} />;
           case '/': return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;
           default: if (showChatInterface) return null; return <NotFoundPage onBack={() => navigate('/')} />;
       }

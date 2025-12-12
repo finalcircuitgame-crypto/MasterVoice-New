@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PricingCard } from './LandingPage';
 
 interface PageProps {
@@ -34,6 +34,150 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
     </div>
   </div>
 );
+
+export const ApiKeyPage: React.FC<PageProps> = ({ onBack }) => {
+    const [generatedKeys, setGeneratedKeys] = useState<{key: string, tier: string, created: string}[]>([]);
+    const [selectedTier, setSelectedTier] = useState<'free' | 'pro' | 'elite'>('free');
+    const [loading, setLoading] = useState(false);
+
+    const generateKey = () => {
+        setLoading(true);
+        setTimeout(() => {
+            const random = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+            const prefix = `mv_${selectedTier}_`;
+            const newKey = `${prefix}${random}`;
+            
+            setGeneratedKeys(prev => [{
+                key: newKey,
+                tier: selectedTier,
+                created: new Date().toLocaleDateString()
+            }, ...prev]);
+            setLoading(false);
+        }, 600);
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        // Could show toast here
+    };
+
+    return (
+        <PageLayout title="Developer Console" onBack={onBack} wide={true}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                
+                {/* Left Column: Generator */}
+                <div className="lg:col-span-2 space-y-8">
+                    <section className="bg-[#111] p-8 rounded-2xl border border-white/10 relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h2 className="text-2xl font-bold text-white mb-2">Create New API Key</h2>
+                            <p className="text-gray-400 mb-6 text-sm">Select a tier to generate a key with specific bandwidth and TURN relay capabilities.</p>
+                            
+                            <div className="grid grid-cols-3 gap-4 mb-8">
+                                <button 
+                                    onClick={() => setSelectedTier('free')}
+                                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'free' ? 'bg-white/10 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
+                                >
+                                    <span className="font-bold">Free</span>
+                                    <span className="text-[10px] uppercase tracking-wider">P2P Only</span>
+                                </button>
+                                <button 
+                                    onClick={() => setSelectedTier('pro')}
+                                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'pro' ? 'bg-white/10 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
+                                >
+                                    <span className="font-bold">Pro</span>
+                                    <span className="text-[10px] uppercase tracking-wider">Standard TURN</span>
+                                </button>
+                                <button 
+                                    onClick={() => setSelectedTier('elite')}
+                                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'elite' ? 'bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-amber-500 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
+                                >
+                                    <span className="font-bold">Elite</span>
+                                    <span className="text-[10px] uppercase tracking-wider">Global Relay</span>
+                                </button>
+                            </div>
+
+                            <button 
+                                onClick={generateKey} 
+                                disabled={loading}
+                                className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {loading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"/> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>}
+                                <span>Generate Secret Key</span>
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* Key List */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-bold text-gray-300">Active Keys</h3>
+                        {generatedKeys.length === 0 && (
+                            <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
+                                <p className="text-gray-500 text-sm">No keys generated yet.</p>
+                            </div>
+                        )}
+                        {generatedKeys.map((k, i) => (
+                            <div key={i} className="flex items-center justify-between p-4 bg-[#0a0a0f] border border-white/10 rounded-xl animate-fade-in-up">
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`w-2 h-2 rounded-full ${k.tier === 'elite' ? 'bg-amber-500' : k.tier === 'pro' ? 'bg-indigo-500' : 'bg-gray-500'}`}></span>
+                                        <code className="text-sm font-mono text-white">{k.key}</code>
+                                    </div>
+                                    <span className="text-xs text-gray-500">Created {k.created} • {k.tier.toUpperCase()} Tier</span>
+                                </div>
+                                <button onClick={() => copyToClipboard(k.key)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Right Column: Stats */}
+                <div className="lg:col-span-1">
+                    <div className="bg-gradient-to-b from-[#1a1a20] to-[#0a0a0f] p-6 rounded-2xl border border-white/10 h-full">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-6">Quota Usage</h3>
+                        
+                        <div className="space-y-6">
+                            <div>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <span className="text-white">Monthly Active Users</span>
+                                    <span className="text-indigo-400">1,240 / 10k</span>
+                                </div>
+                                <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 w-[12%]"></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <span className="text-white">TURN Bandwidth</span>
+                                    <span className="text-indigo-400">45 GB / 100 GB</span>
+                                </div>
+                                <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 w-[45%]"></div>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-white/5">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="p-3 bg-green-500/10 rounded-lg">
+                                        <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-white">System Status</p>
+                                        <p className="text-xs text-green-500">All Systems Operational</p>
+                                    </div>
+                                </div>
+                                <button className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-xs font-bold text-gray-300">View Full Health Check</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </PageLayout>
+    );
+};
 
 export const Documentation: React.FC<PageProps> = ({ onBack }) => {
     const [activeSection, setActiveSection] = useState(0);
@@ -352,9 +496,12 @@ using ( true );`}
     );
 }
 
-// ... existing PlanPage, PrivacyPolicy, etc. (kept minimal for brevity if not changed, but must include exports)
-export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
-    // ... same as before
+// Update the export of PlansPage to include navigation props for the buttons
+interface PlansPageProps extends PageProps {
+  onNavigate?: (path: string) => void;
+}
+
+export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
     return (
         <PageLayout title="Plans & Pricing" onBack={onBack} wide={true}>
             <div className="text-center max-w-2xl mx-auto mb-16">
@@ -374,7 +521,7 @@ export const PlansPage: React.FC<PageProps> = ({ onBack }) => {
                     recommended={true}
                     features={["Standard TURN", "10,000 MAU", "Email Support", "99.9% SLA"]}
                     cta="Get API Key"
-                    onAction={() => {}}
+                    onAction={() => onNavigate?.('/api_key')}
                 />
                 <PricingCard 
                     title="Enterprise"
