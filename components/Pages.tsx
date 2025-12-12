@@ -402,21 +402,21 @@ export const ApiKeyPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
                                     className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'free' ? 'bg-white/10 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
                                 >
                                     <span className="font-bold">Free</span>
-                                    <span className="text-[10px] uppercase tracking-wider">P2P Only</span>
+                                    <span className="text-[10px] uppercase tracking-wider">Standard Relay</span>
                                 </button>
                                 <button 
                                     onClick={() => setSelectedTier('pro')}
                                     className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'pro' ? 'bg-white/10 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
                                 >
                                     <span className="font-bold">Pro</span>
-                                    <span className="text-[10px] uppercase tracking-wider">Standard TURN</span>
+                                    <span className="text-[10px] uppercase tracking-wider">Turbo Mesh</span>
                                 </button>
                                 <button 
                                     onClick={() => setSelectedTier('elite')}
                                     className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${selectedTier === 'elite' ? 'bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-amber-500 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.3)]' : 'bg-transparent border-white/10 text-gray-500 hover:border-white/30'}`}
                                 >
                                     <span className="font-bold">Elite</span>
-                                    <span className="text-[10px] uppercase tracking-wider">Global Relay</span>
+                                    <span className="text-[10px] uppercase tracking-wider">Global + SLA</span>
                                 </button>
                             </div>
 
@@ -571,21 +571,21 @@ export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
                 <PricingCard 
                     title="Free" 
                     price="$0" 
-                    features={['Unlimited P2P Calls', 'Standard Audio Quality', '1 Group (Max 5 members)', '7 Day Message History']} 
+                    features={['Unlimited Calls (Relay Included)', 'HD Voice & Video', 'Unlimited Groups', 'Screen Sharing', '30 Day Cloud History']} 
                     cta="Start Free"
                     onAction={() => onNavigate?.('/register')}
                 />
                 <PricingCard 
                     title="Pro" 
-                    price="$12" 
-                    features={['HD Voice & Video', 'Screen Sharing', 'Unlimited Groups', 'Permanent History', 'Priority Relay Support']} 
+                    price="$9" 
+                    features={['4K Ultra HD Video', 'Lossless Audio Mode', 'Priority Global Mesh', 'Permanent History', 'AI Noise Cancellation']} 
                     recommended={true}
                     cta="Get Pro"
                     onAction={() => onNavigate?.('/register?plan=pro')}
                 />
                 <PricingCard 
                     title="Team" 
-                    price="$49" 
+                    price="$29" 
                     features={['Admin Dashboard', 'SSO Integration', 'Custom Retention', 'Dedicated Support', '99.9% SLA']} 
                     cta="Contact Sales"
                     onAction={() => onNavigate?.('/contact')}
@@ -612,11 +612,11 @@ export const ComparePlansPage: React.FC<PageProps> = ({ onBack }) => (
                     </tr>
                 </thead>
                 <tbody className="text-sm">
-                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">P2P Calls</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td></tr>
-                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Quality</td><td className="p-4 text-gray-400">Standard</td><td className="p-4 text-white font-bold">HD 1080p</td><td className="p-4 text-white font-bold">4K Ready</td></tr>
-                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Group Size</td><td className="p-4 text-gray-400">5 Members</td><td className="p-4 text-white">50 Members</td><td className="p-4 text-white">Unlimited</td></tr>
-                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Storage</td><td className="p-4 text-gray-400">1 GB</td><td className="p-4 text-white">50 GB</td><td className="p-4 text-white">1 TB</td></tr>
-                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Support</td><td className="p-4 text-gray-400">Community</td><td className="p-4 text-white">Email</td><td className="p-4 text-white">Dedicated Agent</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">P2P & Relay Calls</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Quality</td><td className="p-4 text-gray-400">HD 1080p</td><td className="p-4 text-white font-bold">4K Ready</td><td className="p-4 text-white font-bold">4K Ready</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Group Size</td><td className="p-4 text-gray-400">Unlimited</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Storage</td><td className="p-4 text-gray-400">5 GB</td><td className="p-4 text-white">100 GB</td><td className="p-4 text-white">1 TB</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Support</td><td className="p-4 text-gray-400">Community</td><td className="p-4 text-white">Priority Email</td><td className="p-4 text-white">Dedicated Agent</td></tr>
                 </tbody>
             </table>
         </div>
