@@ -7,7 +7,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { GroupWindow } from './components/GroupWindow';
 import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
-import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, NotFoundPage, Documentation, ApiKeyPage, VerifyPage, DevPage } from './components/Pages';
+import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, ComparePlansPage, NotFoundPage, Documentation, ApiKeyPage, VerifyPage, DevPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
@@ -300,6 +300,8 @@ const App: React.FC = () => {
           case '/contact': return <ContactSupport onBack={() => navigate('/')} />;
           case '/docs': return <Documentation onBack={() => navigate('/')} />;
           case '/plans/show-more': return <PlansPage onBack={() => navigate('/')} onNavigate={navigate} />;
+          case '/compare':
+          case '/plans/compare': return <ComparePlansPage onBack={() => navigate('/')} onNavigate={navigate} />;
           case '/api_key': return <ApiKeyPage onBack={() => navigate('/')} onNavigate={navigate} />;
           case '/verify': return <VerifyPage onBack={() => navigate('/')} onNavigate={navigate} />;
           case '/dev': return <DevPage onNavigate={navigate} onBack={() => navigate('/')} />;

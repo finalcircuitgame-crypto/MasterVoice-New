@@ -409,7 +409,7 @@ export const NotFoundPage: React.FC<PageProps> = ({ onBack }) => (
 export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
     return (
         <PageLayout title="Choose Your Plan" onBack={onBack} wide={true}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
                 <PricingCard 
                     title="Free" 
                     price="$0" 
@@ -432,6 +432,16 @@ export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
                     cta="Contact Sales"
                     onAction={() => onNavigate?.('/contact')}
                 />
+            </div>
+
+            <div className="text-center">
+                <p className="text-gray-400 mb-4">Not sure which plan is right for you?</p>
+                <button 
+                    onClick={() => onNavigate?.('/compare')} 
+                    className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline transition"
+                >
+                    Compare all features &rarr;
+                </button>
             </div>
         </PageLayout>
     );
@@ -457,3 +467,91 @@ export const DevPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
         </div>
     </PageLayout>
 );
+
+export const ComparePlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
+    const features = [
+        { category: "Core Experience", items: [
+            { name: "P2P Messaging", free: "Unlimited", pro: "Unlimited", team: "Unlimited" },
+            { name: "Voice Calls", free: "Standard Quality", pro: "HD Voice (Opus)", team: "Studio Lossless" },
+            { name: "Video Resolution", free: "720p @ 30fps", pro: "1080p @ 60fps", team: "4K @ 60fps" },
+            { name: "Group Calls", free: "1-on-1 Only", pro: "Up to 10 Participants", team: "Unlimited" },
+            { name: "Screen Sharing", free: "720p", pro: "1080p", team: "4K / Ultra-wide" },
+        ]},
+        { category: "Network & Security", items: [
+            { name: "Encryption", free: "End-to-End (AES-256)", pro: "E2EE (AES-256)", team: "E2EE + HSM Key Mgmt" },
+            { name: "Connection Mode", free: "P2P (STUN Only)", pro: "TURN Relay (UDP)", team: "Global Mesh (TCP/UDP)" },
+            { name: "Firewall Traversal", free: "Basic", pro: "Advanced", team: "Enterprise Grade" },
+            { name: "Reliability SLA", free: "Best Effort", pro: "99.9% Uptime", team: "99.99% Guaranteed" },
+        ]},
+        { category: "Developer & API", items: [
+            { name: "API Rate Limit", free: "100 req/min", pro: "1,000 req/min", team: "Unlimited" },
+            { name: "SDK Access", free: "Standard", pro: "Priority Access", team: "Full Source Code" },
+            { name: "Support Level", free: "Community Forum", pro: "Priority Email", team: "Dedicated Slack Channel" },
+        ]}
+    ];
+
+    return (
+        <PageLayout title="Compare Plans" onBack={onBack} wide={true}>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0f]">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                            <tr className="bg-[#111] border-b border-white/10">
+                                <th className="p-6 text-sm text-gray-400 font-medium w-1/4">Feature</th>
+                                <th className="p-6 text-center w-1/4">
+                                    <div className="font-bold text-white text-lg">Free</div>
+                                    <div className="text-xs text-gray-500 font-normal">$0/mo</div>
+                                </th>
+                                <th className="p-6 text-center w-1/4 bg-indigo-900/10 border-x border-indigo-500/10 relative">
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-indigo-500 text-[9px] font-bold px-2 py-0.5 rounded-b text-white uppercase tracking-wider">Most Popular</div>
+                                    <div className="font-bold text-indigo-400 text-lg">Pro</div>
+                                    <div className="text-xs text-indigo-300/70 font-normal">$9/mo</div>
+                                </th>
+                                <th className="p-6 text-center w-1/4">
+                                    <div className="font-bold text-amber-400 text-lg">Team</div>
+                                    <div className="text-xs text-amber-500/70 font-normal">$29/mo</div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {features.map((section, i) => (
+                                <React.Fragment key={i}>
+                                    <tr>
+                                        <td colSpan={4} className="p-3 px-6 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-[#050508] border-y border-white/5 sticky left-0">
+                                            {section.category}
+                                        </td>
+                                    </tr>
+                                    {section.items.map((feat, j) => (
+                                        <tr key={j} className="group hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
+                                            <td className="p-4 px-6 font-medium text-gray-300">{feat.name}</td>
+                                            <td className="p-4 text-center text-gray-400 text-sm">{feat.free}</td>
+                                            <td className="p-4 text-center text-white font-medium text-sm bg-indigo-900/5 border-x border-indigo-500/10 group-hover:bg-indigo-500/10 transition-colors">{feat.pro}</td>
+                                            <td className="p-4 text-center text-gray-300 text-sm">{feat.team}</td>
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-8 text-center items-center">
+                <div className="hidden md:block"></div>
+                <div>
+                     <button onClick={() => onNavigate?.('/register')} className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition border border-white/10">Start Free</button>
+                </div>
+                <div>
+                    <button onClick={() => onNavigate?.('/verify?tier=pro')} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/20 transform hover:-translate-y-1">Get Pro</button>
+                </div>
+                <div>
+                    <button onClick={() => onNavigate?.('/contact')} className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl transition shadow-lg shadow-amber-600/20">Contact Sales</button>
+                </div>
+            </div>
+            
+            <div className="mt-12 text-center border-t border-white/5 pt-8">
+                <p className="text-gray-500 text-sm">Need a custom enterprise solution? <button onClick={() => onNavigate?.('/contact')} className="text-indigo-400 hover:text-white transition">Talk to us</button></p>
+            </div>
+        </PageLayout>
+    );
+}
