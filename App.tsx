@@ -194,20 +194,41 @@ const App: React.FC = () => {
     return () => { supabase.removeChannel(presenceChannel); };
   }, [currentUser?.id]);
 
+  // --- Realtime Profile Updates (Fix for PFP) ---
   useEffect(() => {
+      if (!currentUser?.id) return;
+      const channel = supabase.channel(`profile_updates:${currentUser.id}`)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` }, (payload) => {
+              // Merge new profile data (like avatar_url) into current state
+              setCurrentUser(prev => prev ? { ...prev, ...payload.new } : null);
+          })
+          .subscribe();
+      return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.id]);
+
+  // --- Auth & Session Init ---
+  useEffect(() => {
+    const fetchUserProfile = async (userId: string, email: string) => {
+        // Fetch extended profile data (avatar_url) from DB
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+        
+        return { 
+            id: userId, 
+            email: email, 
+            is_family: true, // Keeping demo flag
+            plan: 'pro' as const,
+            ...profile // Merge DB data (overwrites defaults if they exist in DB)
+        };
+    };
+
     const initSession = async () => {
         try {
             const { data, error } = await supabase.auth.getSession();
             if (error) throw error;
             setSession(data.session);
             if (data.session?.user) {
-                // Assuming is_family means Pro for now, or map plan field from DB
-                setCurrentUser({ 
-                    id: data.session.user.id, 
-                    email: data.session.user.email || 'No Email', 
-                    is_family: true,
-                    plan: 'pro' // Defaulting to pro for demo/testing 60fps
-                });
+                const user = await fetchUserProfile(data.session.user.id, data.session.user.email || 'No Email');
+                setCurrentUser(user);
                 if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
             }
         } catch (err: any) {
@@ -215,15 +236,12 @@ const App: React.FC = () => {
         }
     };
     initSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-          setCurrentUser({ 
-              id: session.user.id, 
-              email: session.user.email || 'No Email', 
-              is_family: true,
-              plan: 'pro'
-          });
+          const user = await fetchUserProfile(session.user.id, session.user.email || 'No Email');
+          setCurrentUser(user);
           if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
       } else {
           setCurrentUser(null);

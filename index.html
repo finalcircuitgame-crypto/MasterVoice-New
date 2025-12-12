@@ -217,16 +217,37 @@
 </script>
 </head>
   <body class="bg-[#030014] text-gray-100 antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
-    <div id="cursor" class="custom-cursor hidden md:block"></div>
+    <!-- Removed 'hidden md:block' to make visible on all screens -->
+    <div id="cursor" class="custom-cursor"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
     <script>
       // Custom Cursor Logic
       const cursor = document.getElementById('cursor');
+      
+      // Update position function
+      const updateCursorPos = (x, y) => {
+        cursor.style.left = x + 'px';
+        cursor.style.top = y + 'px';
+      };
+
+      // Mouse events
       document.addEventListener('mousemove', (e) => {
-        cursor.style.left = e.clientX + 'px';
-        cursor.style.top = e.clientY + 'px';
+        updateCursorPos(e.clientX, e.clientY);
       });
+
+      // Touch events for mobile support
+      document.addEventListener('touchmove', (e) => {
+        if (e.touches[0]) {
+          updateCursorPos(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      });
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches[0]) {
+          updateCursorPos(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      });
+
       document.querySelectorAll('a, button, input').forEach(el => {
         el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
         el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
