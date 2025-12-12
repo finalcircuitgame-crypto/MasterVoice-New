@@ -194,18 +194,6 @@ const App: React.FC = () => {
     return () => { supabase.removeChannel(presenceChannel); };
   }, [currentUser?.id]);
 
-  // --- Realtime Profile Updates (Fix for PFP) ---
-  useEffect(() => {
-      if (!currentUser?.id) return;
-      const channel = supabase.channel(`profile_updates:${currentUser.id}`)
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` }, (payload) => {
-              // Merge new profile data (like avatar_url) into current state
-              setCurrentUser(prev => prev ? { ...prev, ...payload.new } : null);
-          })
-          .subscribe();
-      return () => { supabase.removeChannel(channel); };
-  }, [currentUser?.id]);
-
   useEffect(() => {
     const initSession = async () => {
         try {
@@ -213,15 +201,12 @@ const App: React.FC = () => {
             if (error) throw error;
             setSession(data.session);
             if (data.session?.user) {
-                // Fetch full profile to get avatar_url immediately on load
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.session.user.id).single();
-                
+                // Assuming is_family means Pro for now, or map plan field from DB
                 setCurrentUser({ 
                     id: data.session.user.id, 
                     email: data.session.user.email || 'No Email', 
                     is_family: true,
-                    plan: 'pro',
-                    ...profile // Spread DB profile data
+                    plan: 'pro' // Defaulting to pro for demo/testing 60fps
                 });
                 if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
             }
@@ -233,13 +218,11 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-          const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
           setCurrentUser({ 
               id: session.user.id, 
               email: session.user.email || 'No Email', 
               is_family: true,
-              plan: 'pro',
-              ...profile
+              plan: 'pro'
           });
           if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
       } else {
