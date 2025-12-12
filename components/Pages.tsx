@@ -39,12 +39,6 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: 
 
 // --- Theme Editor Helper ---
 const generateShades = (hex: string) => {
-    // Basic helper to adjust lightness.
-    // In a real app, use HSL. Here we use a simplified approach or just CSS manipulation
-    // for this demo, we'll try to guess shades or just return the base for all (not ideal)
-    // Better approach: Use CSS variables on the root and manipulate HSL.
-    // Since we don't have a library, we will rely on a simple Hex -> HSL -> Hex logic.
-    
     const hexToRgb = (hex: string) => {
         const bigint = parseInt(hex.slice(1), 16);
         return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
@@ -95,7 +89,6 @@ const generateShades = (hex: string) => {
     const [h, s, l] = rgbToHsl(r, g, b);
 
     // Generate Tailwind-like shades
-    // 50: L~95, 500: Base L, 900: L~20
     const shadeMap = {
         50: 0.95, 100: 0.9, 200: 0.8, 300: 0.7, 400: 0.6,
         500: l, // Base
@@ -104,22 +97,14 @@ const generateShades = (hex: string) => {
 
     const palette: any = {};
     for (const [key, val] of Object.entries(shadeMap)) {
-        // If key < 500, we interpolate between base L and 1.0
-        // If key > 500, we interpolate between base L and 0.0
         let newL = val;
-        // Adjust logic to be relative to input lightness for better results?
-        // Simple override:
         if (key === '500') newL = l;
         else if (parseInt(key) < 500) {
-             // Lighter
              newL = l + (1 - l) * (1 - (parseInt(key)/500)); 
-             // Correction for 50 being almost white
              if(parseInt(key) === 50) newL = 0.97;
         } else {
-             // Darker
              newL = l * (1 - ((parseInt(key) - 500) / 550));
         }
-        
         palette[key] = hslToRgb(h, s, Math.max(0, Math.min(1, newL)));
     }
     return palette;
@@ -127,22 +112,30 @@ const generateShades = (hex: string) => {
 
 export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
     const [baseColor, setBaseColor] = useState('#6366f1');
+    const [gradientStart, setGradientStart] = useState('#6366f1');
+    const [gradientEnd, setGradientEnd] = useState('#a855f7');
     const [palette, setPalette] = useState<any>({});
+    const [customGradient, setCustomGradient] = useState('');
 
     useEffect(() => {
         setPalette(generateShades(baseColor));
     }, [baseColor]);
 
+    useEffect(() => {
+        setCustomGradient(`linear-gradient(135deg, ${gradientStart}, ${gradientEnd})`);
+    }, [gradientStart, gradientEnd]);
+
     const handleSave = () => {
-        // Apply immediately
         const root = document.documentElement;
         Object.entries(palette).forEach(([key, value]) => {
             root.style.setProperty(`--theme-${key}`, value as string);
         });
         
-        // Persist
+        root.style.setProperty('--theme-gradient', customGradient);
+        
         localStorage.setItem('mv_theme_name', 'custom');
         localStorage.setItem('mv_theme_custom', JSON.stringify(palette));
+        localStorage.setItem('mv_theme_gradient', customGradient);
         
         onNavigate?.('/settings');
     };
@@ -150,16 +143,56 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
     return (
         <PageLayout title="Theme Editor" onBack={onBack}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                <div>
-                    <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wide">Pick Base Color</label>
-                    <div className="flex gap-4 items-center mb-8">
-                        <input 
-                            type="color" 
-                            value={baseColor} 
-                            onChange={(e) => setBaseColor(e.target.value)} 
-                            className="w-16 h-16 rounded-xl cursor-pointer bg-transparent border-0 p-0"
-                        />
-                        <div className="text-xl font-mono text-white">{baseColor}</div>
+                <div className="space-y-8">
+                    {/* Base Color Section */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wide">Base Color (Solid)</label>
+                        <div className="flex gap-4 items-center">
+                            <input 
+                                type="color" 
+                                value={baseColor} 
+                                onChange={(e) => setBaseColor(e.target.value)} 
+                                className="w-16 h-16 rounded-xl cursor-pointer bg-transparent border-0 p-0"
+                            />
+                            <div className="text-xl font-mono text-white">{baseColor}</div>
+                        </div>
+                    </div>
+
+                    {/* Gradient Section */}
+                    <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+                         <label className="block text-sm font-bold text-gray-400 mb-4 uppercase tracking-wide">Custom Gradient</label>
+                         <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                 <span className="text-xs text-gray-500 mb-1 block">Start Color</span>
+                                 <div className="flex gap-3 items-center">
+                                    <input 
+                                        type="color" 
+                                        value={gradientStart} 
+                                        onChange={(e) => setGradientStart(e.target.value)} 
+                                        className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                                    />
+                                    <span className="text-xs font-mono">{gradientStart}</span>
+                                 </div>
+                             </div>
+                             <div>
+                                 <span className="text-xs text-gray-500 mb-1 block">End Color</span>
+                                 <div className="flex gap-3 items-center">
+                                    <input 
+                                        type="color" 
+                                        value={gradientEnd} 
+                                        onChange={(e) => setGradientEnd(e.target.value)} 
+                                        className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                                    />
+                                    <span className="text-xs font-mono">{gradientEnd}</span>
+                                 </div>
+                             </div>
+                         </div>
+                         <div 
+                             className="mt-4 h-12 w-full rounded-xl shadow-lg border border-white/10 flex items-center justify-center text-sm font-bold text-white text-shadow"
+                             style={{ background: customGradient }}
+                         >
+                             Gradient Preview
+                         </div>
                     </div>
 
                     <h3 className="text-lg font-bold text-white mb-4">Generated Palette</h3>
@@ -175,7 +208,7 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
 
                     <div className="flex gap-4">
                         <button onClick={handleSave} className="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Save Theme</button>
-                        <button onClick={() => setBaseColor('#6366f1')} className="px-8 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition">Reset</button>
+                        <button onClick={() => { setBaseColor('#6366f1'); setGradientStart('#6366f1'); setGradientEnd('#a855f7'); }} className="px-8 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition">Reset</button>
                     </div>
                 </div>
 
@@ -187,7 +220,7 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
                         {/* Fake Header */}
                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5" style={{ borderColor: 'var(--theme-900)' }}>
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: `linear-gradient(to right, ${palette[500]}, ${palette[700]})` }}>
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: customGradient }}>
                                     A
                                 </div>
                                 <div>
@@ -208,7 +241,7 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
                                 </div>
                             </div>
                             <div className="flex justify-end">
-                                <div className="p-3 rounded-2xl rounded-br-sm text-sm text-white max-w-[80%] shadow-lg" style={{ background: `linear-gradient(135deg, ${palette[600]}, ${palette[500]})` }}>
+                                <div className="p-3 rounded-2xl rounded-br-sm text-sm text-white max-w-[80%] shadow-lg" style={{ background: customGradient }}>
                                     It looks amazing! The generated shades are perfect.
                                 </div>
                             </div>
@@ -227,7 +260,7 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
                                 className="w-full bg-[#1a1a20] border border-white/10 rounded-full py-3 px-4 text-sm text-white focus:outline-none focus:ring-2"
                                 style={{ '--tw-ring-color': palette[500] } as any}
                             />
-                            <button className="absolute right-2 top-2 p-1.5 rounded-full text-white transition hover:scale-110" style={{ backgroundColor: palette[500] }}>
+                            <button className="absolute right-2 top-2 p-1.5 rounded-full text-white transition hover:scale-110" style={{ background: customGradient }}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                             </button>
                         </div>
@@ -245,7 +278,6 @@ export const VerifyPage: React.FC<PageProps> = ({ onNavigate }) => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        // SECURITY FIX: Whitelist allowed tiers
         const rawTier = params.get('tier');
         const allowedTiers = ['free', 'pro', 'elite'];
         const tier = allowedTiers.includes(rawTier || '') ? rawTier : 'free';
@@ -307,27 +339,22 @@ export const ApiKeyPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
     const [loading, setLoading] = useState(false);
     const hasAutoGenerated = React.useRef(false);
 
-    // Check for verification redirect
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const verified = params.get('verified') === 'true';
         const rawTier = params.get('tier');
         const allowedTiers = ['free', 'pro', 'elite'];
-        
-        // SECURITY FIX: Whitelist allowed tiers before generation
         const tier = allowedTiers.includes(rawTier || '') ? rawTier : 'free';
 
         if (verified && tier && !hasAutoGenerated.current) {
             hasAutoGenerated.current = true;
             setSelectedTier(tier as any);
             generateKeyInternal(tier as any);
-            // Clean URL
             window.history.replaceState({}, '', window.location.pathname);
         }
     }, []);
 
     const generateKeyInternal = (tier: string) => {
-        // Double check just in case called directly
         const allowedTiers = ['free', 'pro', 'elite'];
         const safeTier = allowedTiers.includes(tier) ? tier : 'free';
 
@@ -356,7 +383,6 @@ export const ApiKeyPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        // Could show toast here
     };
 
     return (
@@ -483,373 +509,180 @@ export const ApiKeyPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
     );
 };
 
-export const MauLimitPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
-    return (
-        <PageLayout title="Understanding MAU Limits" onBack={onBack} wide={true}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                <div className="space-y-6">
-                    <p className="text-xl text-white font-medium">
-                        Why does the Pro Plan limit Monthly Active Users?
-                    </p>
-                    <p className="text-gray-400 leading-relaxed">
-                        Unlike standard REST APIs where costs are based on simple request counts, 
-                        MasterVoice Pro enables <strong>TURN Relay</strong> functionality for 
-                        firewall traversal.
-                    </p>
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                        <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                            The Bandwidth Cost
-                        </h4>
-                        <p className="text-sm text-gray-400 mb-4">
-                            When two users cannot connect directly (P2P) due to corporate firewalls or symmetric NATs, 
-                            all their video and audio traffic is routed through our TURN servers.
-                        </p>
-                        <ul className="text-sm text-gray-400 space-y-2 list-disc pl-4">
-                            <li>A single 1-hour HD video call consumes ~1.5 GB of data.</li>
-                            <li>If 10,000 users each make one call, that's 15 Terabytes of relay bandwidth.</li>
-                            <li>Relay servers require high-performance networking and CPU to maintain low latency.</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div className="relative">
-                    <div className="absolute inset-0 bg-indigo-500/10 blur-3xl rounded-full"></div>
-                    <div className="relative bg-[#0a0a0f] border border-white/10 p-8 rounded-3xl">
-                        <h3 className="text-xl font-bold text-white mb-6">Cost Breakdown Visualization</h3>
-                        
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center font-bold">Free</div>
-                                <div className="flex-1">
-                                    <div className="h-2 bg-gray-800 rounded-full w-full">
-                                        <div className="h-full bg-gray-600 rounded-full w-[10%]"></div>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">P2P Only (No Server Cost)</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-indigo-900 flex items-center justify-center font-bold text-indigo-400">Pro</div>
-                                <div className="flex-1">
-                                    <div className="h-2 bg-gray-800 rounded-full w-full">
-                                        <div className="h-full bg-indigo-500 rounded-full w-[60%]"></div>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">10k MAU Cap (Standard TURN)</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-amber-900 flex items-center justify-center font-bold text-amber-400">Elite</div>
-                                <div className="flex-1">
-                                    <div className="h-2 bg-gray-800 rounded-full w-full relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 animate-pulse"></div>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">Unlimited / Custom Volume</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 pt-6 border-t border-white/10">
-                            <button onClick={() => onNavigate?.('/contact')} className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">
-                                Contact Sales for High Volume
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </PageLayout>
-    );
-};
-
-export const Documentation: React.FC<PageProps> = ({ onBack }) => {
-    const [activeSection, setActiveSection] = useState(0);
-    const [sdkPlan, setSdkPlan] = useState<'free' | 'pro' | 'elite'>('free');
-
-    const sections = [
-        "Introduction & Setup",
-        "Authentication",
-        "Session Management",
-        "Realtime Messaging",
-        "Group Management",
-        "WebRTC Engine (Core)",
-        "Voice & Audio Graph",
-        "Video & Screen Share",
-        "Events & Webhooks",
-        "Troubleshooting & FAQ",
-        "React Hooks"
-    ];
-
-    return (
-        <PageLayout title="MasterVoice SDK Reference" onBack={onBack} wide={true}>
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-                {/* Sidebar Navigation */}
-                <div className="lg:col-span-1 border-r border-white/10 pr-6">
-                    <h4 className="font-bold text-white mb-6 uppercase text-xs tracking-wider">SDK Modules</h4>
-                    <ul className="space-y-1">
-                        {sections.map((sec, i) => (
-                            <li 
-                                key={i} 
-                                onClick={() => setActiveSection(i)}
-                                className={`cursor-pointer px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeSection === i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                                {i + 1}. {sec}
-                            </li>
-                        ))}
-                    </ul>
-                    
-                    <div className="mt-8 p-4 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
-                        <p className="text-xs text-indigo-300 font-bold mb-2">LATEST VERSION</p>
-                        <p className="text-white font-mono text-sm">v2.2.0-beta</p>
-                    </div>
-                </div>
-
-                {/* Content Area */}
-                <div className="lg:col-span-3 min-h-[600px]">
-                    {activeSection === 0 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">1. Introduction & Setup</h2>
-                            <p className="mb-6">The MasterVoice SDK provides a unified interface for Supabase Auth, Realtime database events, and WebRTC media handling. It abstracts the complexity of signaling and ICE negotiation.</p>
-                            
-                            <h3 className="text-xl font-bold text-white mb-2">Installation</h3>
-                            <div className="bg-[#111] p-4 rounded-xl border border-white/10 mb-6 font-mono text-sm text-gray-300">
-                                npm install @supabase/supabase-js mastervoice-sdk
-                            </div>
-
-                            <h3 className="text-xl font-bold text-white mb-2">Initialization</h3>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`import { MasterVoice } from 'mastervoice-sdk';
-
-const client = new MasterVoice({
-  apiKey: 'mv_pk_test_...',
-  supabaseUrl: 'https://xyz.supabase.co',
-  supabaseKey: 'eyJ...'
-});`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 1 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">2. Authentication</h2>
-                            <p className="mb-6">The SDK wraps Supabase GoTrue to provide session persistence and automatic token refreshing for WebSocket connections.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Sign Up
-const { user, error } = await client.auth.signUp({
-  email: 'dev@example.com',
-  password: 'secure-password'
-});
-
-// Sign In
-const session = await client.auth.signInWithPassword({
-  email: 'dev@example.com',
-  password: 'secure-password'
-});`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 2 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">3. Session Management</h2>
-                            <p className="mb-6">Manage user presence and connection state.</p>
-                            <ul className="list-disc pl-5 space-y-2 mb-6 text-gray-400">
-                                <li><strong>Heartbeat:</strong> Automatic ping/pong every 30s.</li>
-                                <li><strong>Presence:</strong> Realtime online status synchronization.</li>
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </PageLayout>
-    );
-};
-
 export const PrivacyPolicy: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Privacy Policy" onBack={onBack}>
-      <p className="mb-4">Effective Date: October 26, 2023</p>
-      <h3>1. Introduction</h3>
-      <p>Welcome to MasterVoice. We are committed to protecting your privacy and ensuring you have a positive experience on our website and in using our products and services.</p>
-      <h3>2. Data Collection</h3>
-      <p>We do not collect personal data beyond what is required for authentication (email). All communication is peer-to-peer and encrypted.</p>
-  </PageLayout>
+    <PageLayout title="Privacy Policy" onBack={onBack}>
+        <h3>1. Data Collection</h3>
+        <p>We collect minimal data required to establish peer-to-peer connections. Messages are end-to-end encrypted and are not stored on our servers once delivered.</p>
+        <h3>2. Usage</h3>
+        <p>Data is used solely for service delivery and improvement. We do not sell your data.</p>
+        <h3>3. Encryption</h3>
+        <p>All calls and messages use industry-standard encryption protocols (DTLS/SRTP for WebRTC, AES-256 for messages).</p>
+    </PageLayout>
 );
 
 export const TermsOfService: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Terms of Service" onBack={onBack}>
-      <h3>1. Acceptance of Terms</h3>
-      <p>By accessing and using MasterVoice, you accept and agree to be bound by the terms and provision of this agreement.</p>
-      <h3>2. Use License</h3>
-      <p>Permission is granted to temporarily download one copy of the materials (information or software) on MasterVoice's website for personal, non-commercial transitory viewing only.</p>
-  </PageLayout>
+    <PageLayout title="Terms of Service" onBack={onBack}>
+        <h3>1. Acceptance</h3>
+        <p>By using MasterVoice, you agree to these terms.</p>
+        <h3>2. Conduct</h3>
+        <p>You may not use the service for illegal activities or harassment.</p>
+        <h3>3. Liability</h3>
+        <p>MasterVoice is provided "as is" without warranties.</p>
+    </PageLayout>
 );
 
 export const ContactSupport: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Contact Support" onBack={onBack}>
-      <p className="mb-6">Have questions or need help? Reach out to our team.</p>
-      <div className="bg-[#111] p-6 rounded-xl border border-white/10">
-          <p className="mb-2"><strong>Email:</strong> support@mastervoice.io</p>
-          <p className="mb-2"><strong>Twitter:</strong> @MasterVoiceHQ</p>
-          <p><strong>Discord:</strong> discord.gg/mastervoice</p>
-      </div>
-  </PageLayout>
+    <PageLayout title="Contact Support" onBack={onBack}>
+        <p>Need help? Reach out to our team.</p>
+        <div className="mt-8">
+            <p className="font-bold text-white">Email</p>
+            <p className="text-indigo-400">support@mastervoice.dev</p>
+        </div>
+        <div className="mt-4">
+            <p className="font-bold text-white">Discord</p>
+            <p className="text-indigo-400">Join our community server</p>
+        </div>
+    </PageLayout>
 );
 
 export const NotFoundPage: React.FC<PageProps> = ({ onBack }) => (
-  <div className="min-h-screen bg-[#030014] flex flex-col items-center justify-center font-['Outfit'] relative">
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-      <h1 className="text-9xl font-bold text-white/10 relative z-10">404</h1>
-      <h2 className="text-2xl text-white font-bold mb-4 relative z-10">Page Not Found</h2>
-      <button onClick={onBack} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition relative z-10">Go Back Home</button>
-  </div>
+    <div className="min-h-screen bg-[#030014] flex flex-col items-center justify-center text-center p-6 font-['Outfit']">
+        <h1 className="text-9xl font-bold text-gray-800">404</h1>
+        <h2 className="text-3xl font-bold text-white mt-4">Page Not Found</h2>
+        <p className="text-gray-400 mt-2 mb-8">The coordinate you are looking for does not exist in this mesh.</p>
+        <button onClick={onBack} className="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Go Home</button>
+    </div>
 );
 
-export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
-    return (
-        <PageLayout title="Choose Your Plan" onBack={onBack} wide={true}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
+    <div className="min-h-screen bg-[#030014] overflow-y-auto font-['Outfit'] pt-24 pb-12">
+        <div className="fixed top-6 left-6 z-50">
+             <button onClick={onBack} className="flex items-center text-gray-400 hover:text-white transition bg-black/50 p-2 rounded-full backdrop-blur-md border border-white/10">
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+             </button>
+        </div>
+        <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Choose your frequency</h1>
+                <p className="text-gray-400 text-lg">Scalable plans for individuals and teams.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
                 <PricingCard 
                     title="Free" 
                     price="$0" 
-                    features={['P2P Calling', 'Unlimited Messages', 'Standard Quality', 'Community Support']} 
-                    cta="Get Started"
+                    features={['Unlimited P2P Calls', 'Standard Audio Quality', '1 Group (Max 5 members)', '7 Day Message History']} 
+                    cta="Start Free"
                     onAction={() => onNavigate?.('/register')}
                 />
                 <PricingCard 
                     title="Pro" 
-                    price="$9" 
-                    features={['TURN Relay (Firewall Bypass)', 'HD Voice & Video', 'Group Calls (up to 10)', 'Priority Support']} 
+                    price="$12" 
+                    features={['HD Voice & Video', 'Screen Sharing', 'Unlimited Groups', 'Permanent History', 'Priority Relay Support']} 
                     recommended={true}
-                    cta="Start Trial"
-                    onAction={() => onNavigate?.('/verify?tier=pro')}
+                    cta="Get Pro"
+                    onAction={() => onNavigate?.('/register?plan=pro')}
                 />
                 <PricingCard 
                     title="Team" 
-                    price="$29" 
-                    features={['Global Low Latency Network', '4K Screen Sharing', 'Unlimited Group Size', 'Dedicated Support']} 
+                    price="$49" 
+                    features={['Admin Dashboard', 'SSO Integration', 'Custom Retention', 'Dedicated Support', '99.9% SLA']} 
                     cta="Contact Sales"
                     onAction={() => onNavigate?.('/contact')}
                 />
             </div>
-
-            <div className="text-center">
-                <p className="text-gray-400 mb-4">Not sure which plan is right for you?</p>
-                <button 
-                    onClick={() => onNavigate?.('/compare')} 
-                    className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline transition"
-                >
-                    Compare all features &rarr;
-                </button>
+            
+            <div className="mt-16 text-center">
+                <button onClick={() => onNavigate?.('/compare')} className="text-indigo-400 hover:text-white font-bold underline decoration-2 underline-offset-4">Compare all features &rarr;</button>
             </div>
-        </PageLayout>
-    );
-};
+        </div>
+    </div>
+);
 
-export const DevPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
-    <PageLayout title="Developer Tools" onBack={onBack}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div 
-                onClick={() => onNavigate?.('/docs')}
-                className="p-6 bg-[#111] border border-white/10 rounded-2xl cursor-pointer hover:bg-[#1a1a20] transition group"
-            >
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">Documentation</h3>
-                <p className="text-gray-400 text-sm">Read the full SDK reference and integration guides.</p>
+export const ComparePlansPage: React.FC<PageProps> = ({ onBack }) => (
+    <PageLayout title="Compare Plans" onBack={onBack} wide={true}>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-white/10">
+                        <th className="p-4 text-gray-400 font-medium">Feature</th>
+                        <th className="p-4 text-white font-bold">Free</th>
+                        <th className="p-4 text-indigo-400 font-bold">Pro</th>
+                        <th className="p-4 text-white font-bold">Team</th>
+                    </tr>
+                </thead>
+                <tbody className="text-sm">
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">P2P Calls</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td><td className="p-4 text-white">Unlimited</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Quality</td><td className="p-4 text-gray-400">Standard</td><td className="p-4 text-white font-bold">HD 1080p</td><td className="p-4 text-white font-bold">4K Ready</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Group Size</td><td className="p-4 text-gray-400">5 Members</td><td className="p-4 text-white">50 Members</td><td className="p-4 text-white">Unlimited</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Storage</td><td className="p-4 text-gray-400">1 GB</td><td className="p-4 text-white">50 GB</td><td className="p-4 text-white">1 TB</td></tr>
+                    <tr className="border-b border-white/5"><td className="p-4 text-gray-300">Support</td><td className="p-4 text-gray-400">Community</td><td className="p-4 text-white">Email</td><td className="p-4 text-white">Dedicated Agent</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </PageLayout>
+);
+
+export const Documentation: React.FC<PageProps> = ({ onBack }) => (
+    <PageLayout title="Documentation" onBack={onBack} wide={true}>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="md:col-span-1 border-r border-white/10 pr-4 space-y-2">
+                <button className="text-indigo-400 font-bold block text-left w-full">Getting Started</button>
+                <button className="text-gray-500 hover:text-white block text-left w-full">Authentication</button>
+                <button className="text-gray-500 hover:text-white block text-left w-full">WebRTC Basics</button>
+                <button className="text-gray-500 hover:text-white block text-left w-full">Signaling</button>
+                <button className="text-gray-500 hover:text-white block text-left w-full">Error Handling</button>
             </div>
-            <div 
-                onClick={() => onNavigate?.('/api_key')}
-                className="p-6 bg-[#111] border border-white/10 rounded-2xl cursor-pointer hover:bg-[#1a1a20] transition group"
-            >
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">API Keys</h3>
-                <p className="text-gray-400 text-sm">Manage your secret keys and view usage quotas.</p>
+            <div className="md:col-span-3">
+                <h2 className="text-2xl font-bold mb-4">Quick Start</h2>
+                <p className="mb-4">Install the MasterVoice SDK to get started.</p>
+                <pre className="bg-black/50 p-4 rounded-xl border border-white/10 font-mono text-sm mb-6">
+                    <code>npm install @mastervoice/sdk</code>
+                </pre>
+                <p className="mb-4">Initialize the client with your API Key.</p>
+                <pre className="bg-black/50 p-4 rounded-xl border border-white/10 font-mono text-sm">
+                    <code>{`import { MasterVoice } from '@mastervoice/sdk';
+
+const client = new MasterVoice({
+  apiKey: 'mv_free_...'
+});`}</code>
+                </pre>
             </div>
         </div>
     </PageLayout>
 );
 
-export const ComparePlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
-    const features = [
-        { category: "Core Experience", items: [
-            { name: "P2P Messaging", free: "Unlimited", pro: "Unlimited", team: "Unlimited" },
-            { name: "Voice Calls", free: "Standard Quality", pro: "HD Voice (Opus)", team: "Studio Lossless" },
-            { name: "Video Resolution", free: "720p @ 30fps", pro: "1080p @ 60fps", team: "4K @ 60fps" },
-            { name: "Group Calls", free: "1-on-1 Only", pro: "Up to 10 Participants", team: "Unlimited" },
-            { name: "Screen Sharing", free: "720p", pro: "1080p", team: "4K / Ultra-wide" },
-        ]},
-        { category: "Network & Security", items: [
-            { name: "Encryption", free: "End-to-End (AES-256)", pro: "E2EE (AES-256)", team: "E2EE + HSM Key Mgmt" },
-            { name: "Connection Mode", free: "P2P (STUN Only)", pro: "TURN Relay (UDP)", team: "Global Mesh (TCP/UDP)" },
-            { name: "Firewall Traversal", free: "Basic", pro: "Advanced", team: "Enterprise Grade" },
-            { name: "Reliability SLA", free: "Best Effort", pro: "99.9% Uptime", team: "99.99% Guaranteed" },
-        ]},
-        { category: "Developer & API", items: [
-            { name: "API Rate Limit", free: "100 req/min", pro: "1,000 req/min", team: "Unlimited" },
-            { name: "SDK Access", free: "Standard", pro: "Priority Access", team: "Full Source Code" },
-            { name: "Support Level", free: "Community Forum", pro: "Priority Email", team: "Dedicated Slack Channel" },
-        ]}
-    ];
+export const DevPage: React.FC<PageProps> = ({ onNavigate, onBack }) => (
+    <PageLayout title="Developer Console" onBack={onBack}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div onClick={() => onNavigate?.('/api_key')} className="p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition cursor-pointer group">
+                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">API Keys</h3>
+                <p className="text-gray-400 text-sm">Manage your API keys, view quotas, and monitor usage.</p>
+            </div>
+            <div onClick={() => onNavigate?.('/docs')} className="p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition cursor-pointer group">
+                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">Documentation</h3>
+                <p className="text-gray-400 text-sm">Read the guides, API references, and SDK documentation.</p>
+            </div>
+            <div className="p-6 bg-white/5 border border-white/10 rounded-2xl opacity-50 cursor-not-allowed">
+                <h3 className="text-xl font-bold text-white mb-2">Webhooks (Coming Soon)</h3>
+                <p className="text-gray-400 text-sm">Real-time event notifications for your server.</p>
+            </div>
+            <div className="p-6 bg-white/5 border border-white/10 rounded-2xl opacity-50 cursor-not-allowed">
+                <h3 className="text-xl font-bold text-white mb-2">Analytics (Coming Soon)</h3>
+                <p className="text-gray-400 text-sm">Deep insights into call quality and user engagement.</p>
+            </div>
+        </div>
+    </PageLayout>
+);
 
-    return (
-        <PageLayout title="Compare Plans" onBack={onBack} wide={true}>
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0f]">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead>
-                            <tr className="bg-[#111] border-b border-white/10">
-                                <th className="p-6 text-sm text-gray-400 font-medium w-1/4">Feature</th>
-                                <th className="p-6 text-center w-1/4">
-                                    <div className="font-bold text-white text-lg">Free</div>
-                                    <div className="text-xs text-gray-500 font-normal">$0/mo</div>
-                                </th>
-                                <th className="p-6 text-center w-1/4 bg-indigo-900/10 border-x border-indigo-500/10 relative">
-                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-indigo-500 text-[9px] font-bold px-2 py-0.5 rounded-b text-white uppercase tracking-wider">Most Popular</div>
-                                    <div className="font-bold text-indigo-400 text-lg">Pro</div>
-                                    <div className="text-xs text-indigo-300/70 font-normal">$9/mo</div>
-                                </th>
-                                <th className="p-6 text-center w-1/4">
-                                    <div className="font-bold text-amber-400 text-lg">Team</div>
-                                    <div className="text-xs text-amber-500/70 font-normal">$29/mo</div>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {features.map((section, i) => (
-                                <React.Fragment key={i}>
-                                    <tr>
-                                        <td colSpan={4} className="p-3 px-6 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-[#050508] border-y border-white/5 sticky left-0">
-                                            {section.category}
-                                        </td>
-                                    </tr>
-                                    {section.items.map((feat, j) => (
-                                        <tr key={j} className="group hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
-                                            <td className="p-4 px-6 font-medium text-gray-300">{feat.name}</td>
-                                            <td className="p-4 text-center text-gray-400 text-sm">{feat.free}</td>
-                                            <td className="p-4 text-center text-white font-medium text-sm bg-indigo-900/5 border-x border-indigo-500/10 group-hover:bg-indigo-500/10 transition-colors">{feat.pro}</td>
-                                            <td className="p-4 text-center text-gray-300 text-sm">{feat.team}</td>
-                                        </tr>
-                                    ))}
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-8 text-center items-center">
-                <div className="hidden md:block"></div>
-                <div>
-                     <button onClick={() => onNavigate?.('/register')} className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition border border-white/10">Start Free</button>
-                </div>
-                <div>
-                    <button onClick={() => onNavigate?.('/verify?tier=pro')} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/20 transform hover:-translate-y-1">Get Pro</button>
-                </div>
-                <div>
-                    <button onClick={() => onNavigate?.('/contact')} className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl transition shadow-lg shadow-amber-600/20">Contact Sales</button>
-                </div>
-            </div>
-            
-            <div className="mt-12 text-center border-t border-white/5 pt-8">
-                <p className="text-gray-500 text-sm">Need a custom enterprise solution? <button onClick={() => onNavigate?.('/contact')} className="text-indigo-400 hover:text-white transition">Talk to us</button></p>
-            </div>
-        </PageLayout>
-    );
-}
+export const MauLimitPage: React.FC<PageProps> = ({ onBack }) => (
+    <PageLayout title="MAU Limits Explained" onBack={onBack}>
+        <p>To ensure fair usage and system stability, we limit the number of Monthly Active Users (MAU) for each API key tier.</p>
+        <ul className="list-disc pl-5 space-y-2 mt-4 text-gray-300">
+            <li><strong>Free Tier:</strong> 10k MAU. Suitable for hobby projects and small startups.</li>
+            <li><strong>Pro Tier:</strong> 100k MAU. Designed for growing businesses.</li>
+            <li><strong>Elite Tier:</strong> Unlimited MAU. For enterprise-scale applications.</li>
+        </ul>
+        <p className="mt-6">If you exceed your limit, new connections may be throttled until the next billing cycle or until you upgrade your plan.</p>
+    </PageLayout>
+);
