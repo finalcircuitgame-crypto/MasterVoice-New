@@ -279,7 +279,8 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => {
         "Voice & Audio Graph",
         "Video & Screen Share",
         "Events & Webhooks",
-        "Troubleshooting & FAQ"
+        "Troubleshooting & FAQ",
+        "React Hooks"
     ];
 
     const renderWebRTCConfig = () => {
@@ -576,6 +577,43 @@ using ( true );`}
                             </div>
                         </div>
                     )}
+
+                    {activeSection === 10 && (
+                        <div className="animate-fade-in-up">
+                            <h2 className="text-3xl font-bold text-white mb-4">11. React Hooks</h2>
+                            <p className="mb-6">The <code>mastervoice-react</code> package provides convenient hooks.</p>
+                            
+                            <h3 className="text-xl font-bold text-white mb-2">useMasterVoice</h3>
+                            <p className="text-gray-400 text-sm mb-4">Access the initialized client instance.</p>
+                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300 mb-8">
+{`import { useMasterVoice } from 'mastervoice-react';
+
+const MyComponent = () => {
+  const client = useMasterVoice();
+  
+  const sendMessage = async () => {
+    await client.chat.send({ content: "Hello!" });
+  };
+};`}
+                            </pre>
+
+                            <h3 className="text-xl font-bold text-white mb-2">useCall</h3>
+                            <p className="text-gray-400 text-sm mb-4">Manage call state and media streams.</p>
+                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
+{`import { useCall } from 'mastervoice-react';
+
+const CallButton = ({ userId }) => {
+  const { startCall, callState } = useCall(userId);
+  
+  return (
+    <button onClick={startCall}>
+      {callState === 'IDLE' ? 'Call' : 'Connecting...'}
+    </button>
+  );
+};`}
+                            </pre>
+                        </div>
+                    )}
                 </div>
             </div>
         </PageLayout>
@@ -589,11 +627,14 @@ interface PlansPageProps extends PageProps {
 
 export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
     const [view, setView] = useState<'users' | 'devs'>('users');
+    const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+
+    const isAnnual = billing === 'annual';
 
     return (
         <PageLayout title="Plans & Pricing" onBack={onBack} wide={true}>
-            {/* Toggle Switch */}
-            <div className="flex justify-center mb-12">
+            {/* View Toggle Switch (Users vs Devs) */}
+            <div className="flex justify-center mb-8">
                 <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex">
                     <button 
                         onClick={() => setView('users')}
@@ -610,6 +651,21 @@ export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
                 </div>
             </div>
 
+            {/* Billing Cycle Toggle */}
+            <div className="flex justify-center items-center gap-4 mb-16">
+                <span className={`text-sm font-medium ${!isAnnual ? 'text-white' : 'text-gray-500'}`}>Monthly</span>
+                <button 
+                    onClick={() => setBilling(isAnnual ? 'monthly' : 'annual')}
+                    className="w-14 h-8 rounded-full bg-gray-800 border border-white/10 relative transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                >
+                    <div className={`absolute top-1 w-6 h-6 rounded-full bg-indigo-500 transition-all shadow-md ${isAnnual ? 'left-7' : 'left-1'}`}></div>
+                </button>
+                <div className="flex items-center gap-2">
+                    <span className={`text-sm font-medium ${isAnnual ? 'text-white' : 'text-gray-500'}`}>Annual</span>
+                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Save ~20%</span>
+                </div>
+            </div>
+
             {view === 'users' ? (
                 // User Plans
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
@@ -622,7 +678,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
                      />
                      <PricingCard 
                          title="Premium" 
-                         price="$4.99" 
+                         price={isAnnual ? "$49.99/yr" : "$4.99/mo"}
                          recommended 
                          features={["Group Video Calls (up to 12)", "HD Voice Quality", "10GB Cloud Storage", "Priority Support"]} 
                          cta="Go Premium" 
@@ -630,7 +686,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
                      />
                      <PricingCard 
                          title="Family" 
-                         price="$12.99" 
+                         price={isAnnual ? "$129.99/yr" : "$12.99/mo"}
                          features={["6 Premium Accounts", "Parental Controls", "Shared Photo Vault", "50GB Shared Storage"]} 
                          cta="Get Family Plan" 
                          onAction={() => {}} 
@@ -648,7 +704,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
                     />
                     <PricingCard 
                         title="Startup" 
-                        price="$49" 
+                        price={isAnnual ? "$490/yr" : "$49/mo"}
                         recommended 
                         features={["Standard TURN Relay", "10,000 MAU", "Email Support", "99.9% Uptime SLA"]} 
                         cta="Get API Key" 
@@ -709,12 +765,14 @@ export const DevPage: React.FC<PageProps> = ({ onNavigate }) => {
                                   <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
                                   <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
                               </div>
-                              <span className="text-xs text-gray-500">install.sh</span>
+                              <span className="text-xs text-gray-500">quickstart.ts</span>
                           </div>
                           <pre className="font-mono text-sm text-gray-300 overflow-x-auto">
                               <code>
-{`// 1. Install SDK
-npm install mastervoice-sdk
+{`// 1. Install via NPM
+// npm install mastervoice-sdk
+
+import { MasterVoice } from 'mastervoice-sdk';
 
 // 2. Initialize
 const client = new MasterVoice({
@@ -729,6 +787,51 @@ const call = await client.call.start(
                               </code>
                           </pre>
                       </div>
+                 </div>
+
+                 {/* Infrastructure Map Placeholder */}
+                 <div className="mt-32 border-t border-white/10 pt-20">
+                     <div className="text-center mb-16">
+                         <h2 className="text-3xl font-bold mb-4">Global Edge Infrastructure</h2>
+                         <p className="text-gray-400">Low latency signaling and media relay nodes deployed worldwide.</p>
+                     </div>
+                     <div className="relative h-[300px] w-full bg-[#0a0a0f] rounded-3xl border border-white/5 overflow-hidden flex items-center justify-center">
+                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
+                         {/* Abstract Map Dots */}
+                         <div className="w-full max-w-4xl h-full relative opacity-50">
+                             {[...Array(20)].map((_, i) => (
+                                 <div key={i} className="absolute w-2 h-2 bg-indigo-500 rounded-full animate-pulse" style={{ top: `${Math.random() * 80 + 10}%`, left: `${Math.random() * 90 + 5}%`, animationDelay: `${Math.random() * 2}s` }}></div>
+                             ))}
+                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-700 font-bold text-4xl tracking-widest uppercase select-none">
+                                 Global Mesh Network
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+
+                 {/* Use Cases Grid */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
+                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
+                         <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-6 text-blue-400">
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                         </div>
+                         <h3 className="text-xl font-bold mb-2">Live Streaming</h3>
+                         <p className="text-gray-400 text-sm">Add real-time voice chat alongside your video streams for interactive watch parties.</p>
+                     </div>
+                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
+                         <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mb-6 text-green-400">
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                         </div>
+                         <h3 className="text-xl font-bold mb-2">Telehealth</h3>
+                         <p className="text-gray-400 text-sm">HIPAA-compliant encrypted video calls for doctor-patient consultations.</p>
+                     </div>
+                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
+                         <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-6 text-purple-400">
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                         </div>
+                         <h3 className="text-xl font-bold mb-2">Collaboration</h3>
+                         <p className="text-gray-400 text-sm">Embed voice channels directly into your project management or whiteboard tools.</p>
+                     </div>
                  </div>
 
                  {/* Quick Links */}
