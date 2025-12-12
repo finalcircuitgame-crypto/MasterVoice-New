@@ -23,17 +23,9 @@ export interface CallConfig {
 
 const TIER_CONFIGS = {
   free: {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Standard TURN (UDP) enabled for Free users
-        { 
-            urls: 'turn:relay1.expressturn.com:3480?transport=udp', 
-            username: '000000002080624754', 
-            credential: 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
-        }
-    ],
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], // STUN Only (High failure rate on corp networks)
     iceTransportPolicy: 'all' as RTCIceTransportPolicy,
-    maxBitrate: 1500000 // 1.5Mbps (Generous for free)
+    maxBitrate: 500000 // 500kbps cap
   },
   pro: {
     iceServers: [
@@ -46,7 +38,7 @@ const TIER_CONFIGS = {
       }
     ],
     iceTransportPolicy: 'relay' as RTCIceTransportPolicy, // Force Relay for stability
-    maxBitrate: 4000000 // 4Mbps cap
+    maxBitrate: 2000000 // 2Mbps cap
   },
   elite: {
     iceServers: [

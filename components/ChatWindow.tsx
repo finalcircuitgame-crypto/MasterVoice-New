@@ -179,9 +179,9 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
                         )}
                         
                         {showReactions && (
-                            <div className="absolute -top-12 left-0 bg-[#2a2a30] rounded-xl p-2 shadow-xl z-30 flex gap-1 animate-scale-in border border-white/10 w-64 flex-wrap">
-                                {(availableEmojis || DEFAULT_EMOJI_LIST).slice(0, 16).map(emoji => (
-                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition hover:scale-125 text-lg">{emoji}</button>
+                            <div className="absolute -top-12 left-0 bg-[#2a2a30] rounded-xl p-2 shadow-xl z-30 flex gap-1 animate-scale-in border border-white/10">
+                                {(availableEmojis || DEFAULT_EMOJI_LIST).slice(0, 8).map(emoji => (
+                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition hover:scale-125">{emoji}</button>
                                 ))}
                             </div>
                         )}
@@ -193,10 +193,10 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
                             </div>
                         )}
 
-                        <div className={`px-5 py-3 shadow-md backdrop-blur-md transition-all ${isMe ? 'bg-gradient-to-br from-[var(--theme-500)] to-[var(--theme-600)] text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'} ${isHighlighted ? 'ring-2 ring-white/50 scale-[1.02]' : ''} ${isError ? 'border-red-500 bg-red-900/10' : ''}`}>
+                        <div className={`px-5 py-3 shadow-md backdrop-blur-md transition-all ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'} ${isHighlighted ? 'ring-2 ring-white/50 scale-[1.02]' : ''} ${isError ? 'border-red-500 bg-red-900/10' : ''}`}>
                             {renderAttachment()}
                             {msg.content && <div className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{parseMessageContent(msg.content)}</div>}
-                            <div className={`flex items-center justify-between mt-1.5 gap-3 ${isMe ? 'text-white/80' : 'text-gray-400'}`}>
+                            <div className={`flex items-center justify-between mt-1.5 gap-3 ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
                                 <div className="flex items-center gap-2">
                                     <p className="text-[10px] font-medium">{isSending ? 'Sending...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                     {isRecentlyEdited && <span className="text-[9px] italic opacity-70">edited</span>}
@@ -260,26 +260,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
     const isRecipientOnline = onlineUsers.has(recipient.id);
     const roomId = [currentUser.id, recipient.id].sort().join('_');
 
-    // Load Emojis Safely
+    // Load Emojis
     useEffect(() => {
         fetch(EMOJI_SOURCE_URL).then(res => res.json()).then(data => {
-            if (Array.isArray(data)) {
-                // Ensure we only get strings. If 'char' is missing, try parsing 'unified'.
-                const processed = data.map((item: any) => {
-                    if (typeof item.char === 'string') return item.char;
-                    if (typeof item.unified === 'string') {
-                         try {
-                             return item.unified.split('-').map((code: string) => String.fromCodePoint(parseInt(code, 16))).join('');
-                         } catch (e) { return null; }
-                    }
-                    return null;
-                }).filter((s): s is string => typeof s === 'string' && s.length > 0);
-                
-                setEmojiList(processed.slice(0, 100));
-            }
-        }).catch(() => {
-            setEmojiList(DEFAULT_EMOJI_LIST);
-        });
+            if (Array.isArray(data)) setEmojiList(data.map((i:any) => i.char || i).filter(Boolean).slice(0, 100));
+        }).catch(() => {});
     }, []);
 
     // Subscribe
@@ -445,7 +430,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="relative">
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg overflow-hidden border border-white/10" style={{ background: 'var(--theme-gradient)' }}>
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg overflow-hidden border border-white/10">
                             {recipient.avatar_url ? <img src={recipient.avatar_url} className="w-full h-full object-cover" /> : recipient.email[0].toUpperCase()}
                         </div>
                         <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#030014] ${isRecipientOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
@@ -471,7 +456,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
             {/* Messages */}
             <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar scroll-smooth">
-                {loading && <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-[var(--theme-500)] border-t-transparent rounded-full animate-spin"></div></div>}
+                {loading && <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}
                 
                 {messages.map(msg => (
                     <MessageItem 
@@ -505,7 +490,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
 
             {/* Scroll Button */}
             {showScrollButton && (
-                <button onClick={scrollToBottom} className="absolute bottom-24 right-6 p-3 bg-[var(--theme-600)] rounded-full shadow-xl hover:bg-[var(--theme-500)] transition animate-fade-in-up z-20">
+                <button onClick={scrollToBottom} className="absolute bottom-24 right-6 p-3 bg-indigo-600 rounded-full shadow-xl hover:bg-indigo-500 transition animate-fade-in-up z-20">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7m14-8l-7 7-7-7" /></svg>
                 </button>
             )}
@@ -519,7 +504,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                             <button onClick={() => { setEditingId(null); setReplyingTo(null); setNewMessage(''); }} className="hover:text-white">Cancel</button>
                         </div>
                     )}
-                    <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl transition-all focus-within:ring-2 focus-within:ring-[var(--theme-500)]/30">
+                    <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl transition-all focus-within:ring-2 focus-within:ring-indigo-500/30">
                         <input 
                             ref={inputRef}
                             type="text" 
@@ -528,7 +513,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
                             className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
                             placeholder="Message..." 
                         />
-                        <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full text-white font-bold transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95" style={{ background: 'var(--theme-gradient)' }}>
+                        <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 text-white font-bold transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95">
                             {editingId ? 'Save' : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}
                         </button>
                     </form>

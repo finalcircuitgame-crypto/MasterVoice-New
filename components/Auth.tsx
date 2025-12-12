@@ -120,7 +120,7 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
         {authStep === 'credentials' ? (
           <>
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-6 shadow-lg shadow-indigo-500/20" style={{ background: 'var(--theme-gradient)' }}>
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-fuchsia-500 mb-6 shadow-lg shadow-indigo-500/20">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 4 00-8 0v4h8z" />
                 </svg>
@@ -167,8 +167,7 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 mt-2"
-                style={{ background: 'var(--theme-gradient)' }}
+                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 mt-2"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">

@@ -151,7 +151,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              
              {/* Avatar Circle */}
              <div className="relative z-10 -mt-2 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden" style={{ background: 'var(--theme-gradient)' }}>
+                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden">
                      {currentUser.avatar_url ? (
                          <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                      ) : (
