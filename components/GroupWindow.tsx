@@ -300,30 +300,13 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         setAddingMember(false);
     };
 
-    const handleRemoveMember = async (userId: string) => {
-        const confirmed = await showConfirm("Remove Member", "Are you sure you want to remove this user?");
-        if (!confirmed) return;
-        
-        const { error } = await supabase.from('group_members').delete().match({ group_id: selectedGroup.id, user_id: userId });
-        if (error) {
-            showAlert("Error", "Failed to remove member: " + error.message);
-        }
-    };
-
     // Feature: Group Rename
     const handleRenameGroup = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsEditingName(false);
-        const trimmed = groupName.trim();
+        if (groupName.trim() === selectedGroup.name) return;
         
-        if (!trimmed) {
-            setGroupName(selectedGroup.name);
-            return;
-        }
-        
-        if (trimmed === selectedGroup.name) return;
-        
-        const { error } = await supabase.from('groups').update({ name: trimmed }).eq('id', selectedGroup.id);
+        const { error } = await supabase.from('groups').update({ name: groupName.trim() }).eq('id', selectedGroup.id);
         if (error) {
             showAlert("Error", "Failed to update group name.");
             setGroupName(selectedGroup.name);
@@ -453,36 +436,25 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const offlineMembers = groupMembers.filter(m => !onlineUsers.has(m.id));
 
     const renderMember = (m: UserProfile, isOnline: boolean) => (
-        <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group cursor-default justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                    {m.avatar_url ? (
-                        <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover border border-white/10" />
-                    ) : (
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-white/10">
-                            {m.email[0].toUpperCase()}
-                        </div>
-                    )}
-                    <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                </div>
-                <div className="flex flex-col min-w-0">
-                    <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors flex items-center gap-1">
-                        {m.email.split('@')[0]}
-                        {/* Feature: Owner Badge */}
-                        {m.id === selectedGroup.created_by && <span className="text-yellow-500 text-[10px]" title="Owner">👑</span>}
-                    </span>
-                    {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
-                </div>
+        <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group cursor-default">
+            <div className="relative shrink-0">
+                {m.avatar_url ? (
+                    <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                ) : (
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-white/10">
+                        {m.email[0].toUpperCase()}
+                    </div>
+                )}
+                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
             </div>
-            {isOwner && m.id !== currentUser.id && (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-                    title="Remove Member"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-            )}
+            <div className="flex flex-col min-w-0">
+                <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors flex items-center gap-1">
+                    {m.email.split('@')[0]}
+                    {/* Feature: Owner Badge */}
+                    {m.id === selectedGroup.created_by && <span className="text-yellow-500 text-[10px]" title="Owner">👑</span>}
+                </span>
+                {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
+            </div>
         </div>
     );
 
@@ -495,7 +467,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm shrink-0">
                     <div className="flex items-center gap-4 min-w-0 flex-1">
                         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
-                            {groupName?.[0]?.toUpperCase() || '?'}
+                            {groupName[0].toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
                             {isEditingName ? (

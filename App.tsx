@@ -30,7 +30,6 @@ const App: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [loading, setLoading] = useState(true);
   
   // Call Persistence & UI State
   const [activeCallContact, setActiveCallContact] = useState<UserProfile | null>(null);
@@ -195,56 +194,36 @@ const App: React.FC = () => {
     return () => { supabase.removeChannel(presenceChannel); };
   }, [currentUser?.id]);
 
-  // --- Realtime Profile Updates (Fix for PFP) ---
   useEffect(() => {
-      if (!currentUser?.id) return;
-      const channel = supabase.channel(`profile_updates:${currentUser.id}`)
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${currentUser.id}` }, (payload) => {
-              // Merge new profile data (like avatar_url) into current state
-              setCurrentUser(prev => prev ? { ...prev, ...payload.new } : null);
-          })
-          .subscribe();
-      return () => { supabase.removeChannel(channel); };
-  }, [currentUser?.id]);
-
-  // --- Auth & Session Init ---
-  useEffect(() => {
-    const fetchUserProfile = async (userId: string, email: string) => {
-        // Fetch extended profile data (avatar_url) from DB
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        
-        return { 
-            id: userId, 
-            email: email, 
-            is_family: true, // Keeping demo flag
-            plan: 'pro' as const,
-            ...profile // Merge DB data (overwrites defaults if they exist in DB)
-        };
-    };
-
     const initSession = async () => {
         try {
             const { data, error } = await supabase.auth.getSession();
             if (error) throw error;
             setSession(data.session);
             if (data.session?.user) {
-                const user = await fetchUserProfile(data.session.user.id, data.session.user.email || 'No Email');
-                setCurrentUser(user);
+                // Assuming is_family means Pro for now, or map plan field from DB
+                setCurrentUser({ 
+                    id: data.session.user.id, 
+                    email: data.session.user.email || 'No Email', 
+                    is_family: true,
+                    plan: 'pro' // Defaulting to pro for demo/testing 60fps
+                });
                 if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
             }
         } catch (err: any) {
             console.error("Session init error:", err.message);
-        } finally {
-            setLoading(false);
         }
     };
     initSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-          const user = await fetchUserProfile(session.user.id, session.user.email || 'No Email');
-          setCurrentUser(user);
+          setCurrentUser({ 
+              id: session.user.id, 
+              email: session.user.email || 'No Email', 
+              is_family: true,
+              plan: 'pro'
+          });
           if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
       } else {
           setCurrentUser(null);
@@ -252,7 +231,6 @@ const App: React.FC = () => {
           setOnlineUsers(new Set());
           if (['/conversations', '/settings'].includes(window.location.pathname)) navigate('/login');
       }
-      setLoading(false);
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -309,17 +287,6 @@ const App: React.FC = () => {
           navigate(`/conversations/groups/${group.id}`);
       }
   };
-
-  if (loading) {
-      return (
-          <div className="h-screen w-screen bg-[#030014] flex items-center justify-center font-['Outfit']">
-               <div className="flex flex-col items-center gap-4">
-                   <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                   <p className="text-gray-400 text-sm animate-pulse">Initializing Secure Session...</p>
-               </div>
-          </div>
-      );
-  }
 
   const isSettingsOpen = path === '/settings';
   const showChatInterface = (path.startsWith('/conversations') || isSettingsOpen) && session && currentUser;
@@ -405,7 +372,7 @@ const App: React.FC = () => {
                             </button>
                             <div className="flex items-center gap-2">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${selectedGroup ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gray-800'}`}>
-                                    {selectedGroup ? selectedGroup.name?.[0]?.toUpperCase() || '?' : selectedUser?.email[0].toUpperCase()}
+                                    {selectedGroup ? selectedGroup.name[0].toUpperCase() : selectedUser?.email[0].toUpperCase()}
                                 </div>
                                 <span className="font-bold text-white">{selectedGroup ? selectedGroup.name : selectedUser?.email.split('@')[0]}</span>
                             </div>

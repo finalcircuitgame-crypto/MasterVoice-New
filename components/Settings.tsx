@@ -121,8 +121,7 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
               .eq('id', currentUser.id);
 
           if (updateError) throw updateError;
-          
-          // Removed manual reload. The App component subscribes to profile changes and will update the UI automatically.
+          window.location.reload();
 
       } catch (error: any) {
           alert('Failed to update avatar. ' + error.message);
