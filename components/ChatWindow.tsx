@@ -180,7 +180,7 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
                         
                         {showReactions && (
                             <div className="absolute -top-12 left-0 bg-[#2a2a30] rounded-xl p-2 shadow-xl z-30 flex gap-1 animate-scale-in border border-white/10">
-                                {availableEmojis.slice(0, 8).map(emoji => (
+                                {(availableEmojis || DEFAULT_EMOJI_LIST).slice(0, 8).map(emoji => (
                                     <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowReactions(false); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition hover:scale-125">{emoji}</button>
                                 ))}
                             </div>

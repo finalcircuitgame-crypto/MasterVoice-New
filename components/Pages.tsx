@@ -37,6 +37,208 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: 
   </div>
 );
 
+// --- Theme Editor Helper ---
+const generateShades = (hex: string) => {
+    // Basic helper to adjust lightness.
+    // In a real app, use HSL. Here we use a simplified approach or just CSS manipulation
+    // for this demo, we'll try to guess shades or just return the base for all (not ideal)
+    // Better approach: Use CSS variables on the root and manipulate HSL.
+    // Since we don't have a library, we will rely on a simple Hex -> HSL -> Hex logic.
+    
+    const hexToRgb = (hex: string) => {
+        const bigint = parseInt(hex.slice(1), 16);
+        return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+    };
+
+    const rgbToHsl = (r: number, g: number, b: number) => {
+        r /= 255, g /= 255, b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h = 0, s, l = (max + min) / 2;
+        if (max === min) { h = s = 0; } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        return [h, s, l];
+    };
+
+    const hslToRgb = (h: number, s: number, l: number) => {
+        let r, g, b;
+        if (s === 0) { r = g = b = l; } else {
+            const hue2rgb = (p: number, q: number, t: number) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1/3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1/3);
+        }
+        const toHex = (x: number) => {
+            const hex = Math.round(x * 255).toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+        };
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    };
+
+    const [r, g, b] = hexToRgb(hex);
+    const [h, s, l] = rgbToHsl(r, g, b);
+
+    // Generate Tailwind-like shades
+    // 50: L~95, 500: Base L, 900: L~20
+    const shadeMap = {
+        50: 0.95, 100: 0.9, 200: 0.8, 300: 0.7, 400: 0.6,
+        500: l, // Base
+        600: l * 0.85, 700: l * 0.7, 800: l * 0.55, 900: l * 0.4, 950: l * 0.25
+    };
+
+    const palette: any = {};
+    for (const [key, val] of Object.entries(shadeMap)) {
+        // If key < 500, we interpolate between base L and 1.0
+        // If key > 500, we interpolate between base L and 0.0
+        let newL = val;
+        // Adjust logic to be relative to input lightness for better results?
+        // Simple override:
+        if (key === '500') newL = l;
+        else if (parseInt(key) < 500) {
+             // Lighter
+             newL = l + (1 - l) * (1 - (parseInt(key)/500)); 
+             // Correction for 50 being almost white
+             if(parseInt(key) === 50) newL = 0.97;
+        } else {
+             // Darker
+             newL = l * (1 - ((parseInt(key) - 500) / 550));
+        }
+        
+        palette[key] = hslToRgb(h, s, Math.max(0, Math.min(1, newL)));
+    }
+    return palette;
+};
+
+export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
+    const [baseColor, setBaseColor] = useState('#6366f1');
+    const [palette, setPalette] = useState<any>({});
+
+    useEffect(() => {
+        setPalette(generateShades(baseColor));
+    }, [baseColor]);
+
+    const handleSave = () => {
+        // Apply immediately
+        const root = document.documentElement;
+        Object.entries(palette).forEach(([key, value]) => {
+            root.style.setProperty(`--theme-${key}`, value as string);
+        });
+        
+        // Persist
+        localStorage.setItem('mv_theme_name', 'custom');
+        localStorage.setItem('mv_theme_custom', JSON.stringify(palette));
+        
+        onNavigate?.('/settings');
+    };
+
+    return (
+        <PageLayout title="Theme Editor" onBack={onBack}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div>
+                    <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wide">Pick Base Color</label>
+                    <div className="flex gap-4 items-center mb-8">
+                        <input 
+                            type="color" 
+                            value={baseColor} 
+                            onChange={(e) => setBaseColor(e.target.value)} 
+                            className="w-16 h-16 rounded-xl cursor-pointer bg-transparent border-0 p-0"
+                        />
+                        <div className="text-xl font-mono text-white">{baseColor}</div>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-white mb-4">Generated Palette</h3>
+                    <div className="space-y-2 mb-8">
+                        {Object.entries(palette).map(([shade, color]: any) => (
+                            <div key={shade} className="flex items-center gap-4">
+                                <div className="w-12 h-8 rounded shadow-lg border border-white/10" style={{ backgroundColor: color }}></div>
+                                <span className="text-sm font-mono text-gray-400 w-12">{shade}</span>
+                                <span className="text-sm font-mono text-gray-500">{color}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-4">
+                        <button onClick={handleSave} className="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Save Theme</button>
+                        <button onClick={() => setBaseColor('#6366f1')} className="px-8 py-3 bg-white/10 text-white font-bold rounded-xl hover:bg-white/20 transition">Reset</button>
+                    </div>
+                </div>
+
+                {/* Preview */}
+                <div className="relative">
+                    <h3 className="text-lg font-bold text-white mb-4">Live Preview</h3>
+                    <div className="bg-[#060609] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden h-[500px] flex flex-col">
+                        
+                        {/* Fake Header */}
+                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5" style={{ borderColor: 'var(--theme-900)' }}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: `linear-gradient(to right, ${palette[500]}, ${palette[700]})` }}>
+                                    A
+                                </div>
+                                <div>
+                                    <div className="font-bold text-white">Alice</div>
+                                    <div className="text-xs font-bold" style={{ color: palette[400] }}>Online</div>
+                                </div>
+                            </div>
+                            <div className="p-2 rounded-full text-white" style={{ backgroundColor: palette[600] }}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                            </div>
+                        </div>
+
+                        {/* Messages */}
+                        <div className="space-y-4 flex-1">
+                            <div className="flex justify-start">
+                                <div className="bg-[#1a1a20] p-3 rounded-2xl rounded-bl-sm text-sm text-gray-300 max-w-[80%] border border-white/5">
+                                    Hey! How do you like the new theme?
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
+                                <div className="p-3 rounded-2xl rounded-br-sm text-sm text-white max-w-[80%] shadow-lg" style={{ background: `linear-gradient(135deg, ${palette[600]}, ${palette[500]})` }}>
+                                    It looks amazing! The generated shades are perfect.
+                                </div>
+                            </div>
+                            <div className="flex justify-start">
+                                <div className="bg-[#1a1a20] p-3 rounded-2xl rounded-bl-sm text-sm text-gray-300 max-w-[80%] border border-white/5">
+                                    Glad you like it! 🔥
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Input */}
+                        <div className="mt-4 relative">
+                            <input 
+                                type="text" 
+                                placeholder="Type a message..." 
+                                className="w-full bg-[#1a1a20] border border-white/10 rounded-full py-3 px-4 text-sm text-white focus:outline-none focus:ring-2"
+                                style={{ '--tw-ring-color': palette[500] } as any}
+                            />
+                            <button className="absolute right-2 top-2 p-1.5 rounded-full text-white transition hover:scale-110" style={{ backgroundColor: palette[500] }}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </PageLayout>
+    );
+};
+
 export const VerifyPage: React.FC<PageProps> = ({ onNavigate }) => {
     const [status, setStatus] = useState('Checking account status...');
     const [progress, setProgress] = useState(0);

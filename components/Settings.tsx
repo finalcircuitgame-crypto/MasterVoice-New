@@ -1,20 +1,30 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
+import { useRouter } from '../hooks/useRouter';
 
 interface SettingsProps {
   currentUser: UserProfile;
   onBack: () => void;
 }
 
+const PRESET_THEMES: Record<string, any> = {
+    indigo: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b' },
+    emerald: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b', 950: '#022c22' },
+    rose: { 50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519' },
+    amber: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03' },
+    blue: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554' }
+};
+
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const { navigate } = useRouter();
   
   // Settings State
   const [notifications, setNotifications] = useState(localStorage.getItem('mv_notifications') !== 'false');
   const [darkMode, setDarkMode] = useState(localStorage.getItem('mv_dark_mode') !== 'false');
-  const [currentTheme, setCurrentTheme] = useState(localStorage.getItem('mv_theme') || 'indigo');
+  const [currentTheme, setCurrentTheme] = useState(localStorage.getItem('mv_theme_name') || 'indigo');
   
   // Modals State
   const [showKeysModal, setShowKeysModal] = useState(false);
@@ -29,14 +39,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
       }
   }, [darkMode]);
 
-  useEffect(() => {
-      // Apply theme
-      document.body.classList.remove('theme-emerald', 'theme-rose', 'theme-amber', 'theme-blue');
-      if (currentTheme !== 'indigo') {
-          document.body.classList.add(`theme-${currentTheme}`);
-      }
-  }, [currentTheme]);
-
   const toggleNotifications = () => {
       const newVal = !notifications;
       setNotifications(newVal);
@@ -49,9 +51,19 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
       localStorage.setItem('mv_dark_mode', String(newVal));
   };
 
-  const changeTheme = (theme: string) => {
-      setCurrentTheme(theme);
-      localStorage.setItem('mv_theme', theme);
+  const changeTheme = (themeName: string) => {
+      setCurrentTheme(themeName);
+      localStorage.setItem('mv_theme_name', themeName);
+      
+      const colors = PRESET_THEMES[themeName];
+      if (colors) {
+          const root = document.documentElement;
+          Object.entries(colors).forEach(([key, value]) => {
+              root.style.setProperty(`--theme-${key}`, value as string);
+          });
+          // Save custom theme vars too so they persist on reload
+          localStorage.setItem('mv_theme_custom', JSON.stringify(colors));
+      }
   };
 
   const handleLogout = async () => {
@@ -162,19 +174,21 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              <div className="bg-[#13131a] border border-white/5 rounded-[1.5rem] overflow-hidden p-4">
                  <div className="flex items-center justify-between mb-4">
                      <span className="text-gray-200 font-medium">Accent Color</span>
+                     <button onClick={() => navigate('/theme-editor')} className="text-xs text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/10 px-2 py-1 rounded-lg transition">Customize</button>
                  </div>
                  <div className="flex gap-3 justify-start">
                      {[
-                         { id: 'indigo', color: 'bg-indigo-500' },
-                         { id: 'emerald', color: 'bg-emerald-500' },
-                         { id: 'rose', color: 'bg-rose-500' },
-                         { id: 'amber', color: 'bg-amber-500' },
-                         { id: 'blue', color: 'bg-blue-500' },
+                         { id: 'indigo', color: 'bg-[#6366f1]' },
+                         { id: 'emerald', color: 'bg-[#10b981]' },
+                         { id: 'rose', color: 'bg-[#f43f5e]' },
+                         { id: 'amber', color: 'bg-[#f59e0b]' },
+                         { id: 'blue', color: 'bg-[#3b82f6]' },
                      ].map(t => (
                          <button 
                             key={t.id}
                             onClick={() => changeTheme(t.id)}
-                            className={`w-8 h-8 rounded-full ${t.color} ${currentTheme === t.id ? 'ring-2 ring-white ring-offset-2 ring-offset-[#13131a]' : ''} transition-all hover:scale-110`}
+                            className={`w-8 h-8 rounded-full ${t.color} ${currentTheme === t.id ? 'ring-2 ring-white ring-offset-2 ring-offset-[#13131a]' : 'opacity-70 hover:opacity-100'} transition-all hover:scale-110`}
+                            style={{ backgroundColor: t.color.replace('bg-[', '').replace(']', '') }}
                          />
                      ))}
                  </div>

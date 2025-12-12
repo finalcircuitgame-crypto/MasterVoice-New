@@ -6,14 +6,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MasterVoice - Next Gen Communication</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Outfit', 'sans-serif'],
+            },
+            colors: {
+              // Map 'indigo' (primary app color) to CSS variables for dynamic theming
+              indigo: {
+                50: 'var(--theme-50)',
+                100: 'var(--theme-100)',
+                200: 'var(--theme-200)',
+                300: 'var(--theme-300)',
+                400: 'var(--theme-400)',
+                500: 'var(--theme-500)',
+                600: 'var(--theme-600)',
+                700: 'var(--theme-700)',
+                800: 'var(--theme-800)',
+                900: 'var(--theme-900)',
+                950: 'var(--theme-950)',
+              }
+            }
+          }
+        }
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
       :root {
         --font-outfit: 'Outfit', sans-serif;
-        --theme-color: #6366f1; /* Indigo-500 */
-        --theme-hover: #4f46e5; /* Indigo-600 */
+        /* Default Indigo Palette */
+        --theme-50: #eef2ff;
+        --theme-100: #e0e7ff;
+        --theme-200: #c7d2fe;
+        --theme-300: #a5b4fc;
+        --theme-400: #818cf8;
+        --theme-500: #6366f1;
+        --theme-600: #4f46e5;
+        --theme-700: #4338ca;
+        --theme-800: #3730a3;
+        --theme-900: #312e81;
+        --theme-950: #1e1b4b;
       }
       
       body {
@@ -25,7 +63,7 @@
       .custom-cursor {
         width: 20px;
         height: 20px;
-        border: 2px solid var(--theme-color);
+        border: 2px solid var(--theme-500);
         border-radius: 50%;
         position: fixed;
         pointer-events: none;
@@ -87,6 +125,11 @@
         to { opacity: 1; transform: translateY(0); }
       }
 
+      @keyframes scale-in {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
       @keyframes gradient-x {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
@@ -115,61 +158,16 @@
         100% { background-position: 200% center; }
       }
 
-      /* Penguin Wobble */
-      @keyframes wobble {
-        0%, 100% { transform: rotate(0deg); }
-        25% { transform: rotate(-10deg); }
-        75% { transform: rotate(10deg); }
-      }
-
-      /* Audio Visualizers */
-      @keyframes wave {
-        0%, 100% { height: 10%; }
-        50% { height: 100%; }
-      }
-
-      @keyframes music {
-        0%, 100% { transform: scaleY(0.3); }
-        50% { transform: scaleY(1); }
-      }
-
-      .animate-float {
-        animation: float 15s ease-in-out infinite;
-      }
-      
-      .animate-float-delayed {
-        animation: float-delayed 18s ease-in-out infinite;
-        animation-delay: 2s;
-      }
-
-      .animate-pulse-glow {
-        animation: pulse-glow 8s ease-in-out infinite;
-      }
-
-      .animate-fade-in-up {
-        animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-      
-      .animate-slide-up {
-        animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-
-      .animate-gradient-x {
-        background-size: 200% 200%;
-        animation: gradient-x 10s ease infinite;
-      }
-      
-      .animate-message-enter {
-        animation: message-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-      }
-
-      .animate-message-flash {
-        animation: message-flash 1s ease-out forwards;
-      }
-
-      .animate-typing-bounce {
-        animation: typing-bounce 1s infinite ease-in-out;
-      }
+      .animate-float { animation: float 15s ease-in-out infinite; }
+      .animate-float-delayed { animation: float-delayed 18s ease-in-out infinite; animation-delay: 2s; }
+      .animate-pulse-glow { animation: pulse-glow 8s ease-in-out infinite; }
+      .animate-fade-in-up { animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-scale-in { animation: scale-in 0.2s ease-out forwards; }
+      .animate-gradient-x { background-size: 200% 200%; animation: gradient-x 10s ease infinite; }
+      .animate-message-enter { animation: message-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+      .animate-message-flash { animation: message-flash 1s ease-out forwards; }
+      .animate-typing-bounce { animation: typing-bounce 1s infinite ease-in-out; }
       
       .animate-text-shimmer {
         background: linear-gradient(to right, #fbbf24 20%, #fef3c7 40%, #fef3c7 60%, #fbbf24 80%);
@@ -178,20 +176,6 @@
         -webkit-background-clip: text;
         background-clip: text;
         animation: text-shimmer 3s linear infinite;
-      }
-
-      .animate-wobble {
-        animation: wobble 2s ease-in-out infinite;
-        display: inline-block;
-      }
-
-      .animate-wave {
-        animation: wave 1s ease-in-out infinite;
-      }
-
-      .animate-music {
-        animation: music 1s ease-in-out infinite;
-        transform-origin: bottom;
       }
 
       .glass-panel {
@@ -207,12 +191,6 @@
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
-      
-      /* Theme Classes */
-      body.theme-emerald { --theme-color: #10b981; --theme-hover: #059669; }
-      body.theme-rose { --theme-color: #f43f5e; --theme-hover: #e11d48; }
-      body.theme-amber { --theme-color: #f59e0b; --theme-hover: #d97706; }
-      body.theme-blue { --theme-color: #3b82f6; --theme-hover: #2563eb; }
     </style>
   <script type="importmap">
 {
@@ -223,6 +201,19 @@
     "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.87.0"
   }
 }
+</script>
+<script>
+  // Load saved theme immediately to prevent FOUC (Flash of Unstyled Content)
+  try {
+    const savedTheme = localStorage.getItem('mv_theme_custom');
+    if (savedTheme) {
+      const colors = JSON.parse(savedTheme);
+      const root = document.documentElement;
+      Object.entries(colors).forEach(([key, value]) => {
+        root.style.setProperty(`--theme-${key}`, value);
+      });
+    }
+  } catch(e) { console.error('Error loading theme', e); }
 </script>
 </head>
   <body class="bg-[#030014] text-gray-100 antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
