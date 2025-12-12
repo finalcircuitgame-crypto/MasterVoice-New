@@ -120,10 +120,13 @@ for delete using ( auth.uid() = sender_id OR auth.uid() = receiver_id );
 drop policy if exists "View groups if member" on public.groups;
 drop policy if exists "View groups if member or creator" on public.groups;
 drop policy if exists "Users can create groups" on public.groups;
+drop policy if exists "Creator can update groups" on public.groups;
+drop policy if exists "Creator can delete groups" on public.groups;
 drop policy if exists "View members if in group" on public.group_members;
 drop policy if exists "Creator can add members" on public.group_members;
 drop policy if exists "View own membership" on public.group_members;
 drop policy if exists "View members of my groups" on public.group_members;
+drop policy if exists "Members can leave groups" on public.group_members;
 
 -- (Re)Create Tables if not exist
 create table if not exists public.groups (
@@ -162,8 +165,14 @@ create policy "Users can create groups" on public.groups
     created_by = auth.uid()
   );
 
--- 3. View Group Members (Select) - RECURSION FIX (SECURITY DEFINER)
--- We use a security definer function to break the RLS recursion loop.
+-- 3. Update/Delete Groups (Owner only)
+create policy "Creator can update groups" on public.groups
+  for update using ( auth.uid() = created_by );
+  
+create policy "Creator can delete groups" on public.groups
+  for delete using ( auth.uid() = created_by );
+
+-- 4. View Group Members (Select) - RECURSION FIX (SECURITY DEFINER)
 create or replace function public.is_group_member(_group_id uuid)
 returns boolean as $$
 begin
@@ -180,7 +189,7 @@ create policy "View members of my groups" on public.group_members
     public.is_group_member(group_id)
   );
 
--- 4. Manage members (Insert)
+-- 5. Manage members (Insert/Delete)
 create policy "Creator can add members" on public.group_members
   for insert with check (
     exists (
@@ -190,6 +199,9 @@ create policy "Creator can add members" on public.group_members
     )
     or auth.uid() = user_id -- Allow self-join
   );
+
+create policy "Members can leave groups" on public.group_members
+  for delete using ( auth.uid() = user_id );
 
 -- ============================
 -- === GROUP MESSAGES FIX ===
@@ -205,6 +217,7 @@ alter table public.messages alter column receiver_id drop not null;
 drop policy if exists "Users can update messages they are involved in" on messages;
 drop policy if exists "Users can insert messages" on messages;
 drop policy if exists "Users can view messages" on messages;
+drop policy if exists "Users can delete own messages" on messages;
 
 -- 1. Insert Messages
 create policy "Users can insert messages" on messages for insert with check (
@@ -229,4 +242,9 @@ create policy "Users can update messages they are involved in"
     auth.uid() = receiver_id OR
     (group_id is not null AND exists (select 1 from public.group_members where group_id = messages.group_id and user_id = auth.uid()))
   );
+
+-- 4. Delete Messages (Sender only)
+create policy "Users can delete own messages" on messages for delete using (
+  auth.uid() = sender_id
+);
 ```

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Message, UserProfile, CallState, Attachment, Group } from '../types';
+import { Message, UserProfile, Group } from '../types';
 import { useModal } from './ModalContext';
+import { useRouter } from '../hooks/useRouter';
 
 // --- Confetti Utility ---
 const triggerConfetti = () => {
@@ -45,22 +46,16 @@ interface GroupWindowProps {
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 
-const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-};
-
 const MessageItem = React.memo<{
     msg: Message;
     isMe: boolean;
     currentUser: UserProfile;
     onReaction: (msg: Message, emoji: string) => void;
+    onEdit: (msg: Message) => void;
+    onDelete: (id: string) => void;
     availableEmojis: string[];
     onRetry?: (msg: Message) => void;
-}>(({ msg, isMe, currentUser, onReaction, availableEmojis, onRetry }) => {
+}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, availableEmojis, onRetry }) => {
     const [showActions, setShowActions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
@@ -70,6 +65,7 @@ const MessageItem = React.memo<{
     const hasReacted = (emoji: string) => msg.reactions?.[emoji]?.includes(currentUser.id);
     const isSending = msg.status === 'sending';
     const isError = msg.status === 'error';
+    const isRecentlyEdited = msg.updated_at && msg.created_at && new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
 
     return (
         <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 group`}>
@@ -84,14 +80,21 @@ const MessageItem = React.memo<{
                     <div className="flex flex-col min-w-0 cursor-pointer relative" onClick={() => setShowActions(!showActions)}>
                         {!isMe && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{senderName}</span>}
                         
-                        {/* Reaction Menu */}
+                        {/* Action Menu */}
                         {showActions && !isError && (
-                            <div className={`absolute -top-10 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-full p-1 flex gap-1 shadow-xl z-20`}>
+                            <div className={`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-xl p-1 flex gap-1 shadow-xl z-20 animate-scale-in`}>
                                 {availableEmojis.slice(0, 5).map(emoji => (
                                     <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition text-sm">
                                         {emoji}
                                     </button>
                                 ))}
+                                {isMe && (
+                                    <>
+                                        <div className="w-px bg-white/10 mx-1"></div>
+                                        <button onClick={(e) => { e.stopPropagation(); onEdit(msg); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition text-gray-400" title="Edit">✏️</button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(msg.id); }} className="hover:bg-white/10 p-1.5 rounded transition text-red-400" title="Delete">🗑️</button>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -105,7 +108,10 @@ const MessageItem = React.memo<{
                                 ) : isSending ? (
                                     <span className="text-white/50 text-[10px]">Sending...</span>
                                 ) : (
-                                    <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                        {isRecentlyEdited && <span className="text-[9px] italic opacity-70">edited</span>}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -130,6 +136,7 @@ const MessageItem = React.memo<{
 });
 
 export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedGroup, onlineUsers }) => {
+    const { navigate } = useRouter();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -139,8 +146,26 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const [friends, setFriends] = useState<UserProfile[]>([]);
     const [addingMember, setAddingMember] = useState(false);
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+    
+    // Feature: Edit Group Name
+    const [groupName, setGroupName] = useState(selectedGroup.name);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [showGroupSettings, setShowGroupSettings] = useState(false);
+
+    // Feature: Message Editing
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    // Feature: Typing Indicators
+    const [remoteDrafts, setRemoteDrafts] = useState<Record<string, string>>({});
+    const typingTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
+    const lastTypingBroadcast = useRef<number>(0);
+    const [groupChannel, setGroupChannel] = useState<any>(null);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const { showAlert } = useModal();
+    const { showAlert, showConfirm } = useModal();
+
+    // Owner Check
+    const isOwner = selectedGroup.created_by === currentUser.id;
 
     // Load Emojis
     useEffect(() => {
@@ -151,6 +176,8 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
     // Load Group Data & Setup Realtime
     useEffect(() => {
+        setGroupName(selectedGroup.name);
+        
         const fetchMessages = async () => {
             setLoading(true);
             const { data } = await supabase.from('messages')
@@ -167,21 +194,50 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 // Skip if we already added it optimistically
                 setMessages(prev => {
                     if (prev.find(m => m.id === payload.new.id)) return prev;
-                    return prev; // We will handle optimistic update in send
+                    return prev; 
                 });
 
                 // Fetch sender details for incoming messages from others
                 if (payload.new.sender_id !== currentUser.id) {
                      const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', payload.new.sender_id).single();
                      setMessages(prev => [...prev, { ...payload.new, sender: data, status: 'sent' } as Message]);
+                     setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.new.sender_id]; return n; });
                 }
             })
+            // Realtime Update (Reactions/Edits)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (payload) => {
+                 setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+            })
+            // Realtime Delete
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (payload) => {
+                 setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+            })
             // Realtime listener for member additions
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `group_id=eq.${selectedGroup.id}` }, () => {
-                fetchMembers(); // Reload members if someone else adds one
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `group_id=eq.${selectedGroup.id}` }, () => {
+                fetchMembers(); // Reload members if someone else adds one or leaves
+            })
+            // Realtime Group Name updates
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups', filter: `id=eq.${selectedGroup.id}` }, (payload) => {
+                setGroupName(payload.new.name);
+            })
+            // Feature: Typing Indicators Broadcast
+            .on('broadcast', { event: 'typing' }, ({ payload }) => {
+                if (payload.userId === currentUser.id) return;
+                
+                if (typingTimeouts.current[payload.userId]) clearTimeout(typingTimeouts.current[payload.userId]);
+                
+                if (payload.content) {
+                    setRemoteDrafts(prev => ({ ...prev, [payload.userId]: payload.content }));
+                    typingTimeouts.current[payload.userId] = setTimeout(() => {
+                        setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.userId]; return n; });
+                    }, 3000);
+                } else {
+                    setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.userId]; return n; });
+                }
             })
             .subscribe();
 
+        setGroupChannel(channel);
         // Initial member load
         fetchMembers();
 
@@ -190,15 +246,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length]);
+    }, [messages.length, remoteDrafts]);
 
     const fetchMembers = async () => {
         const { data: memberRows, error } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
-        
-        if (error) {
-            console.error("Error fetching group members:", error);
-            return;
-        }
+        if (error) { console.error("Error fetching group members:", error); return; }
 
         if (memberRows) {
             const { data: profiles } = await supabase.from('profiles').select('*').in('id', memberRows.map(m => m.user_id));
@@ -235,14 +287,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         if (!error) {
             setFriends(prev => prev.filter(f => f.id !== userId));
             showAlert("Success", "Member added!");
-            fetchMembers(); // Refresh list to confirm visibility
+            fetchMembers();
         } else {
-            // Postgres unique_violation code is 23505
             if (error.code === '23505') {
                  showAlert("Member Exists", "This user is already in the group.");
-                 // Optimistically remove them from the add list
                  setFriends(prev => prev.filter(f => f.id !== userId));
-                 // Try fetching members again, maybe RLS was slow
                  fetchMembers();
             } else {
                  showAlert("Error", "Failed to add member: " + error.message);
@@ -251,13 +300,70 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         setAddingMember(false);
     };
 
+    // Feature: Group Rename
+    const handleRenameGroup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsEditingName(false);
+        if (groupName.trim() === selectedGroup.name) return;
+        
+        const { error } = await supabase.from('groups').update({ name: groupName.trim() }).eq('id', selectedGroup.id);
+        if (error) {
+            showAlert("Error", "Failed to update group name.");
+            setGroupName(selectedGroup.name);
+        }
+    };
+
+    // Feature: Leave Group
+    const handleLeaveGroup = async () => {
+        const confirmed = await showConfirm("Leave Group", "Are you sure you want to leave this group? You won't be able to rejoin unless invited.");
+        if (confirmed) {
+            const { error } = await supabase.from('group_members').delete().match({ group_id: selectedGroup.id, user_id: currentUser.id });
+            if (!error) {
+                navigate('/conversations');
+            } else {
+                showAlert("Error", "Failed to leave group: " + error.message);
+            }
+        }
+    };
+
+    // Feature: Delete Group
+    const handleDeleteGroup = async () => {
+        const confirmed = await showConfirm("Delete Group", "Are you sure? This will delete the group and all messages for everyone. This action cannot be undone.", "Delete Forever");
+        if (confirmed) {
+            const { error } = await supabase.from('groups').delete().eq('id', selectedGroup.id);
+            if (!error) {
+                navigate('/conversations');
+            } else {
+                showAlert("Error", "Failed to delete group: " + error.message);
+            }
+        }
+    };
+
+    const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setNewMessage(val);
+        const now = Date.now();
+        if (now - lastTypingBroadcast.current > 200) {
+            groupChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, content: val } });
+            lastTypingBroadcast.current = now;
+        }
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
         const content = newMessage;
         setNewMessage('');
         
-        // Optimistic
+        if (editingId) {
+            // Edit Existing Message
+            const { error } = await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', editingId);
+            if (error) showAlert("Error", "Failed to update message.");
+            setEditingId(null);
+            return;
+        }
+
+        // Send New Message
         const tempId = Math.random().toString();
         const optimisticMsg: Message = { 
             id: tempId, 
@@ -271,7 +377,6 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         
         setMessages(prev => [...prev, optimisticMsg]);
 
-        // Insert with explicit NULL receiver_id for groups
         const { data, error } = await supabase.from('messages').insert({
             sender_id: currentUser.id,
             group_id: selectedGroup.id,
@@ -287,10 +392,17 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         }
     };
 
+    // Feature: Delete Message
+    const handleDeleteMessage = async (id: string) => {
+        const { error } = await supabase.from('messages').delete().eq('id', id);
+        if (error) {
+            console.error("Delete failed", error);
+            showAlert("Error", "Could not delete message.");
+        }
+    };
+
     const handleRetry = async (msg: Message) => {
-        // Retry sending a failed message
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sending' } : m));
-        
         const { data, error } = await supabase.from('messages').insert({
             sender_id: currentUser.id,
             group_id: selectedGroup.id,
@@ -299,10 +411,8 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         }).select().single();
 
         if (error) {
-            console.error("Retry failed:", error);
             setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
         } else {
-            // Remove the old temporary message and add the new real one, or update in place
             setMessages(prev => prev.map(m => m.id === msg.id ? { ...data, sender: msg.sender, status: 'sent' } : m));
         }
     };
@@ -338,7 +448,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
             </div>
             <div className="flex flex-col min-w-0">
-                <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors">{m.email.split('@')[0]}</span>
+                <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors flex items-center gap-1">
+                    {m.email.split('@')[0]}
+                    {/* Feature: Owner Badge */}
+                    {m.id === selectedGroup.created_by && <span className="text-yellow-500 text-[10px]" title="Owner">👑</span>}
+                </span>
                 {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
             </div>
         </div>
@@ -351,15 +465,34 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
             <div className="flex-1 flex flex-col min-w-0 h-full relative z-0">
                 {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm shrink-0">
-                    <div className="flex items-center gap-4 min-w-0">
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
                         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
-                            {selectedGroup.name[0].toUpperCase()}
+                            {groupName[0].toUpperCase()}
                         </div>
-                        <div className="min-w-0">
-                            <h2 className="font-bold text-white text-lg tracking-tight truncate">{selectedGroup.name}</h2>
+                        <div className="min-w-0 flex-1">
+                            {isEditingName ? (
+                                <form onSubmit={handleRenameGroup} className="flex items-center gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={groupName} 
+                                        onChange={(e) => setGroupName(e.target.value)}
+                                        className="bg-black/50 border border-white/20 text-white px-2 py-1 rounded text-sm font-bold w-full focus:outline-none focus:border-indigo-500"
+                                        autoFocus
+                                        onBlur={handleRenameGroup}
+                                    />
+                                </form>
+                            ) : (
+                                <div className="flex items-center gap-2 group">
+                                    <h2 className="font-bold text-white text-lg tracking-tight truncate cursor-default">{groupName}</h2>
+                                    {isOwner && (
+                                        <button onClick={() => setIsEditingName(true)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                             <div className="flex items-center gap-3">
                                 <span className="text-xs text-indigo-400 font-medium">Group Chat</span>
-                                {/* Mobile Toggle for Members */}
                                 <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-[10px] text-gray-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                                     <span>{groupMembers.length}</span>
@@ -367,10 +500,30 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                             </div>
                         </div>
                     </div>
-                    <button onClick={() => { setShowAddMemberModal(true); fetchFriendsToAdd(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition text-xs font-bold flex items-center gap-1 shrink-0">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        <span className="hidden sm:inline">Add</span>
-                    </button>
+                    
+                    {/* Settings Dropdown */}
+                    <div className="relative">
+                        <button onClick={() => setShowGroupSettings(!showGroupSettings)} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition text-xs font-bold flex items-center gap-1 shrink-0">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+                        </button>
+                        {showGroupSettings && (
+                            <div className="absolute right-0 top-12 bg-[#1a1a20] border border-white/10 rounded-xl shadow-2xl p-1 z-30 min-w-[160px] animate-scale-in">
+                                <button onClick={() => { setShowGroupSettings(false); setShowAddMemberModal(true); fetchFriendsToAdd(); }} className="w-full text-left px-3 py-2 hover:bg-white/10 rounded-lg text-sm text-gray-300 hover:text-white flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> Add Member
+                                </button>
+                                {isOwner ? (
+                                    <button onClick={() => { setShowGroupSettings(false); handleDeleteGroup(); }} className="w-full text-left px-3 py-2 hover:bg-red-500/20 rounded-lg text-sm text-red-400 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Delete Group
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setShowGroupSettings(false); handleLeaveGroup(); }} className="w-full text-left px-3 py-2 hover:bg-red-500/20 rounded-lg text-sm text-red-400 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> Leave Group
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        {showGroupSettings && <div className="fixed inset-0 z-20" onClick={() => setShowGroupSettings(false)}></div>}
+                    </div>
                 </div>
 
                 {/* Messages */}
@@ -385,32 +538,52 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                                 isMe={msg.sender_id === currentUser.id} 
                                 currentUser={currentUser} 
                                 onReaction={handleReaction} 
+                                onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }}
+                                onDelete={handleDeleteMessage}
                                 availableEmojis={emojiList} 
                                 onRetry={handleRetry}
                             />
                         ))
+                    )}
+                    
+                    {/* Feature: Typing Indicators */}
+                    {Object.keys(remoteDrafts).length > 0 && (
+                        <div className="px-4 py-2 text-xs text-gray-500 italic flex items-center gap-1 animate-fade-in">
+                            <div className="w-1 h-1 bg-gray-500 rounded-full animate-bounce"></div>
+                            <div className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-75"></div>
+                            <div className="w-1 h-1 bg-gray-500 rounded-full animate-bounce delay-150"></div>
+                            <span className="ml-1">Someone is typing...</span>
+                        </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
                 {/* Input */}
                 <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md shrink-0">
-                    <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
-                        <input 
-                            type="text" 
-                            value={newMessage} 
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
-                            placeholder={`Message ${selectedGroup.name}...`} 
-                        />
-                        <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50">
-                            <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                        </button>
-                    </form>
+                    <div className="max-w-4xl mx-auto flex flex-col gap-2">
+                        {editingId && (
+                            <div className="flex items-center justify-between bg-gray-800/50 p-2 px-4 rounded-lg text-xs text-gray-300 animate-slide-up">
+                                <span>Editing message</span>
+                                <button onClick={() => { setEditingId(null); setNewMessage(''); }} className="hover:text-white">Cancel</button>
+                            </div>
+                        )}
+                        <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
+                            <input 
+                                type="text" 
+                                value={newMessage} 
+                                onChange={handleInput}
+                                className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
+                                placeholder={`Message ${groupName}...`} 
+                            />
+                            <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50 hover:scale-105 active:scale-95">
+                                {editingId ? 'Save' : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
 
-            {/* Right Sidebar (Desktop: Flex / Mobile: Fixed Slide-over) */}
+            {/* Right Sidebar */}
             <div className={`
                 fixed inset-y-0 right-0 z-40 w-72 bg-[#060609] border-l border-white/5 flex flex-col shrink-0 transition-transform duration-300 shadow-2xl
                 md:relative md:translate-x-0 md:shadow-none
@@ -426,7 +599,6 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
-                    {/* Online Section */}
                     <div>
                         <div className="px-2 mb-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
@@ -436,8 +608,6 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                             {onlineMembers.length > 0 ? onlineMembers.map(m => renderMember(m, true)) : <div className="px-2 text-xs text-gray-600 italic">No one online</div>}
                         </div>
                     </div>
-
-                    {/* Offline Section */}
                     <div>
                         <div className="px-2 mb-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
@@ -457,12 +627,10 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 </div>
             </div>
             
-            {/* Mobile Overlay */}
             {showMobileSidebar && (
                 <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowMobileSidebar(false)}></div>
             )}
 
-            {/* Add Member Modal */}
             {showAddMemberModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
