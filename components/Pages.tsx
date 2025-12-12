@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { PricingCard } from './LandingPage';
 
@@ -283,50 +282,6 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => {
         "React Hooks"
     ];
 
-    const renderWebRTCConfig = () => {
-        if (sdkPlan === 'free') {
-            return `// ⚠️ Free Tier: STUN Only (P2P Mesh)
-// High failure rate on corporate networks.
-const config = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' }
-  ],
-  iceTransportPolicy: 'all'
-};`;
-        }
-        if (sdkPlan === 'pro') {
-            return `// ✅ Pro Tier: Standard TURN
-// Reliable traversal, capped at 2Mbps.
-const config = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { 
-      urls: 'turn:us-east.mastervoice.dev:3478?transport=udp',
-      username: 'pro_user_123',
-      credential: 'generated_token_xyz'
-    }
-  ],
-  bandwidth: '2048' // kbps limit
-};`;
-        }
-        return `// 🚀 Elite Tier: Premium Global Relay
-// Low latency, TCP fallback, unlimited bandwidth.
-const config = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { 
-      urls: 'turn:global-relay.mastervoice.dev:443?transport=tcp', // 443 bypasses firewalls
-      username: 'elite_corp_001',
-      credential: 'premium_token_abc'
-    }
-  ],
-  videoConfig: {
-    codec: 'VP9', // High efficiency
-    bitrate: 'unlimited'
-  }
-};`;
-    };
-
     return (
         <PageLayout title="MasterVoice SDK Reference" onBack={onBack} wide={true}>
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
@@ -401,468 +356,104 @@ const session = await client.auth.signInWithPassword({
                             <h2 className="text-3xl font-bold text-white mb-4">3. Session Management</h2>
                             <p className="mb-6">Manage user presence and connection state.</p>
                             <ul className="list-disc pl-5 space-y-2 mb-6 text-gray-400">
-                                <li><strong>Heartbeat:</strong> Automatically sends ping frames to keep the WebSocket open.</li>
-                                <li><strong>Presence:</strong> Broadcasts online status to peers.</li>
+                                <li><strong>Heartbeat:</strong> Automatic ping/pong every 30s.</li>
+                                <li><strong>Presence:</strong> Realtime online status synchronization.</li>
                             </ul>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Listen to auth state changes
-client.auth.onAuthStateChange((event, session) => {
-  console.log('New state:', event);
-});
-
-// Get current user
-const user = client.auth.user();`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 3 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">4. Realtime Messaging</h2>
-                            <p className="mb-6">Send and receive end-to-end encrypted text messages via Supabase Realtime channels.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Subscribe to a room
-const channel = client.chat.subscribe('room_123');
-
-// Send Message
-await channel.send({
-  content: 'Hello World',
-  type: 'text/plain'
-});
-
-// Receive Message
-channel.on('message', (msg) => {
-  console.log('Received:', msg.content);
-});`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 4 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">5. Group Management</h2>
-                            <p className="mb-6">Create dynamic groups and manage memberships.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Create Group
-const group = await client.groups.create({ name: 'Developers' });
-
-// Add Member
-await client.groups.addMember(group.id, 'user_uuid_456');
-
-// List Members
-const members = await client.groups.getMembers(group.id);`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 5 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">6. WebRTC Engine</h2>
-                            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl mb-6">
-                                <p className="text-amber-400 text-sm font-bold">⚠️ Bandwidth Throttling Active</p>
-                                <p className="text-gray-400 text-sm mt-1">
-                                    The SDK automatically configures ICE servers based on your API Key tier. Free tier keys are restricted to STUN (public) only.
-                                </p>
-                            </div>
-
-                            {/* Plan Simulator */}
-                            <div className="mb-8 bg-[#111] p-6 rounded-2xl border border-white/10">
-                                <div className="flex gap-4 mb-4 border-b border-white/5 pb-4">
-                                    <button onClick={() => setSdkPlan('free')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${sdkPlan === 'free' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}>Free SDK</button>
-                                    <button onClick={() => setSdkPlan('pro')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${sdkPlan === 'pro' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white'}`}>SDK Pro</button>
-                                    <button onClick={() => setSdkPlan('elite')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${sdkPlan === 'elite' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black' : 'text-gray-500 hover:text-white'}`}>SDK Elite</button>
-                                </div>
-                                <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Generated Configuration</p>
-                                <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">{renderWebRTCConfig()}</pre>
-                            </div>
-
-                            <p>To initialize the WebRTC engine with these settings:</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300 mt-2">
-{`const rtc = client.webrtc.initialize(config);`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 6 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">7. Voice & Audio Graph</h2>
-                            <p className="mb-6">The SDK creates an `AudioContext` graph for gain control and visualization.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Start Call
-await client.call.start(recipientId, { 
-  audio: true, 
-  video: false 
-});
-
-// Handle Incoming Stream
-client.on('track', (track, stream) => {
-  if (track.kind === 'audio') {
-    const audio = new Audio();
-    audio.srcObject = stream;
-    audio.play();
-  }
-});`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 7 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">8. Video & Screen Share</h2>
-                            <p className="mb-6">Handling multiple video tracks (Camera + Screen) simultaneously.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`// Enable Camera
-await client.call.enableVideo();
-
-// Start Screen Share (Dual Stream)
-await client.call.startScreenShare();
-
-// The SDK automatically renegotiates the SDP offer 
-// to include the second video track.`}
-                            </pre>
-                        </div>
-                    )}
-
-                    {activeSection === 8 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">9. Events & Webhooks</h2>
-                            <p className="mb-6">Listen to system events.</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-[#1a1a20] p-4 rounded-xl border border-white/5">
-                                    <code className="text-indigo-400">call.incoming</code>
-                                    <p className="text-xs text-gray-500 mt-1">Fired when an offer is received.</p>
-                                </div>
-                                <div className="bg-[#1a1a20] p-4 rounded-xl border border-white/5">
-                                    <code className="text-indigo-400">call.connected</code>
-                                    <p className="text-xs text-gray-500 mt-1">Fired when ICE connection is established.</p>
-                                </div>
-                                <div className="bg-[#1a1a20] p-4 rounded-xl border border-white/5">
-                                    <code className="text-indigo-400">user.typing</code>
-                                    <p className="text-xs text-gray-500 mt-1">Realtime typing indicator.</p>
-                                </div>
-                                <div className="bg-[#1a1a20] p-4 rounded-xl border border-white/5">
-                                    <code className="text-indigo-400">error</code>
-                                    <p className="text-xs text-gray-500 mt-1">Global error handler.</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeSection === 9 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">10. Troubleshooting</h2>
-                            
-                            <div className="space-y-6">
-                                <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-xl">
-                                    <h4 className="font-bold text-white mb-2">Issue: "View Members" only shows myself</h4>
-                                    <p className="text-sm text-gray-300 mb-4">
-                                        <strong>Cause:</strong> Row Level Security (RLS) policies in Supabase default to private. Authenticated users cannot see other profiles unless explicitly allowed.
-                                    </p>
-                                    <p className="text-sm text-gray-300 mb-2"><strong>Fix:</strong> Run the following SQL in your Supabase Editor:</p>
-                                    <pre className="bg-black/50 p-3 rounded-lg text-xs font-mono text-green-400 overflow-x-auto">
-{`create policy "Public profiles" 
-on public.profiles for select 
-using ( true );`}
-                                    </pre>
-                                </div>
-
-                                <div className="bg-[#1a1a20] border border-white/10 p-6 rounded-xl">
-                                    <h4 className="font-bold text-white mb-2">Issue: Connection Failed (ICE Error)</h4>
-                                    <p className="text-sm text-gray-300">
-                                        <strong>Cause:</strong> Symmetric NAT or Corporate Firewall blocking P2P.
-                                        <br/>
-                                        <strong>Fix:</strong> Upgrade to SDK Pro to enable TURN relay servers.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeSection === 10 && (
-                        <div className="animate-fade-in-up">
-                            <h2 className="text-3xl font-bold text-white mb-4">11. React Hooks</h2>
-                            <p className="mb-6">The <code>mastervoice-react</code> package provides convenient hooks.</p>
-                            
-                            <h3 className="text-xl font-bold text-white mb-2">useMasterVoice</h3>
-                            <p className="text-gray-400 text-sm mb-4">Access the initialized client instance.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300 mb-8">
-{`import { useMasterVoice } from 'mastervoice-react';
-
-const MyComponent = () => {
-  const client = useMasterVoice();
-  
-  const sendMessage = async () => {
-    await client.chat.send({ content: "Hello!" });
-  };
-};`}
-                            </pre>
-
-                            <h3 className="text-xl font-bold text-white mb-2">useCall</h3>
-                            <p className="text-gray-400 text-sm mb-4">Manage call state and media streams.</p>
-                            <pre className="bg-[#111] p-4 rounded-xl border border-white/10 overflow-x-auto text-sm text-gray-300">
-{`import { useCall } from 'mastervoice-react';
-
-const CallButton = ({ userId }) => {
-  const { startCall, callState } = useCall(userId);
-  
-  return (
-    <button onClick={startCall}>
-      {callState === 'IDLE' ? 'Call' : 'Connecting...'}
-    </button>
-  );
-};`}
-                            </pre>
                         </div>
                     )}
                 </div>
             </div>
         </PageLayout>
     );
-}
-
-// Update the export of PlansPage to include navigation props for the buttons
-interface PlansPageProps extends PageProps {
-  onNavigate?: (path: string) => void;
-}
-
-export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
-    const [view, setView] = useState<'users' | 'devs'>('users');
-    const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
-
-    const isAnnual = billing === 'annual';
-
-    return (
-        <PageLayout title="Plans & Pricing" onBack={onBack} wide={true}>
-            {/* View Toggle Switch (Users vs Devs) */}
-            <div className="flex justify-center mb-8">
-                <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex">
-                    <button 
-                        onClick={() => setView('users')}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'users' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        For Individuals
-                    </button>
-                    <button 
-                        onClick={() => setView('devs')}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'devs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        For Developers
-                    </button>
-                </div>
-            </div>
-
-            {/* Billing Cycle Toggle */}
-            <div className="flex justify-center items-center gap-4 mb-16">
-                <span className={`text-sm font-medium ${!isAnnual ? 'text-white' : 'text-gray-500'}`}>Monthly</span>
-                <button 
-                    onClick={() => setBilling(isAnnual ? 'monthly' : 'annual')}
-                    className="w-14 h-8 rounded-full bg-gray-800 border border-white/10 relative transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                >
-                    <div className={`absolute top-1 w-6 h-6 rounded-full bg-indigo-500 transition-all shadow-md ${isAnnual ? 'left-7' : 'left-1'}`}></div>
-                </button>
-                <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${isAnnual ? 'text-white' : 'text-gray-500'}`}>Annual</span>
-                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Save ~20%</span>
-                </div>
-            </div>
-
-            {view === 'users' ? (
-                // User Plans
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
-                     <PricingCard 
-                         title="Free" 
-                         price="$0" 
-                         features={["Secure P2P Messaging", "1-on-1 Voice Calls", "1GB Cloud Storage"]} 
-                         cta="Sign Up Free" 
-                         onAction={() => onNavigate?.('/register')} 
-                     />
-                     <PricingCard 
-                         title="Premium" 
-                         price={isAnnual ? "$49.99/yr" : "$4.99/mo"}
-                         recommended 
-                         features={["Group Video Calls (up to 12)", "HD Voice Quality", "10GB Cloud Storage", "Priority Support"]} 
-                         cta="Go Premium" 
-                         onAction={() => {}} 
-                     />
-                     <PricingCard 
-                         title="Family" 
-                         price={isAnnual ? "$129.99/yr" : "$12.99/mo"}
-                         features={["6 Premium Accounts", "Parental Controls", "Shared Photo Vault", "50GB Shared Storage"]} 
-                         cta="Get Family Plan" 
-                         onAction={() => {}} 
-                     />
-                </div>
-            ) : (
-                // Developer Plans
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
-                    <PricingCard 
-                        title="Hobby" 
-                        price="Free" 
-                        features={["P2P Mesh (STUN Only)", "1,000 MAU", "Community Support", "Basic Analytics"]} 
-                        cta="Start Building" 
-                        onAction={() => onNavigate?.('/dev')} 
-                    />
-                    <PricingCard 
-                        title="Startup" 
-                        price={isAnnual ? "$490/yr" : "$49/mo"}
-                        recommended 
-                        features={["Standard TURN Relay", "10,000 MAU", "Email Support", "99.9% Uptime SLA"]} 
-                        cta="Get API Key" 
-                        onAction={() => onNavigate?.('/api_key')} 
-                    />
-                    <PricingCard 
-                        title="Enterprise" 
-                        price="Custom" 
-                        features={["Global Premium Relay", "Unlimited MAU", "24/7 Phone Support", "On-Premise Option"]} 
-                        cta="Contact Sales" 
-                        onAction={() => onNavigate?.('/contact')} 
-                    />
-                </div>
-            )}
-        </PageLayout>
-    );
-}
-
-export const DevPage: React.FC<PageProps> = ({ onNavigate }) => {
-    return (
-        <div className="min-h-screen bg-[#050510] text-white font-['Outfit'] relative overflow-hidden animate-slide-up">
-             {/* Background */}
-             <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-900/20 to-transparent pointer-events-none"></div>
-             
-             <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-                 {/* Header */}
-                 <div className="flex justify-between items-center mb-20">
-                     <div className="flex items-center gap-2">
-                         <div className="w-8 h-8 bg-white text-black rounded-lg flex items-center justify-center font-bold">M</div>
-                         <span className="font-bold text-xl">MasterVoice <span className="text-indigo-400">Developers</span></span>
-                     </div>
-                     <button onClick={() => onNavigate?.('/')} className="text-gray-400 hover:text-white transition">Back to Home</button>
-                 </div>
-
-                 {/* Content */}
-                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                      <div>
-                          <div className="inline-block px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold mb-6">
-                              SDK v2.2.0 Beta
-                          </div>
-                          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-                              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Communication Layer</span> for the Web.
-                          </h1>
-                          <p className="text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-                              Add secure, low-latency voice and chat to your React application with just a few lines of code. No backend required.
-                          </p>
-                          <div className="flex gap-4">
-                              <button onClick={() => onNavigate?.('/docs')} className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Read Documentation</button>
-                              <button onClick={() => onNavigate?.('/api_key')} className="px-8 py-4 bg-white/5 border border-white/10 text-white font-bold rounded-xl hover:bg-white/10 transition">Get API Keys</button>
-                          </div>
-                      </div>
-                      
-                      <div className="bg-[#0f0f13] border border-white/10 rounded-2xl p-6 shadow-2xl relative group">
-                          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition duration-500 rounded-2xl"></div>
-                          <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-4">
-                              <div className="flex gap-1.5">
-                                  <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
-                                  <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
-                                  <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
-                              </div>
-                              <span className="text-xs text-gray-500">quickstart.ts</span>
-                          </div>
-                          <pre className="font-mono text-sm text-gray-300 overflow-x-auto">
-                              <code>
-{`// 1. Install via NPM
-// npm install mastervoice-sdk
-
-import { MasterVoice } from 'mastervoice-sdk';
-
-// 2. Initialize
-const client = new MasterVoice({
-  apiKey: process.env.MV_KEY
-});
-
-// 3. Connect
-const call = await client.call.start(
-  'user_123', 
-  { audio: true }
-);`}
-                              </code>
-                          </pre>
-                      </div>
-                 </div>
-
-                 {/* Infrastructure Map Placeholder */}
-                 <div className="mt-32 border-t border-white/10 pt-20">
-                     <div className="text-center mb-16">
-                         <h2 className="text-3xl font-bold mb-4">Global Edge Infrastructure</h2>
-                         <p className="text-gray-400">Low latency signaling and media relay nodes deployed worldwide.</p>
-                     </div>
-                     <div className="relative h-[300px] w-full bg-[#0a0a0f] rounded-3xl border border-white/5 overflow-hidden flex items-center justify-center">
-                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
-                         {/* Abstract Map Dots */}
-                         <div className="w-full max-w-4xl h-full relative opacity-50">
-                             {[...Array(20)].map((_, i) => (
-                                 <div key={i} className="absolute w-2 h-2 bg-indigo-500 rounded-full animate-pulse" style={{ top: `${Math.random() * 80 + 10}%`, left: `${Math.random() * 90 + 5}%`, animationDelay: `${Math.random() * 2}s` }}></div>
-                             ))}
-                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-700 font-bold text-4xl tracking-widest uppercase select-none">
-                                 Global Mesh Network
-                             </div>
-                         </div>
-                     </div>
-                 </div>
-
-                 {/* Use Cases Grid */}
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
-                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
-                         <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-6 text-blue-400">
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                         </div>
-                         <h3 className="text-xl font-bold mb-2">Live Streaming</h3>
-                         <p className="text-gray-400 text-sm">Add real-time voice chat alongside your video streams for interactive watch parties.</p>
-                     </div>
-                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
-                         <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mb-6 text-green-400">
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                         </div>
-                         <h3 className="text-xl font-bold mb-2">Telehealth</h3>
-                         <p className="text-gray-400 text-sm">HIPAA-compliant encrypted video calls for doctor-patient consultations.</p>
-                     </div>
-                     <div className="p-8 bg-[#0a0a0f] border border-white/10 rounded-3xl">
-                         <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-6 text-purple-400">
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                         </div>
-                         <h3 className="text-xl font-bold mb-2">Collaboration</h3>
-                         <p className="text-gray-400 text-sm">Embed voice channels directly into your project management or whiteboard tools.</p>
-                     </div>
-                 </div>
-
-                 {/* Quick Links */}
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24">
-                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => onNavigate?.('/docs')}>
-                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg> Documentation</h3>
-                         <p className="text-sm text-gray-400">Guides, API Reference, and Tutorials.</p>
-                     </div>
-                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => onNavigate?.('/api_key')}>
-                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg> Developer Console</h3>
-                         <p className="text-sm text-gray-400">Manage API keys, check usage, and billing.</p>
-                     </div>
-                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => window.open('https://github.com/mastervoice', '_blank')}>
-                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> GitHub</h3>
-                         <p className="text-sm text-gray-400">View source code and contribute.</p>
-                     </div>
-                 </div>
-             </div>
-        </div>
-    );
-}
+};
 
 export const PrivacyPolicy: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Privacy Policy" onBack={onBack}><p>Standard privacy policy content...</p></PageLayout>
+  <PageLayout title="Privacy Policy" onBack={onBack}>
+      <p className="mb-4">Effective Date: October 26, 2023</p>
+      <h3>1. Introduction</h3>
+      <p>Welcome to MasterVoice. We are committed to protecting your privacy and ensuring you have a positive experience on our website and in using our products and services.</p>
+      <h3>2. Data Collection</h3>
+      <p>We do not collect personal data beyond what is required for authentication (email). All communication is peer-to-peer and encrypted.</p>
+  </PageLayout>
 );
+
 export const TermsOfService: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Terms of Service" onBack={onBack}><p>Standard terms content...</p></PageLayout>
+  <PageLayout title="Terms of Service" onBack={onBack}>
+      <h3>1. Acceptance of Terms</h3>
+      <p>By accessing and using MasterVoice, you accept and agree to be bound by the terms and provision of this agreement.</p>
+      <h3>2. Use License</h3>
+      <p>Permission is granted to temporarily download one copy of the materials (information or software) on MasterVoice's website for personal, non-commercial transitory viewing only.</p>
+  </PageLayout>
 );
+
 export const ContactSupport: React.FC<PageProps> = ({ onBack }) => (
-  <PageLayout title="Contact Support" onBack={onBack}><p>Support form...</p></PageLayout>
+  <PageLayout title="Contact Support" onBack={onBack}>
+      <p className="mb-6">Have questions or need help? Reach out to our team.</p>
+      <div className="bg-[#111] p-6 rounded-xl border border-white/10">
+          <p className="mb-2"><strong>Email:</strong> support@mastervoice.io</p>
+          <p className="mb-2"><strong>Twitter:</strong> @MasterVoiceHQ</p>
+          <p><strong>Discord:</strong> discord.gg/mastervoice</p>
+      </div>
+  </PageLayout>
 );
+
 export const NotFoundPage: React.FC<PageProps> = ({ onBack }) => (
-  <div className="min-h-screen flex items-center justify-center text-white"><button onClick={onBack}>Go Back</button></div>
+  <div className="min-h-screen bg-[#030014] flex flex-col items-center justify-center font-['Outfit'] relative">
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+      <h1 className="text-9xl font-bold text-white/10 relative z-10">404</h1>
+      <h2 className="text-2xl text-white font-bold mb-4 relative z-10">Page Not Found</h2>
+      <button onClick={onBack} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition relative z-10">Go Back Home</button>
+  </div>
+);
+
+export const PlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
+    return (
+        <PageLayout title="Choose Your Plan" onBack={onBack} wide={true}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <PricingCard 
+                    title="Free" 
+                    price="$0" 
+                    features={['P2P Calling', 'Unlimited Messages', 'Standard Quality', 'Community Support']} 
+                    cta="Get Started"
+                    onAction={() => onNavigate?.('/register')}
+                />
+                <PricingCard 
+                    title="Pro" 
+                    price="$9" 
+                    features={['TURN Relay (Firewall Bypass)', 'HD Voice & Video', 'Group Calls (up to 10)', 'Priority Support']} 
+                    recommended={true}
+                    cta="Start Trial"
+                    onAction={() => onNavigate?.('/verify?tier=pro')}
+                />
+                <PricingCard 
+                    title="Team" 
+                    price="$29" 
+                    features={['Global Low Latency Network', '4K Screen Sharing', 'Unlimited Group Size', 'Dedicated Support']} 
+                    cta="Contact Sales"
+                    onAction={() => onNavigate?.('/contact')}
+                />
+            </div>
+        </PageLayout>
+    );
+};
+
+export const DevPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
+    <PageLayout title="Developer Tools" onBack={onBack}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div 
+                onClick={() => onNavigate?.('/docs')}
+                className="p-6 bg-[#111] border border-white/10 rounded-2xl cursor-pointer hover:bg-[#1a1a20] transition group"
+            >
+                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">Documentation</h3>
+                <p className="text-gray-400 text-sm">Read the full SDK reference and integration guides.</p>
+            </div>
+            <div 
+                onClick={() => onNavigate?.('/api_key')}
+                className="p-6 bg-[#111] border border-white/10 rounded-2xl cursor-pointer hover:bg-[#1a1a20] transition group"
+            >
+                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400">API Keys</h3>
+                <p className="text-gray-400 text-sm">Manage your secret keys and view usage quotas.</p>
+            </div>
+        </div>
+    </PageLayout>
 );

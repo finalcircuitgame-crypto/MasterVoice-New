@@ -1,3 +1,4 @@
+
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
@@ -29,11 +30,11 @@ const TIER_CONFIGS = {
   pro: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // "Slow" Standard TURN
+      // Standard TURN (UDP) via Expressturn
       { 
-        urls: 'turn:standard.relay.mastervoice.dev:3478?transport=udp', 
-        username: 'pro_tier', 
-        credential: 'standard_token' 
+        urls: 'turn:relay1.expressturn.com:3480?transport=udp', 
+        username: '000000002080624754', 
+        credential: 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
       }
     ],
     iceTransportPolicy: 'relay' as RTCIceTransportPolicy, // Force Relay for stability
@@ -42,11 +43,11 @@ const TIER_CONFIGS = {
   elite: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // "Fast" Premium Global TURN (TCP 443 bypass)
+      // Premium Relay (TCP) via Expressturn for firewall traversal
       { 
-        urls: 'turn:global.relay.mastervoice.dev:443?transport=tcp', 
-        username: 'elite_tier', 
-        credential: 'premium_token' 
+        urls: 'turn:relay1.expressturn.com:3480?transport=tcp', 
+        username: '000000002080624754', 
+        credential: 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
       }
     ],
     iceTransportPolicy: 'all' as RTCIceTransportPolicy,
