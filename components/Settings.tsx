@@ -121,8 +121,9 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
               .eq('id', currentUser.id);
 
           if (updateError) throw updateError;
-          window.location.reload();
-
+          
+          // No reload needed, App.tsx subscription handles the UI update
+          
       } catch (error: any) {
           alert('Failed to update avatar. ' + error.message);
       } finally {
