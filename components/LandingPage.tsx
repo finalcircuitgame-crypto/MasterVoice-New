@@ -217,7 +217,10 @@ call.on('connected', () => {
                                 <h3 className="text-xl font-bold">Global Low Latency</h3>
                                 <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold">PRO</span>
                             </div>
-                            <p className="text-gray-400 text-sm leading-relaxed">Intelligent TURN relay routing ensures < 100ms latency even on restrictive corporate networks.</p>
+                           <p className="text-gray-400 text-sm leading-relaxed">
+  Intelligent TURN relay routing ensures &lt; 100ms latency even on restrictive corporate networks.
+</p>
+
                         </div>
                         <div className="p-8 bg-white/5 rounded-3xl border border-white/5 hover:border-green-500/50 transition-colors group">
                             <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
