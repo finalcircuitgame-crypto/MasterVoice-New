@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
 import { useRouter } from '../hooks/useRouter';
@@ -17,8 +17,6 @@ const PRESET_THEMES: Record<string, any> = {
 };
 
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const { navigate } = useRouter();
   
   // Settings State
@@ -83,53 +81,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
       }
   };
 
-  const calculateFileHash = async (file: File): Promise<string> => {
-    const buffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!e.target.files || e.target.files.length === 0) return;
-      
-      const file = e.target.files[0];
-      setUploading(true);
-
-      try {
-          const fileHash = await calculateFileHash(file);
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${fileHash}.${fileExt}`;
-          const filePath = `avatars/${fileName}`;
-
-          const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
-          const { error: uploadError } = await supabase.storage
-              .from('avatars')
-              .upload(filePath, file, { upsert: false });
-
-          if (uploadError) {
-              const isExisting = uploadError.message.includes('already exists') || 
-                                 uploadError.message.includes('violates row-level security') ||
-                                 (uploadError as any).statusCode === '409';
-              if (!isExisting) throw uploadError;
-          }
-
-          const { error: updateError } = await supabase
-              .from('profiles')
-              .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-              .eq('id', currentUser.id);
-
-          if (updateError) throw updateError;
-          window.location.reload();
-
-      } catch (error: any) {
-          alert('Failed to update avatar. ' + error.message);
-      } finally {
-          setUploading(false);
-      }
-  };
-
   return (
     <div className="flex flex-col h-full w-full bg-[#060609] md:bg-[#060609] font-['Outfit'] animate-fade-in relative z-20 overflow-hidden">
       {/* Header */}
@@ -149,21 +100,16 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 blur-xl"></div>
              
              {/* Avatar Circle */}
-             <div className="relative z-10 -mt-2 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden">
+             <div className="relative z-10 -mt-2 mb-4">
+                 <div className="w-24 h-24 rounded-full border-4 border-[#13131a] flex items-center justify-center text-3xl font-bold text-white shadow-xl relative overflow-hidden" style={{ background: 'var(--theme-gradient)' }}>
                      {currentUser.avatar_url ? (
                          <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                      ) : (
                          <span>{currentUser.email[0].toUpperCase()}</span>
                      )}
-                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                     </div>
                  </div>
-                 {uploading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full z-30"><div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div></div>}
              </div>
              
-             <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
              <h2 className="text-xl font-bold text-white">{currentUser.email}</h2>
              <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.plan || 'Free Plan'}</p>
          </div>
