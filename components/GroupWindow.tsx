@@ -134,11 +134,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
-    const [showMembersModal, setShowMembersModal] = useState(false);
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
     const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
     const [friends, setFriends] = useState<UserProfile[]>([]);
     const [addingMember, setAddingMember] = useState(false);
+    const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const { showAlert } = useModal();
 
@@ -304,84 +304,148 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         await supabase.from('messages').update({ reactions: newReactions }).eq('id', msg.id);
     };
 
-    return (
-        <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
-            {/* Header */}
-            <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm">
-                <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                        {selectedGroup.name[0].toUpperCase()}
-                    </div>
-                    <div>
-                        <h2 className="font-bold text-white text-lg tracking-tight">{selectedGroup.name}</h2>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs text-indigo-400 font-medium">Group Chat</span>
-                            <button onClick={() => { setShowMembersModal(true); fetchMembers(); }} className="text-[10px] text-gray-400 hover:text-white hover:underline transition">View Members</button>
-                        </div>
-                    </div>
-                </div>
-                <button onClick={() => { setShowAddMemberModal(true); fetchFriendsToAdd(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition text-xs font-bold flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                    <span>Add</span>
-                </button>
-            </div>
+    // --- Sidebar Logic ---
+    const onlineMembers = groupMembers.filter(m => onlineUsers.has(m.id));
+    const offlineMembers = groupMembers.filter(m => !onlineUsers.has(m.id));
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar">
-                {loading ? (
-                    <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
+    const renderMember = (m: UserProfile, isOnline: boolean) => (
+        <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group cursor-default">
+            <div className="relative shrink-0">
+                {m.avatar_url ? (
+                    <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover border border-white/10" />
                 ) : (
-                    messages.map(msg => (
-                        <MessageItem 
-                            key={msg.id} 
-                            msg={msg} 
-                            isMe={msg.sender_id === currentUser.id} 
-                            currentUser={currentUser} 
-                            onReaction={handleReaction} 
-                            availableEmojis={emojiList} 
-                            onRetry={handleRetry}
-                        />
-                    ))
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-white/10">
+                        {m.email[0].toUpperCase()}
+                    </div>
                 )}
-                <div ref={messagesEndRef} />
+                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
             </div>
-
-            {/* Input */}
-            <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md">
-                <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
-                    <input 
-                        type="text" 
-                        value={newMessage} 
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
-                        placeholder={`Message ${selectedGroup.name}...`} 
-                    />
-                    <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50">
-                        <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                    </button>
-                </form>
+            <div className="flex flex-col min-w-0">
+                <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors">{m.email.split('@')[0]}</span>
+                {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
             </div>
+        </div>
+    );
 
-            {/* Modals */}
-            {showMembersModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-white">Members</h3>
-                            <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+    return (
+        <div className="flex flex-row h-full bg-[#030014] relative font-['Outfit'] overflow-hidden">
+            
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 h-full relative z-0">
+                {/* Header */}
+                <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm shrink-0">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
+                            {selectedGroup.name[0].toUpperCase()}
                         </div>
-                        <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-                            {groupMembers.map(m => (
-                                <div key={m.id} className="flex items-center p-2 rounded-xl bg-white/5 gap-3">
-                                    {m.avatar_url ? <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{m.email[0]}</div>}
-                                    <span className="text-gray-200 text-sm">{m.email.split('@')[0]}</span>
-                                </div>
-                            ))}
+                        <div className="min-w-0">
+                            <h2 className="font-bold text-white text-lg tracking-tight truncate">{selectedGroup.name}</h2>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-indigo-400 font-medium">Group Chat</span>
+                                {/* Mobile Toggle for Members */}
+                                <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-[10px] text-gray-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                    <span>{groupMembers.length}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={() => { setShowAddMemberModal(true); fetchFriendsToAdd(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition text-xs font-bold flex items-center gap-1 shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        <span className="hidden sm:inline">Add</span>
+                    </button>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar">
+                    {loading ? (
+                        <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
+                    ) : (
+                        messages.map(msg => (
+                            <MessageItem 
+                                key={msg.id} 
+                                msg={msg} 
+                                isMe={msg.sender_id === currentUser.id} 
+                                currentUser={currentUser} 
+                                onReaction={handleReaction} 
+                                availableEmojis={emojiList} 
+                                onRetry={handleRetry}
+                            />
+                        ))
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md shrink-0">
+                    <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
+                        <input 
+                            type="text" 
+                            value={newMessage} 
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
+                            placeholder={`Message ${selectedGroup.name}...`} 
+                        />
+                        <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50">
+                            <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Right Sidebar (Desktop: Flex / Mobile: Fixed Slide-over) */}
+            <div className={`
+                fixed inset-y-0 right-0 z-40 w-72 bg-[#060609] border-l border-white/5 flex flex-col shrink-0 transition-transform duration-300 shadow-2xl
+                md:relative md:translate-x-0 md:shadow-none
+                ${showMobileSidebar ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+            `}>
+                <div className="h-[73px] flex items-center justify-between px-6 border-b border-white/5 shrink-0">
+                    <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider flex items-center gap-2">
+                        Members <span className="bg-white/10 px-1.5 py-0.5 rounded-full text-white">{groupMembers.length}</span>
+                    </h3>
+                    <button onClick={() => setShowMobileSidebar(false)} className="md:hidden text-gray-400 hover:text-white bg-white/5 p-1 rounded-lg">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
+                    {/* Online Section */}
+                    <div>
+                        <div className="px-2 mb-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            Online — {onlineMembers.length}
+                        </div>
+                        <div className="space-y-1">
+                            {onlineMembers.length > 0 ? onlineMembers.map(m => renderMember(m, true)) : <div className="px-2 text-xs text-gray-600 italic">No one online</div>}
+                        </div>
+                    </div>
+
+                    {/* Offline Section */}
+                    <div>
+                        <div className="px-2 mb-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
+                            Offline — {offlineMembers.length}
+                        </div>
+                        <div className="space-y-1">
+                            {offlineMembers.length > 0 ? offlineMembers.map(m => renderMember(m, false)) : <div className="px-2 text-xs text-gray-600 italic">No offline members</div>}
                         </div>
                     </div>
                 </div>
+
+                <div className="p-4 border-t border-white/5 bg-white/5">
+                    <button onClick={() => { setShowAddMemberModal(true); fetchFriendsToAdd(); }} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition text-xs shadow-lg shadow-indigo-600/20 active:scale-95 flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+                        Invite People
+                    </button>
+                </div>
+            </div>
+            
+            {/* Mobile Overlay */}
+            {showMobileSidebar && (
+                <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowMobileSidebar(false)}></div>
             )}
 
+            {/* Add Member Modal */}
             {showAddMemberModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-[#1a1a20] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
