@@ -193,7 +193,13 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     }, [messages.length]);
 
     const fetchMembers = async () => {
-        const { data: memberRows } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
+        const { data: memberRows, error } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
+        
+        if (error) {
+            console.error("Error fetching group members:", error);
+            return;
+        }
+
         if (memberRows) {
             const { data: profiles } = await supabase.from('profiles').select('*').in('id', memberRows.map(m => m.user_id));
             if (profiles) setGroupMembers(profiles);
@@ -225,11 +231,22 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const handleAddMember = async (userId: string) => {
         setAddingMember(true);
         const { error } = await supabase.from('group_members').insert({ group_id: selectedGroup.id, user_id: userId });
+        
         if (!error) {
             setFriends(prev => prev.filter(f => f.id !== userId));
             showAlert("Success", "Member added!");
+            fetchMembers(); // Refresh list to confirm visibility
         } else {
-            showAlert("Error", "Failed to add member.");
+            // Postgres unique_violation code is 23505
+            if (error.code === '23505') {
+                 showAlert("Member Exists", "This user is already in the group.");
+                 // Optimistically remove them from the add list
+                 setFriends(prev => prev.filter(f => f.id !== userId));
+                 // Try fetching members again, maybe RLS was slow
+                 fetchMembers();
+            } else {
+                 showAlert("Error", "Failed to add member: " + error.message);
+            }
         }
         setAddingMember(false);
     };

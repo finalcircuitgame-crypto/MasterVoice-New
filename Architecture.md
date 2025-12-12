@@ -162,13 +162,22 @@ create policy "Users can create groups" on public.groups
     created_by = auth.uid()
   );
 
--- 3. View Group Members (Select) - CRITICAL FIX
--- Old policy only let you see YOURSELF. This lets you see ALL members of groups you are in.
+-- 3. View Group Members (Select) - RECURSION FIX (SECURITY DEFINER)
+-- We use a security definer function to break the RLS recursion loop.
+create or replace function public.is_group_member(_group_id uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.group_members
+    where group_id = _group_id
+    and user_id = auth.uid()
+  );
+end;
+$$ language plpgsql security definer;
+
 create policy "View members of my groups" on public.group_members
   for select using (
-    group_id in (
-      select group_id from public.group_members where user_id = auth.uid()
-    )
+    public.is_group_member(group_id)
   );
 
 -- 4. Manage members (Insert)
