@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [loading, setLoading] = useState(true);
   
   // Call Persistence & UI State
   const [activeCallContact, setActiveCallContact] = useState<UserProfile | null>(null);
@@ -233,6 +234,8 @@ const App: React.FC = () => {
             }
         } catch (err: any) {
             console.error("Session init error:", err.message);
+        } finally {
+            setLoading(false);
         }
     };
     initSession();
@@ -249,6 +252,7 @@ const App: React.FC = () => {
           setOnlineUsers(new Set());
           if (['/conversations', '/settings'].includes(window.location.pathname)) navigate('/login');
       }
+      setLoading(false);
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -305,6 +309,17 @@ const App: React.FC = () => {
           navigate(`/conversations/groups/${group.id}`);
       }
   };
+
+  if (loading) {
+      return (
+          <div className="h-screen w-screen bg-[#030014] flex items-center justify-center font-['Outfit']">
+               <div className="flex flex-col items-center gap-4">
+                   <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                   <p className="text-gray-400 text-sm animate-pulse">Initializing Secure Session...</p>
+               </div>
+          </div>
+      );
+  }
 
   const isSettingsOpen = path === '/settings';
   const showChatInterface = (path.startsWith('/conversations') || isSettingsOpen) && session && currentUser;
@@ -390,7 +405,7 @@ const App: React.FC = () => {
                             </button>
                             <div className="flex items-center gap-2">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${selectedGroup ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gray-800'}`}>
-                                    {selectedGroup ? selectedGroup.name[0].toUpperCase() : selectedUser?.email[0].toUpperCase()}
+                                    {selectedGroup ? selectedGroup.name?.[0]?.toUpperCase() || '?' : selectedUser?.email[0].toUpperCase()}
                                 </div>
                                 <span className="font-bold text-white">{selectedGroup ? selectedGroup.name : selectedUser?.email.split('@')[0]}</span>
                             </div>
