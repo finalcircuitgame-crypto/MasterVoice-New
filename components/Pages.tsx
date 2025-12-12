@@ -7,7 +7,7 @@ interface PageProps {
   onNavigate?: (path: string) => void;
 }
 
-const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: () => void; wide?: boolean }> = ({ title, children, onBack, wide }) => (
+const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: () => void; wide?: boolean }> = ({ title, children, onBack, wide }) => (
   <div className="min-h-screen bg-[#030014] text-white overflow-y-auto animate-slide-up relative font-['Outfit']">
     {/* Background Effects */}
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -16,18 +16,20 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack: (
     </div>
 
     <div className={`relative z-10 container mx-auto px-6 py-12 ${wide ? 'max-w-7xl' : 'max-w-4xl'}`}>
-      <button 
-        onClick={onBack} 
-        className="group flex items-center text-gray-400 hover:text-white transition mb-8"
-      >
-        <div className="p-2 rounded-full bg-white/5 group-hover:bg-white/10 mr-3 transition">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-        </div>
-        <span className="text-sm font-semibold tracking-wide">BACK</span>
-      </button>
+      {onBack && (
+        <button 
+            onClick={onBack} 
+            className="group flex items-center text-gray-400 hover:text-white transition mb-8"
+        >
+            <div className="p-2 rounded-full bg-white/5 group-hover:bg-white/10 mr-3 transition">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </div>
+            <span className="text-sm font-semibold tracking-wide">BACK</span>
+        </button>
+      )}
 
       <div className={`glass-panel p-8 md:p-12 rounded-3xl border border-white/10 ${wide ? 'bg-[#050510]/80' : ''}`}>
-        <h1 className="text-4xl md:text-5xl font-bold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">{title}</h1>
+        {title && <h1 className="text-4xl md:text-5xl font-bold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">{title}</h1>}
         <div className="prose prose-invert prose-lg max-w-none text-gray-300">
             {children}
         </div>
@@ -586,36 +588,166 @@ interface PlansPageProps extends PageProps {
 }
 
 export const PlansPage: React.FC<PlansPageProps> = ({ onBack, onNavigate }) => {
+    const [view, setView] = useState<'users' | 'devs'>('users');
+
     return (
         <PageLayout title="Plans & Pricing" onBack={onBack} wide={true}>
-            <div className="text-center max-w-2xl mx-auto mb-16">
-                <p className="text-xl text-gray-400">Transparent pricing for the SDK and managed cloud services.</p>
+            {/* Toggle Switch */}
+            <div className="flex justify-center mb-12">
+                <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex">
+                    <button 
+                        onClick={() => setView('users')}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'users' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        For Individuals
+                    </button>
+                    <button 
+                        onClick={() => setView('devs')}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'devs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        For Developers
+                    </button>
+                </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
-                <PricingCard 
-                    title="Developer"
-                    price="Free"
-                    features={["P2P Mesh (STUN)", "1,000 MAU", "Community Support"]}
-                    cta="Start Building"
-                    onAction={() => window.open('https://github.com/mastervoice', '_blank')}
-                />
-                <PricingCard 
-                    title="Startup"
-                    price="$49"
-                    recommended={true}
-                    features={["Standard TURN", "10,000 MAU", "Email Support", "99.9% SLA"]}
-                    cta="Get API Key"
-                    onAction={() => onNavigate?.('/api_key')}
-                />
-                <PricingCard 
-                    title="Enterprise"
-                    price="Custom"
-                    features={["Global Premium Relay", "Unlimited MAU", "24/7 Phone Support", "On-premise Option"]}
-                    cta="Contact Sales"
-                    onAction={() => {}}
-                />
-            </div>
+
+            {view === 'users' ? (
+                // User Plans
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
+                     <PricingCard 
+                         title="Free" 
+                         price="$0" 
+                         features={["Secure P2P Messaging", "1-on-1 Voice Calls", "1GB Cloud Storage"]} 
+                         cta="Sign Up Free" 
+                         onAction={() => onNavigate?.('/register')} 
+                     />
+                     <PricingCard 
+                         title="Premium" 
+                         price="$4.99" 
+                         recommended 
+                         features={["Group Video Calls (up to 12)", "HD Voice Quality", "10GB Cloud Storage", "Priority Support"]} 
+                         cta="Go Premium" 
+                         onAction={() => {}} 
+                     />
+                     <PricingCard 
+                         title="Family" 
+                         price="$12.99" 
+                         features={["6 Premium Accounts", "Parental Controls", "Shared Photo Vault", "50GB Shared Storage"]} 
+                         cta="Get Family Plan" 
+                         onAction={() => {}} 
+                     />
+                </div>
+            ) : (
+                // Developer Plans
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 not-prose">
+                    <PricingCard 
+                        title="Hobby" 
+                        price="Free" 
+                        features={["P2P Mesh (STUN Only)", "1,000 MAU", "Community Support", "Basic Analytics"]} 
+                        cta="Start Building" 
+                        onAction={() => onNavigate?.('/dev')} 
+                    />
+                    <PricingCard 
+                        title="Startup" 
+                        price="$49" 
+                        recommended 
+                        features={["Standard TURN Relay", "10,000 MAU", "Email Support", "99.9% Uptime SLA"]} 
+                        cta="Get API Key" 
+                        onAction={() => onNavigate?.('/api_key')} 
+                    />
+                    <PricingCard 
+                        title="Enterprise" 
+                        price="Custom" 
+                        features={["Global Premium Relay", "Unlimited MAU", "24/7 Phone Support", "On-Premise Option"]} 
+                        cta="Contact Sales" 
+                        onAction={() => onNavigate?.('/contact')} 
+                    />
+                </div>
+            )}
         </PageLayout>
+    );
+}
+
+export const DevPage: React.FC<PageProps> = ({ onNavigate }) => {
+    return (
+        <div className="min-h-screen bg-[#050510] text-white font-['Outfit'] relative overflow-hidden animate-slide-up">
+             {/* Background */}
+             <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-900/20 to-transparent pointer-events-none"></div>
+             
+             <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
+                 {/* Header */}
+                 <div className="flex justify-between items-center mb-20">
+                     <div className="flex items-center gap-2">
+                         <div className="w-8 h-8 bg-white text-black rounded-lg flex items-center justify-center font-bold">M</div>
+                         <span className="font-bold text-xl">MasterVoice <span className="text-indigo-400">Developers</span></span>
+                     </div>
+                     <button onClick={() => onNavigate?.('/')} className="text-gray-400 hover:text-white transition">Back to Home</button>
+                 </div>
+
+                 {/* Content */}
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                      <div>
+                          <div className="inline-block px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold mb-6">
+                              SDK v2.2.0 Beta
+                          </div>
+                          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Communication Layer</span> for the Web.
+                          </h1>
+                          <p className="text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
+                              Add secure, low-latency voice and chat to your React application with just a few lines of code. No backend required.
+                          </p>
+                          <div className="flex gap-4">
+                              <button onClick={() => onNavigate?.('/docs')} className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition">Read Documentation</button>
+                              <button onClick={() => onNavigate?.('/api_key')} className="px-8 py-4 bg-white/5 border border-white/10 text-white font-bold rounded-xl hover:bg-white/10 transition">Get API Keys</button>
+                          </div>
+                      </div>
+                      
+                      <div className="bg-[#0f0f13] border border-white/10 rounded-2xl p-6 shadow-2xl relative group">
+                          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition duration-500 rounded-2xl"></div>
+                          <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-4">
+                              <div className="flex gap-1.5">
+                                  <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
+                                  <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
+                                  <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
+                              </div>
+                              <span className="text-xs text-gray-500">install.sh</span>
+                          </div>
+                          <pre className="font-mono text-sm text-gray-300 overflow-x-auto">
+                              <code>
+{`// 1. Install SDK
+npm install mastervoice-sdk
+
+// 2. Initialize
+const client = new MasterVoice({
+  apiKey: process.env.MV_KEY
+});
+
+// 3. Connect
+const call = await client.call.start(
+  'user_123', 
+  { audio: true }
+);`}
+                              </code>
+                          </pre>
+                      </div>
+                 </div>
+
+                 {/* Quick Links */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24">
+                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => onNavigate?.('/docs')}>
+                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg> Documentation</h3>
+                         <p className="text-sm text-gray-400">Guides, API Reference, and Tutorials.</p>
+                     </div>
+                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => onNavigate?.('/api_key')}>
+                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg> Developer Console</h3>
+                         <p className="text-sm text-gray-400">Manage API keys, check usage, and billing.</p>
+                     </div>
+                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-white/10 transition cursor-pointer" onClick={() => window.open('https://github.com/mastervoice', '_blank')}>
+                         <h3 className="font-bold text-white mb-2 flex items-center gap-2"><svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> GitHub</h3>
+                         <p className="text-sm text-gray-400">View source code and contribute.</p>
+                     </div>
+                 </div>
+             </div>
+        </div>
     );
 }
 

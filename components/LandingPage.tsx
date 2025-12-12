@@ -3,25 +3,25 @@ import React, { useState } from 'react';
 
 // PricingCard is exported for use in Pages.tsx
 export const PricingCard = ({ title, price, features, recommended = false, cta = "Get Started", onAction }: any) => (
-  <div className={`p-8 rounded-[2rem] border flex flex-col h-full relative transition-all duration-500 hover:-translate-y-2 group ${recommended ? 'bg-gradient-to-b from-indigo-900/40 to-[#050510] border-indigo-500/50 shadow-2xl z-10 scale-105' : 'bg-white/5 border-white/5 hover:border-white/20'}`}>
-    {recommended && <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-6 py-2 bg-indigo-600 rounded-full text-xs font-bold uppercase shadow-lg text-white tracking-wider">Recommended</div>}
-    <h3 className="text-xl font-bold mb-2 text-gray-300 group-hover:text-white transition-colors">{title}</h3>
-    <div className="flex items-baseline gap-1 mb-6"><span className="text-4xl font-bold text-white">{price}</span></div>
-    <ul className="space-y-4 flex-1 mb-8">
-        {features.map((f:string, i:number) => (
-            <li key={i} className="text-sm text-gray-400 flex gap-3 items-center">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${recommended ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>✓</div>
-                {f}
-            </li>
-        ))}
-    </ul>
-    <button onClick={onAction} className={`w-full py-4 rounded-xl font-bold transition-all active:scale-95 ${recommended ? 'bg-white text-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-white/5 text-white hover:bg-white/10'}`}>{cta}</button>
-  </div>
+    <div className={`p-8 rounded-[2rem] border flex flex-col h-full relative transition-all duration-500 hover:-translate-y-2 group ${recommended ? 'bg-gradient-to-b from-indigo-900/40 to-[#050510] border-indigo-500/50 shadow-2xl z-10 scale-105' : 'bg-white/5 border-white/5 hover:border-white/20'}`}>
+        {recommended && <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-6 py-2 bg-indigo-600 rounded-full text-xs font-bold uppercase shadow-lg text-white tracking-wider">Recommended</div>}
+        <h3 className="text-xl font-bold mb-2 text-gray-300 group-hover:text-white transition-colors">{title}</h3>
+        <div className="flex items-baseline gap-1 mb-6"><span className="text-4xl font-bold text-white">{price}</span></div>
+        <ul className="space-y-4 flex-1 mb-8">
+            {features.map((f: string, i: number) => (
+                <li key={i} className="text-sm text-gray-400 flex gap-3 items-center">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${recommended ? 'bg-indigo-500 text-white' : 'bg-white/10 text-gray-400'}`}>✓</div>
+                    {f}
+                </li>
+            ))}
+        </ul>
+        <button onClick={onAction} className={`w-full py-4 rounded-xl font-bold transition-all active:scale-95 ${recommended ? 'bg-white text-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-white/5 text-white hover:bg-white/10'}`}>{cta}</button>
+    </div>
 );
 
 interface LandingPageProps {
-  onNavigate: (page: string) => void;
-  isAuthenticated: boolean;
+    onNavigate: (page: string) => void;
+    isAuthenticated: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, isAuthenticated }) => {
@@ -122,7 +122,7 @@ call.on('connected', () => {
             {/* Hero Section */}
             <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 px-6 z-10 overflow-hidden">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80vw] h-[500px] bg-indigo-600/20 rounded-[100%] blur-[120px] pointer-events-none"></div>
-                
+
                 <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                     <div className="animate-fade-in-up">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-indigo-300 mb-6">
@@ -145,10 +145,10 @@ call.on('connected', () => {
                             </button>
                         </div>
                         <div className="mt-12 flex items-center gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-                           {/* Tech Stack Logos (Simulated) */}
-                           <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-green-500 rounded"></div> Supabase</div>
-                           <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-blue-500 rounded"></div> React</div>
-                           <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-orange-500 rounded"></div> WebRTC</div>
+                            {/* Tech Stack Logos (Simulated) */}
+                            <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-green-500 rounded"></div> Supabase</div>
+                            <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-blue-500 rounded"></div> React</div>
+                            <div className="text-xl font-bold flex items-center gap-2"><div className="w-6 h-6 bg-orange-500 rounded"></div> WebRTC</div>
                         </div>
                     </div>
 
@@ -166,11 +166,11 @@ call.on('connected', () => {
                                 <div className="text-xs text-gray-500 font-mono">index.ts</div>
                                 <div className="w-10"></div>
                             </div>
-                            
+
                             {/* Editor Tabs */}
                             <div className="flex border-b border-white/5">
                                 {Object.keys(snippets).map((key) => (
-                                    <button 
+                                    <button
                                         key={key}
                                         onClick={() => setActiveSnippet(key as any)}
                                         className={`px-6 py-2 text-xs font-mono border-r border-white/5 transition-colors ${activeSnippet === key ? 'bg-indigo-500/10 text-indigo-300 border-t-2 border-t-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
@@ -200,7 +200,7 @@ call.on('connected', () => {
                         <h2 className="text-3xl md:text-5xl font-bold mb-4">Everything you need.</h2>
                         <p className="text-gray-400 max-w-2xl mx-auto">Stop wrestling with STUN servers and signaling logic. We handle the heavy lifting.</p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <div className="p-8 bg-white/5 rounded-3xl border border-white/5 hover:border-indigo-500/50 transition-colors group">
                             <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -217,10 +217,9 @@ call.on('connected', () => {
                                 <h3 className="text-xl font-bold">Global Low Latency</h3>
                                 <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold">PRO</span>
                             </div>
-                           <p className="text-gray-400 text-sm leading-relaxed">
-  Intelligent TURN relay routing ensures &lt; 100ms latency even on restrictive corporate networks.
-</p>
-
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                                Intelligent TURN relay routing ensures &lt; 100ms latency even on restrictive corporate networks.
+                            </p>
                         </div>
                         <div className="p-8 bg-white/5 rounded-3xl border border-white/5 hover:border-green-500/50 transition-colors group">
                             <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -242,14 +241,14 @@ call.on('connected', () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <PricingCard 
+                        <PricingCard
                             title="Developer"
                             price="Free"
                             features={["P2P Mesh (STUN Only)", "1,000 MAU", "Community Support", "Basic Analytics"]}
                             cta="Start Building"
                             onAction={() => window.open('https://github.com/mastervoice', '_blank')}
                         />
-                        <PricingCard 
+                        <PricingCard
                             title="Startup"
                             price="$49"
                             recommended={true}
@@ -257,7 +256,7 @@ call.on('connected', () => {
                             cta="Get API Key"
                             onAction={() => onNavigate('/api_key')}
                         />
-                        <PricingCard 
+                        <PricingCard
                             title="Enterprise"
                             price="Custom"
                             features={["Global Premium Relay", "Unlimited MAU", "24/7 Phone Support", "On-Premise Option", "SSO Integration"]}
@@ -273,8 +272,8 @@ call.on('connected', () => {
                 <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
                     <div>
                         <div className="flex items-center gap-2 mb-6">
-                             <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xs">M</div>
-                             <span className="font-bold">MasterVoice</span>
+                            <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xs">M</div>
+                            <span className="font-bold">MasterVoice</span>
                         </div>
                         <p className="text-xs text-gray-500">© 2024 MasterVoice Inc.</p>
                     </div>
