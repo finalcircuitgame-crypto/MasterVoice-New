@@ -6,6 +6,7 @@ export interface UserProfile {
   is_family?: boolean; // New feature flag
   avatar_url?: string | null;
   plan?: 'free' | 'pro' | 'team'; // Added plan field
+  email_confirmed_at?: string | null; // Added verification status
 }
 
 export interface Group {

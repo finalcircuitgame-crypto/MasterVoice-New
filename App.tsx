@@ -201,12 +201,12 @@ const App: React.FC = () => {
             if (error) throw error;
             setSession(data.session);
             if (data.session?.user) {
-                // Assuming is_family means Pro for now, or map plan field from DB
                 setCurrentUser({ 
                     id: data.session.user.id, 
                     email: data.session.user.email || 'No Email', 
                     is_family: true,
-                    plan: 'pro' // Defaulting to pro for demo/testing 60fps
+                    plan: 'pro',
+                    email_confirmed_at: data.session.user.email_confirmed_at
                 });
                 if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
             }
@@ -222,7 +222,8 @@ const App: React.FC = () => {
               id: session.user.id, 
               email: session.user.email || 'No Email', 
               is_family: true,
-              plan: 'pro'
+              plan: 'pro',
+              email_confirmed_at: session.user.email_confirmed_at
           });
           if (['/login', '/register'].includes(window.location.pathname)) navigate('/conversations');
       } else {

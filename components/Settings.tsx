@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { supabase } from '../supabaseClient';
 import { useRouter } from '../hooks/useRouter';
+import { useModal } from './ModalContext';
 
 interface SettingsProps {
   currentUser: UserProfile;
@@ -18,11 +19,13 @@ const PRESET_THEMES: Record<string, any> = {
 
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
   const { navigate } = useRouter();
+  const { showAlert } = useModal();
   
   // Settings State
   const [notifications, setNotifications] = useState(localStorage.getItem('mv_notifications') !== 'false');
   const [darkMode, setDarkMode] = useState(localStorage.getItem('mv_dark_mode') !== 'false');
   const [currentTheme, setCurrentTheme] = useState(localStorage.getItem('mv_theme_name') || 'indigo');
+  const [resendingEmail, setResendingEmail] = useState(false);
   
   // Modals State
   const [showKeysModal, setShowKeysModal] = useState(false);
@@ -61,6 +64,23 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
           });
           // Save custom theme vars too so they persist on reload
           localStorage.setItem('mv_theme_custom', JSON.stringify(colors));
+      }
+  };
+
+  const handleResendVerification = async () => {
+      if (resendingEmail) return;
+      setResendingEmail(true);
+      try {
+          const { error } = await supabase.auth.resend({
+              type: 'signup',
+              email: currentUser.email,
+          });
+          if (error) throw error;
+          showAlert("Email Sent", "Verification email has been resent to your inbox.");
+      } catch (err: any) {
+          showAlert("Error", err.message);
+      } finally {
+          setResendingEmail(false);
       }
   };
 
@@ -113,6 +133,28 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onBack }) => {
              <h2 className="text-xl font-bold text-white">{currentUser.email}</h2>
              <p className="text-indigo-400 text-sm font-medium mt-1 tracking-wide uppercase bg-indigo-500/10 px-3 py-1 rounded-full">{currentUser.plan || 'Free Plan'}</p>
          </div>
+
+         {/* Email Verification Banner (if unverified) */}
+         {!currentUser.email_confirmed_at && (
+             <div className="bg-amber-500/10 border border-amber-500/20 rounded-[1.5rem] p-4 flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                     </div>
+                     <div>
+                         <p className="text-sm font-bold text-white">Email not verified</p>
+                         <p className="text-[10px] text-gray-400">Some features may be limited.</p>
+                     </div>
+                 </div>
+                 <button 
+                    onClick={handleResendVerification} 
+                    disabled={resendingEmail}
+                    className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                 >
+                     {resendingEmail ? 'Sending...' : 'Verify Now'}
+                 </button>
+             </div>
+         )}
 
          {/* General Settings */}
          <div className="space-y-3">

@@ -93,6 +93,12 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
     }
   };
 
+  const handleSkip = () => {
+      // Force navigation to app. If session exists (but unverified), App.tsx will load.
+      // If session does not exist, App.tsx will redirect back to login.
+      window.location.href = '/conversations';
+  };
+
   return (
     <div className="min-h-screen bg-[#030014] flex flex-col items-center justify-center p-4 relative overflow-hidden font-['Outfit'] animate-slide-up">
       
@@ -230,13 +236,23 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg shadow-emerald-600/25"
-              >
-                {loading ? 'Verifying...' : 'Verify Email'}
-              </button>
+              <div className="flex flex-col gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg shadow-emerald-600/25"
+                  >
+                    {loading ? 'Verifying...' : 'Verify Email'}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={handleSkip}
+                    className="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl transition-all duration-300 border border-white/5 text-sm"
+                  >
+                    Skip for now
+                  </button>
+              </div>
             </form>
 
             <button
