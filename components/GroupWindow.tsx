@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { Message, UserProfile, Group } from '../types';
 import { useModal } from './ModalContext';
@@ -45,6 +45,18 @@ interface GroupWindowProps {
 // Emoji Source
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
+const GIF_LIST = [
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l2JI4z9s4YQYQ/giphy.gif"
+];
+
+// Poll Constants
+const POLL_PREFIX = "$$POLL$$";
+const VOTE_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
 
 const MessageItem = React.memo<{
     msg: Message;
@@ -53,9 +65,10 @@ const MessageItem = React.memo<{
     onReaction: (msg: Message, emoji: string) => void;
     onEdit: (msg: Message) => void;
     onDelete: (id: string) => void;
+    onPin: (msg: Message) => void; // New
     availableEmojis: string[];
     onRetry?: (msg: Message) => void;
-}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, availableEmojis, onRetry }) => {
+}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, onPin, availableEmojis, onRetry }) => {
     const [showActions, setShowActions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
@@ -66,10 +79,27 @@ const MessageItem = React.memo<{
     const isSending = msg.status === 'sending';
     const isError = msg.status === 'error';
     const isRecentlyEdited = msg.updated_at && msg.created_at && new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
+    const isPinned = msg.reactions?.['📌'] && msg.reactions['📌'].length > 0;
+
+    // Feature: Poll Rendering
+    const isPoll = msg.content.startsWith(POLL_PREFIX);
+    let pollData = null;
+    if (isPoll) {
+        try {
+            pollData = JSON.parse(msg.content.replace(POLL_PREFIX, ''));
+        } catch(e) {}
+    }
 
     return (
-        <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 group`}>
-            <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
+        <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 group relative`}>
+            {isPinned && (
+                <div className={`absolute -top-3 ${isMe ? 'right-4' : 'left-14'} z-0`}>
+                    <div className="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-t-lg shadow-sm flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.699 3.177a1 1 0 01.107.46V17l-4.586-2.293a1 1 0 00-.894 0L6.707 17v-7.46a1 1 0 01.107-.46l1.699-3.177L12.46 4.323V3a1 1 0 011-1zm0 5.382l-2-1V3h2v4.382z"/></svg> Pinned
+                    </div>
+                </div>
+            )}
+            <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'} relative z-10`}>
                 <div className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     {!isMe && (
                         <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs text-gray-300 font-bold shrink-0 mb-1 border border-white/10 shadow-sm overflow-hidden" title={senderName}>
@@ -83,24 +113,61 @@ const MessageItem = React.memo<{
                         {/* Action Menu */}
                         {showActions && !isError && (
                             <div className={`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-xl p-1 flex gap-1 shadow-xl z-20 animate-scale-in`}>
-                                {availableEmojis.slice(0, 5).map(emoji => (
+                                {!isPoll && availableEmojis.slice(0, 5).map(emoji => (
                                     <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition text-sm">
                                         {emoji}
                                     </button>
                                 ))}
+                                <div className="w-px bg-white/10 mx-1"></div>
+                                <button onClick={(e) => { e.stopPropagation(); onPin(msg); setShowActions(false); }} className={`hover:bg-white/10 p-1.5 rounded transition ${isPinned ? 'text-indigo-400' : 'text-gray-400'}`} title={isPinned ? "Unpin" : "Pin"}>📌</button>
                                 {isMe && (
                                     <>
-                                        <div className="w-px bg-white/10 mx-1"></div>
-                                        <button onClick={(e) => { e.stopPropagation(); onEdit(msg); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition text-gray-400" title="Edit">✏️</button>
+                                        {!isPoll && <button onClick={(e) => { e.stopPropagation(); onEdit(msg); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition text-gray-400" title="Edit">✏️</button>}
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(msg.id); }} className="hover:bg-white/10 p-1.5 rounded transition text-red-400" title="Delete">🗑️</button>
                                     </>
                                 )}
                             </div>
                         )}
 
-                        <div className={`relative px-5 py-3 shadow-md backdrop-blur-md ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5'} ${isError ? 'border-red-500 bg-red-900/10' : ''}`}>
-                            {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
-                            <div className={`flex items-center justify-end mt-1.5 gap-1.5 ${isMe ? 'text-indigo-200/80' : 'text-gray-400'}`}>
+                        <div className={`relative px-5 py-3 shadow-md backdrop-blur-md ${isPoll ? 'bg-gray-800 border border-white/10 rounded-xl w-full min-w-[250px]' : (isMe ? 'bg-gradient-to-br from-[var(--theme-500)] to-[var(--theme-600)] text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5')} ${isError ? 'border-red-500 bg-red-900/10' : ''} ${isPinned ? 'ring-1 ring-indigo-500/50' : ''}`}>
+                            {isPoll && pollData ? (
+                                <div className="text-white w-full">
+                                    <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                        Poll: {pollData.question}
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {pollData.options.map((opt: string, i: number) => {
+                                            const voteKey = VOTE_OPTIONS[i];
+                                            const votes = msg.reactions?.[voteKey]?.length || 0;
+                                            const totalVotes = Object.keys(msg.reactions || {}).filter(k => VOTE_OPTIONS.includes(k)).reduce((acc, k) => acc + (msg.reactions![k]?.length || 0), 0);
+                                            const percent = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                                            const iVoted = hasReacted(voteKey);
+
+                                            return (
+                                                <button 
+                                                    key={i} 
+                                                    onClick={(e) => { e.stopPropagation(); onReaction(msg, voteKey); }}
+                                                    className={`w-full p-2 rounded-lg border text-left relative overflow-hidden transition ${iVoted ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/10 hover:bg-white/5'}`}
+                                                >
+                                                    <div className={`absolute top-0 left-0 bottom-0 bg-indigo-500/20 transition-all duration-500`} style={{ width: `${percent}%` }}></div>
+                                                    <div className="relative flex justify-between text-xs font-medium z-10">
+                                                        <span>{opt}</span>
+                                                        <span>{percent}% ({votes})</span>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                    <p className="text-[9px] text-gray-500 mt-2 text-right">Click options to vote</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
+                                </>
+                            )}
+                            
+                            <div className={`flex items-center justify-end mt-1.5 gap-1.5 ${isMe ? 'text-white/80' : 'text-gray-400'}`}>
                                 {isError ? (
                                     <span className="text-red-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); onRetry?.(msg); }}>
                                         Failed <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -116,11 +183,11 @@ const MessageItem = React.memo<{
                             </div>
                         </div>
 
-                        {/* Reactions Display */}
-                        {msg.reactions && Object.keys(msg.reactions).some(k => (msg.reactions![k] as string[]).length > 0) && (
+                        {/* Reactions Display (Non-Poll) */}
+                        {!isPoll && msg.reactions && Object.keys(msg.reactions).some(k => k !== '📌' && (msg.reactions![k] as string[]).length > 0) && (
                             <div className={`flex gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                 {Object.entries(msg.reactions).map(([emoji, users]) => (
-                                    (users as string[]).length > 0 && (
+                                    emoji !== '📌' && (users as string[]).length > 0 && (
                                         <button key={emoji} className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 ${hasReacted(emoji) ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-gray-800/50 border-white/5 text-gray-400'}`}>
                                             <span>{emoji}</span><span className="font-bold">{(users as string[]).length}</span>
                                         </button>
@@ -147,6 +214,14 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const [addingMember, setAddingMember] = useState(false);
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     
+    // Feature: Polls
+    const [showPollCreator, setShowPollCreator] = useState(false);
+    const [pollQuestion, setPollQuestion] = useState('');
+    const [pollOptions, setPollOptions] = useState(['', '']);
+
+    // Feature: GIF Picker
+    const [showGifPicker, setShowGifPicker] = useState(false);
+
     // Feature: Edit Group Name
     const [groupName, setGroupName] = useState(selectedGroup.name);
     const [isEditingName, setIsEditingName] = useState(false);
@@ -166,6 +241,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
     // Owner Check
     const isOwner = selectedGroup.created_by === currentUser.id;
+
+    // Feature: Pinned Messages (Last message with '📌' reaction)
+    const pinnedMessage = useMemo(() => {
+        return messages.slice().reverse().find(m => m.reactions?.['📌']?.length! > 0);
+    }, [messages]);
 
     // Load Emojis
     useEffect(() => {
@@ -300,13 +380,30 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         setAddingMember(false);
     };
 
+    const handleRemoveMember = async (userId: string) => {
+        const confirmed = await showConfirm("Remove Member", "Are you sure you want to remove this user?");
+        if (!confirmed) return;
+        
+        const { error } = await supabase.from('group_members').delete().match({ group_id: selectedGroup.id, user_id: userId });
+        if (error) {
+            showAlert("Error", "Failed to remove member: " + error.message);
+        }
+    };
+
     // Feature: Group Rename
     const handleRenameGroup = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsEditingName(false);
-        if (groupName.trim() === selectedGroup.name) return;
+        const trimmed = groupName.trim();
         
-        const { error } = await supabase.from('groups').update({ name: groupName.trim() }).eq('id', selectedGroup.id);
+        if (!trimmed) {
+            setGroupName(selectedGroup.name);
+            return;
+        }
+        
+        if (trimmed === selectedGroup.name) return;
+        
+        const { error } = await supabase.from('groups').update({ name: trimmed }).eq('id', selectedGroup.id);
         if (error) {
             showAlert("Error", "Failed to update group name.");
             setGroupName(selectedGroup.name);
@@ -349,11 +446,32 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         }
     };
 
+    // Feature: Create Poll
+    const handleCreatePoll = async () => {
+        if (!pollQuestion.trim() || pollOptions.some(o => !o.trim())) return;
+        const pollContent = JSON.stringify({
+            question: pollQuestion,
+            options: pollOptions.filter(o => o.trim())
+        });
+        
+        // Use standard send but with special prefix
+        await supabase.from('messages').insert({
+            sender_id: currentUser.id,
+            group_id: selectedGroup.id,
+            content: POLL_PREFIX + pollContent
+        });
+        
+        setShowPollCreator(false);
+        setPollQuestion('');
+        setPollOptions(['', '']);
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
+        e && e.preventDefault();
         const content = newMessage;
+        if (!content.trim()) return;
         setNewMessage('');
+        setShowGifPicker(false);
         
         if (editingId) {
             // Edit Existing Message
@@ -390,6 +508,14 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         } else {
             setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: optimisticMsg.sender, status: 'sent' } : m));
         }
+    };
+
+    // Feature: Send GIF
+    const handleSendGif = (url: string) => {
+        // Send as content url
+        setNewMessage(url);
+        // Trigger manual send immediately (mocking event)
+        setTimeout(() => handleSendMessage(null as any), 0);
     };
 
     // Feature: Delete Message
@@ -431,30 +557,46 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         await supabase.from('messages').update({ reactions: newReactions }).eq('id', msg.id);
     };
 
+    // Feature: Pin Message
+    const handlePin = async (msg: Message) => {
+        handleReaction(msg, '📌');
+    };
+
     // --- Sidebar Logic ---
     const onlineMembers = groupMembers.filter(m => onlineUsers.has(m.id));
     const offlineMembers = groupMembers.filter(m => !onlineUsers.has(m.id));
 
     const renderMember = (m: UserProfile, isOnline: boolean) => (
-        <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group cursor-default">
-            <div className="relative shrink-0">
-                {m.avatar_url ? (
-                    <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover border border-white/10" />
-                ) : (
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-white/10">
-                        {m.email[0].toUpperCase()}
-                    </div>
-                )}
-                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+        <div key={m.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group cursor-default justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+                <div className="relative shrink-0">
+                    {m.avatar_url ? (
+                        <img src={m.avatar_url} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-white/10" style={{ background: 'var(--theme-gradient)' }}>
+                            {m.email[0].toUpperCase()}
+                        </div>
+                    )}
+                    <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#060609] ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors flex items-center gap-1">
+                        {m.email.split('@')[0]}
+                        {/* Feature: Owner Badge */}
+                        {m.id === selectedGroup.created_by && <span className="text-yellow-500 text-[10px]" title="Owner">👑</span>}
+                    </span>
+                    {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
+                </div>
             </div>
-            <div className="flex flex-col min-w-0">
-                <span className="text-sm text-gray-200 font-medium truncate group-hover:text-white transition-colors flex items-center gap-1">
-                    {m.email.split('@')[0]}
-                    {/* Feature: Owner Badge */}
-                    {m.id === selectedGroup.created_by && <span className="text-yellow-500 text-[10px]" title="Owner">👑</span>}
-                </span>
-                {isOnline && <span className="text-[9px] text-green-500 font-bold uppercase tracking-wider">Online</span>}
-            </div>
+            {isOwner && m.id !== currentUser.id && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.id); }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+                    title="Remove Member"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            )}
         </div>
     );
 
@@ -466,8 +608,8 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                 {/* Header */}
                 <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm shrink-0">
                     <div className="flex items-center gap-4 min-w-0 flex-1">
-                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
-                            {groupName[0].toUpperCase()}
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0" style={{ background: 'var(--theme-gradient)' }}>
+                            {groupName?.[0]?.toUpperCase() || '?'}
                         </div>
                         <div className="min-w-0 flex-1">
                             {isEditingName ? (
@@ -526,10 +668,34 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                     </div>
                 </div>
 
+                {/* Feature: Pinned Message Banner */}
+                {pinnedMessage && (
+                    <div 
+                        onClick={() => {
+                            const el = document.getElementById(`msg-${pinnedMessage.id}`);
+                            if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }}
+                        className="bg-indigo-900/40 border-b border-indigo-500/20 p-2 px-6 flex items-center justify-between cursor-pointer hover:bg-indigo-900/60 transition backdrop-blur-sm z-10"
+                    >
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="bg-indigo-500 p-1 rounded">
+                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.699 3.177a1 1 0 01.107.46V17l-4.586-2.293a1 1 0 00-.894 0L6.707 17v-7.46a1 1 0 01.107-.46l1.699-3.177L12.46 4.323V3a1 1 0 011-1zm0 5.382l-2-1V3h2v4.382z"/></svg>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-indigo-300">Pinned Message</span>
+                                <span className="text-xs text-gray-300 truncate max-w-[200px]">{pinnedMessage.content.startsWith(POLL_PREFIX) ? 'Poll' : pinnedMessage.content}</span>
+                            </div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); handlePin(pinnedMessage); }} className="text-gray-500 hover:text-white">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                )}
+
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar">
                     {loading ? (
-                        <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
+                        <div className="flex justify-center h-full items-center"><div className="w-8 h-8 border-2 border-[var(--theme-500)] border-t-transparent rounded-full animate-spin"></div></div>
                     ) : (
                         messages.map(msg => (
                             <MessageItem 
@@ -540,6 +706,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                                 onReaction={handleReaction} 
                                 onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }}
                                 onDelete={handleDeleteMessage}
+                                onPin={handlePin}
                                 availableEmojis={emojiList} 
                                 onRetry={handleRetry}
                             />
@@ -558,6 +725,56 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                     <div ref={messagesEndRef} />
                 </div>
 
+                {/* Feature: Poll Creator */}
+                {showPollCreator && (
+                    <div className="absolute bottom-24 left-4 right-4 z-30 bg-[#1a1a20] border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up max-w-md mx-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white text-sm">Create Poll</h3>
+                            <button onClick={() => setShowPollCreator(false)} className="text-gray-400 hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </div>
+                        <input 
+                            placeholder="Question..." 
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white mb-3 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={pollQuestion}
+                            onChange={(e) => setPollQuestion(e.target.value)}
+                        />
+                        <div className="space-y-2 mb-4">
+                            {pollOptions.map((opt, i) => (
+                                <input 
+                                    key={i}
+                                    placeholder={`Option ${i+1}`}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    value={opt}
+                                    onChange={(e) => {
+                                        const newOpts = [...pollOptions];
+                                        newOpts[i] = e.target.value;
+                                        setPollOptions(newOpts);
+                                    }}
+                                />
+                            ))}
+                            {pollOptions.length < 4 && <button onClick={() => setPollOptions([...pollOptions, ''])} className="text-xs text-indigo-400 font-bold hover:text-indigo-300">+ Add Option</button>}
+                        </div>
+                        <button onClick={handleCreatePoll} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-sm transition">Send Poll</button>
+                    </div>
+                )}
+
+                {/* Feature: GIF Picker */}
+                {showGifPicker && (
+                    <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20] border border-white/10 rounded-2xl p-3 shadow-2xl animate-slide-up w-72">
+                        <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
+                            {GIF_LIST.map((gif, i) => (
+                                <img 
+                                    key={i} 
+                                    src={gif} 
+                                    alt="GIF" 
+                                    className="w-full h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition"
+                                    onClick={() => handleSendGif(gif)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Input */}
                 <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md shrink-0">
                     <div className="max-w-4xl mx-auto flex flex-col gap-2">
@@ -568,6 +785,25 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                             </div>
                         )}
                         <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl">
+                            {/* Poll Button */}
+                            <button 
+                                type="button"
+                                onClick={() => { setShowPollCreator(!showPollCreator); setShowGifPicker(false); }}
+                                className={`p-2 rounded-full transition ${showPollCreator ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                                title="Create Poll"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            </button>
+                            {/* GIF Button */}
+                            <button 
+                                type="button" 
+                                onClick={() => { setShowGifPicker(!showGifPicker); setShowPollCreator(false); }}
+                                className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                                title="Send GIF"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            </button>
+
                             <input 
                                 type="text" 
                                 value={newMessage} 
@@ -575,7 +811,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
                                 className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" 
                                 placeholder={`Message ${groupName}...`} 
                             />
-                            <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold transition shadow-lg disabled:opacity-50 hover:scale-105 active:scale-95">
+                            <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full text-white font-bold transition shadow-lg disabled:opacity-50 hover:scale-105 active:scale-95" style={{ background: 'var(--theme-gradient)' }}>
                                 {editingId ? 'Save' : <svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>}
                             </button>
                         </form>
