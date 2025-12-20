@@ -26,12 +26,19 @@ export const Auth: React.FC<AuthProps> = ({ mode, onBack, onSwitchMode }) => {
     
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ 
+            email, 
+            password,
+            options: {
+                data: {
+                    email_confirmed: true // Attempt to set metadata, though server config rules
+                }
+            } 
+        });
         if (error) throw error;
         
-        // Directly redirect to app. 
-        // Note: If Supabase requires email verification, session might be null here.
-        // App.tsx will handle the session check.
+        // Directly redirect. If Supabase "Confirm Email" is disabled, session exists.
+        // If enabled, this will loop back to login (Backend enforcement).
         window.location.href = '/conversations'; 
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
