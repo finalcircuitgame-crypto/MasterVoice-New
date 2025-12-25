@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Message, UserProfile, Group } from '../types';
 import { useModal } from './ModalContext';
-import { useRouter } from '../hooks/useRouter';
 
 // --- Confetti Utility ---
 const triggerConfetti = () => {
@@ -36,23 +35,20 @@ const triggerConfetti = () => {
     }
 };
 
-interface GroupWindowProps {
-    currentUser: UserProfile;
-    selectedGroup: Group;
-    onlineUsers: Set<string>;
-}
-
-const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 const GIF_CATEGORIES: Record<string, string[]> = {
     "Trending": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif"
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif"
     ],
     "Reaction": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif"
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif"
+    ],
+    "Gaming": [
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKpnO3gLp0W6r2o/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif"
     ]
 };
 
@@ -68,9 +64,8 @@ const MessageItem = React.memo<{
     onDelete: (id: string) => void;
     onPin: (msg: Message) => void;
     availableEmojis: string[];
-    onRetry?: (msg: Message) => void;
     onImageClick?: (url: string) => void;
-}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, onPin, availableEmojis, onRetry, onImageClick }) => {
+}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, onPin, availableEmojis, onImageClick }) => {
     const [showActions, setShowActions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
@@ -78,9 +73,7 @@ const MessageItem = React.memo<{
     const senderInitial = msg.sender?.email ? msg.sender.email[0].toUpperCase() : '?';
 
     const hasReacted = (emoji: string) => msg.reactions?.[emoji]?.includes(currentUser.id);
-    const isSending = msg.status === 'sending';
     const isError = msg.status === 'error';
-    const isRecentlyEdited = msg.updated_at && msg.created_at && new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
     const isPinned = msg.reactions?.['📌'] && msg.reactions['📌'].length > 0;
 
     const isUrl = msg.content && msg.content.trim().match(/^https?:\/\/[^\s]+$/);
@@ -156,23 +149,15 @@ const MessageItem = React.memo<{
     );
 });
 
-export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedGroup, onlineUsers }) => {
-    const { navigate } = useRouter();
+export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Group; onlineUsers: Set<string>; }> = ({ currentUser, selectedGroup, onlineUsers }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
-    const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
-    const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
-    const [remoteDrafts, setRemoteDrafts] = useState<Record<string, string>>({});
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [gifCategory, setGifCategory] = useState("Trending");
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const typingTimeouts = useRef<Record<string, any>>({});
-    const lastTypingBroadcast = useRef<number>(0);
-    const [groupChannel, setGroupChannel] = useState<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const { showAlert, showConfirm } = useModal();
 
     useEffect(() => {
         const load = async () => {
@@ -191,19 +176,11 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (p) => setMessages(prev => prev.map(m => m.id === p.new.id ? { ...m, ...p.new } : m)))
             .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (p) => setMessages(prev => prev.filter(m => m.id !== p.old.id)))
-            .on('broadcast', { event: 'typing' }, ({ payload }) => {
-                if (payload.userId === currentUser.id) return;
-                if (typingTimeouts.current[payload.userId]) clearTimeout(typingTimeouts.current[payload.userId]);
-                setRemoteDrafts(prev => ({ ...prev, [payload.userId]: payload.content }));
-                if (payload.content) typingTimeouts.current[payload.userId] = setTimeout(() => setRemoteDrafts(p => { const n={...p}; delete n[payload.userId]; return n; }), 3000);
-                else setRemoteDrafts(p => { const n={...p}; delete n[payload.userId]; return n; });
-            })
             .subscribe();
-        setGroupChannel(channel);
         return () => { supabase.removeChannel(channel); };
     }, [selectedGroup.id, currentUser.id]);
 
-    useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length, remoteDrafts]);
+    useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e && e.preventDefault();
@@ -211,16 +188,25 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         if (!content.trim()) return;
         setNewMessage('');
         setShowGifPicker(false);
+        if (content.toLowerCase().includes('congrats')) triggerConfetti();
+
         if (editingId) {
             await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', editingId);
             setEditingId(null);
             return;
         }
+
         const tempId = Math.random().toString();
-        setMessages(prev => [...prev, { id: tempId, sender_id: currentUser.id, group_id: selectedGroup.id, content, created_at: new Date().toISOString(), status: 'sending', sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } } as Message]);
+        const optimisticMsg: any = { id: tempId, sender_id: currentUser.id, group_id: selectedGroup.id, content, created_at: new Date().toISOString(), status: 'sending', sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } };
+        setMessages(prev => [...prev, optimisticMsg]);
+        
         const { data, error } = await supabase.from('messages').insert({ sender_id: currentUser.id, group_id: selectedGroup.id, content }).select().single();
-        if (error) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
-        else setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: { email: currentUser.email, avatar_url: currentUser.avatar_url }, status: 'sent' } : m));
+        
+        if (error) {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+        } else {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: { email: currentUser.email, avatar_url: currentUser.avatar_url }, status: 'sent' } : m));
+        }
     };
 
     const handleSendGif = (url: string) => {
@@ -251,8 +237,9 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar scroll-smooth">
+                {loading && <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}
                 {messages.map(msg => (
-                    <MessageItem key={msg.id} msg={msg} isMe={msg.sender_id === currentUser.id} currentUser={currentUser} onReaction={handleReaction} onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }} onDelete={handleDeleteMessage} onPin={handlePin} availableEmojis={emojiList} onImageClick={setLightboxImage} />
+                    <MessageItem key={msg.id} msg={msg} isMe={msg.sender_id === currentUser.id} currentUser={currentUser} onReaction={handleReaction} onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }} onDelete={handleDeleteMessage} onPin={handlePin} availableEmojis={DEFAULT_EMOJI_LIST} onImageClick={setLightboxImage} />
                 ))}
                 <div ref={messagesEndRef} />
             </div>
@@ -274,7 +261,7 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
 
             <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md">
                 <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/30">
-                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
+                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
                     <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" placeholder="Group message..." />
                     <button type="submit" className="p-2.5 rounded-full text-white font-bold transition shadow-lg" style={{ background: 'var(--theme-gradient)' }}><svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg></button>
                 </form>

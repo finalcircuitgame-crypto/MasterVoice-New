@@ -1,27 +1,19 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { supabase } from './supabaseClient';
 import { UserProfile, CallState, Group } from './types';
 import { Auth } from './components/Auth';
 import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
 import { GroupWindow } from './components/GroupWindow';
-import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
 import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, ComparePlansPage, NotFoundPage, Documentation, ApiKeyPage, VerifyPage, DevPage, MauLimitPage, ThemeEditorPage } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
 
-// --- SDK MIGRATION NOTE ---
-// To use the new SDK defined in /sdk/index.ts:
-// 1. import { MasterVoice, MasterVoiceProvider } from './sdk';
-// 2. const client = new MasterVoice({ 
-//      apiKey: 'mv_pro_test_123', 
-//      supabaseUrl: '...', 
-//      supabaseKey: '...' 
-//    });
-// 3. Wrap <App /> with <MasterVoiceProvider client={client}> ...
-// --------------------------
+// --- LAZY LOADING ---
+// Use magic comment to force deterministic chunk name "Settings.js"
+const Settings = React.lazy(() => import(/* webpackChunkName: "Settings" */ './components/Settings'));
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -91,9 +83,9 @@ const App: React.FC = () => {
   const { 
     callState, 
     remoteStream, 
-    remoteScreenStream, // New
+    remoteScreenStream,
     localVideoStream,
-    localScreenStream, // New
+    localScreenStream,
     startCall: rtcStartCall, 
     endCall: rtcEndCall, 
     answerCall: rtcAnswerCall, 
@@ -133,8 +125,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-      // Auto-rejoin ONLY if we have persistence item.
-      // handleCallEnded clears this item, preventing loops.
       if (activeCallContact && callState === CallState.IDLE && localStorage.getItem('mv_active_call')) {
            const t = setTimeout(() => { rtcStartCall(); }, 1000);
            return () => clearTimeout(t);
@@ -157,7 +147,6 @@ const App: React.FC = () => {
 
   const handleEndCall = () => {
       rtcEndCall();
-      // We manually call this here too just in case 'hangup' signal isn't involved (local end)
       handleCallEnded();
   };
 
@@ -416,10 +405,17 @@ const App: React.FC = () => {
         </div>
 
         {isSettingsOpen && (
-             <div className="absolute inset-0 z-50 flex items-center justify-center animate-slide-up bg-black/50 backdrop-blur-sm">
-                 <div className="w-full h-full md:max-w-2xl md:h-[90vh] md:rounded-[2rem] bg-[#060609] overflow-hidden shadow-2xl relative">
-                    <Settings currentUser={currentUser!} onBack={() => navigate('/conversations')} />
-                 </div>
+             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <Suspense fallback={
+                    <div className="w-full h-full md:max-w-2xl md:h-[90vh] md:rounded-[2rem] bg-[#060609] flex flex-col items-center justify-center border border-white/10 shadow-2xl animate-pulse">
+                        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-indigo-400 font-bold tracking-widest text-xs uppercase">Loading Settings...</p>
+                    </div>
+                }>
+                    <div className="w-full h-full md:max-w-2xl md:h-[90vh] md:rounded-[2rem] bg-[#060609] overflow-hidden shadow-2xl relative animate-slide-up">
+                        <Settings currentUser={currentUser!} onBack={() => navigate('/conversations')} />
+                    </div>
+                </Suspense>
              </div>
         )}
 
