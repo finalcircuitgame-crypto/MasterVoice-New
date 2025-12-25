@@ -42,19 +42,20 @@ interface GroupWindowProps {
     onlineUsers: Set<string>;
 }
 
-// Emoji Source
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
-const GIF_LIST = [
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l2JI4z9s4YQYQ/giphy.gif"
-];
+const GIF_CATEGORIES: Record<string, string[]> = {
+    "Trending": [
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif"
+    ],
+    "Reaction": [
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif"
+    ]
+};
 
-// Poll Constants
 const POLL_PREFIX = "$$POLL$$";
 const VOTE_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
 
@@ -65,10 +66,11 @@ const MessageItem = React.memo<{
     onReaction: (msg: Message, emoji: string) => void;
     onEdit: (msg: Message) => void;
     onDelete: (id: string) => void;
-    onPin: (msg: Message) => void; // New
+    onPin: (msg: Message) => void;
     availableEmojis: string[];
     onRetry?: (msg: Message) => void;
-}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, onPin, availableEmojis, onRetry }) => {
+    onImageClick?: (url: string) => void;
+}>(({ msg, isMe, currentUser, onReaction, onEdit, onDelete, onPin, availableEmojis, onRetry, onImageClick }) => {
     const [showActions, setShowActions] = useState(false);
     
     const senderName = isMe ? 'You' : (msg.sender?.email?.split('@')[0] || 'Unknown');
@@ -81,17 +83,17 @@ const MessageItem = React.memo<{
     const isRecentlyEdited = msg.updated_at && msg.created_at && new Date(msg.updated_at).getTime() > new Date(msg.created_at).getTime() + 1000;
     const isPinned = msg.reactions?.['📌'] && msg.reactions['📌'].length > 0;
 
-    // Feature: Poll Rendering
+    const isUrl = msg.content && msg.content.trim().match(/^https?:\/\/[^\s]+$/);
+    const isImageUrl = isUrl && (msg.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || msg.content.includes('giphy.com/media'));
+
     const isPoll = msg.content.startsWith(POLL_PREFIX);
     let pollData = null;
     if (isPoll) {
-        try {
-            pollData = JSON.parse(msg.content.replace(POLL_PREFIX, ''));
-        } catch(e) {}
+        try { pollData = JSON.parse(msg.content.replace(POLL_PREFIX, '')); } catch(e) {}
     }
 
     return (
-        <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 animate-message-enter px-2 group relative`}>
+        <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} mb-6 px-2 group relative`}>
             {isPinned && (
                 <div className={`absolute -top-3 ${isMe ? 'right-4' : 'left-14'} z-0`}>
                     <div className="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-t-lg shadow-sm flex items-center gap-1">
@@ -106,95 +108,47 @@ const MessageItem = React.memo<{
                             {senderAvatar ? <img src={senderAvatar} alt="Sender" className="w-full h-full object-cover" /> : senderInitial}
                         </div>
                     )}
-
                     <div className="flex flex-col min-w-0 cursor-pointer relative" onClick={() => setShowActions(!showActions)}>
                         {!isMe && <span className="text-[10px] text-gray-500 ml-1 mb-1 font-bold">{senderName}</span>}
-                        
-                        {/* Action Menu */}
                         {showActions && !isError && (
                             <div className={`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} bg-[#1a1a20] border border-white/10 rounded-xl p-1 flex gap-1 shadow-xl z-20 animate-scale-in`}>
                                 {!isPoll && availableEmojis.slice(0, 5).map(emoji => (
-                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition text-sm">
-                                        {emoji}
-                                    </button>
+                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); onReaction(msg, emoji); setShowActions(false); }} className="hover:bg-white/10 p-1 rounded transition text-sm">{emoji}</button>
                                 ))}
                                 <div className="w-px bg-white/10 mx-1"></div>
                                 <button onClick={(e) => { e.stopPropagation(); onPin(msg); setShowActions(false); }} className={`hover:bg-white/10 p-1.5 rounded transition ${isPinned ? 'text-indigo-400' : 'text-gray-400'}`} title={isPinned ? "Unpin" : "Pin"}>📌</button>
                                 {isMe && (
                                     <>
-                                        {!isPoll && <button onClick={(e) => { e.stopPropagation(); onEdit(msg); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition text-gray-400" title="Edit">✏️</button>}
+                                        {!isPoll && !isImageUrl && <button onClick={(e) => { e.stopPropagation(); onEdit(msg); setShowActions(false); }} className="hover:bg-white/10 p-1.5 rounded transition text-gray-400" title="Edit">✏️</button>}
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(msg.id); }} className="hover:bg-white/10 p-1.5 rounded transition text-red-400" title="Delete">🗑️</button>
                                     </>
                                 )}
                             </div>
                         )}
-
                         <div className={`relative px-5 py-3 shadow-md backdrop-blur-md ${isPoll ? 'bg-gray-800 border border-white/10 rounded-xl w-full min-w-[250px]' : (isMe ? 'bg-gradient-to-br from-[var(--theme-500)] to-[var(--theme-600)] text-white rounded-[1.2rem] rounded-br-sm' : 'bg-white/10 text-gray-100 rounded-[1.2rem] rounded-bl-sm border border-white/5')} ${isError ? 'border-red-500 bg-red-900/10' : ''} ${isPinned ? 'ring-1 ring-indigo-500/50' : ''}`}>
                             {isPoll && pollData ? (
                                 <div className="text-white w-full">
-                                    <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
-                                        <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                                        Poll: {pollData.question}
-                                    </h4>
+                                    <h4 className="font-bold text-sm mb-3 flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Poll: {pollData.question}</h4>
                                     <div className="space-y-2">
                                         {pollData.options.map((opt: string, i: number) => {
                                             const voteKey = VOTE_OPTIONS[i];
+                                            const total = Object.keys(msg.reactions || {}).filter(k => VOTE_OPTIONS.includes(k)).reduce((acc, k) => acc + (msg.reactions![k]?.length || 0), 0);
                                             const votes = msg.reactions?.[voteKey]?.length || 0;
-                                            const totalVotes = Object.keys(msg.reactions || {}).filter(k => VOTE_OPTIONS.includes(k)).reduce((acc, k) => acc + (msg.reactions![k]?.length || 0), 0);
-                                            const percent = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-                                            const iVoted = hasReacted(voteKey);
-
-                                            return (
-                                                <button 
-                                                    key={i} 
-                                                    onClick={(e) => { e.stopPropagation(); onReaction(msg, voteKey); }}
-                                                    className={`w-full p-2 rounded-lg border text-left relative overflow-hidden transition ${iVoted ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/10 hover:bg-white/5'}`}
-                                                >
-                                                    <div className={`absolute top-0 left-0 bottom-0 bg-indigo-500/20 transition-all duration-500`} style={{ width: `${percent}%` }}></div>
-                                                    <div className="relative flex justify-between text-xs font-medium z-10">
-                                                        <span>{opt}</span>
-                                                        <span>{percent}% ({votes})</span>
-                                                    </div>
-                                                </button>
-                                            )
+                                            const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+                                            return <button key={i} onClick={(e) => { e.stopPropagation(); onReaction(msg, voteKey); }} className={`w-full p-2 rounded-lg border text-left relative overflow-hidden transition ${hasReacted(voteKey) ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/10 hover:bg-white/5'}`}><div className={`absolute top-0 left-0 bottom-0 bg-indigo-500/20 transition-all duration-500`} style={{ width: `${pct}%` }}></div><div className="relative flex justify-between text-xs font-medium z-10"><span>{opt}</span><span>{pct}% ({votes})</span></div></button>
                                         })}
                                     </div>
-                                    <p className="text-[9px] text-gray-500 mt-2 text-right">Click options to vote</p>
                                 </div>
                             ) : (
                                 <>
-                                    {msg.content && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
+                                    {isImageUrl && <img src={msg.content} alt="GIF" className="max-w-full rounded-lg max-h-80 object-cover border border-white/5 mb-2" onClick={(e) => { e.stopPropagation(); onImageClick?.(msg.content); }} />}
+                                    {msg.content && !isImageUrl && <p className="leading-relaxed whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>}
                                 </>
                             )}
-                            
                             <div className={`flex items-center justify-end mt-1.5 gap-1.5 ${isMe ? 'text-white/80' : 'text-gray-400'}`}>
-                                {isError ? (
-                                    <span className="text-red-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); onRetry?.(msg); }}>
-                                        Failed <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                    </span>
-                                ) : isSending ? (
-                                    <span className="text-white/50 text-[10px]">Sending...</span>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                        {isRecentlyEdited && <span className="text-[9px] italic opacity-70">edited</span>}
-                                    </div>
-                                )}
+                                <p className="text-[10px] font-medium">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                             </div>
                         </div>
-
-                        {/* Reactions Display (Non-Poll) */}
-                        {!isPoll && msg.reactions && Object.keys(msg.reactions).some(k => k !== '📌' && (msg.reactions![k] as string[]).length > 0) && (
-                            <div className={`flex gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                {Object.entries(msg.reactions).map(([emoji, users]) => (
-                                    emoji !== '📌' && (users as string[]).length > 0 && (
-                                        <button key={emoji} className={`px-1.5 py-0.5 rounded-full text-[10px] border flex items-center gap-1 ${hasReacted(emoji) ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-gray-800/50 border-white/5 text-gray-400'}`}>
-                                            <span>{emoji}</span><span className="font-bold">{(users as string[]).length}</span>
-                                        </button>
-                                    )
-                                ))}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
@@ -208,263 +162,48 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
-    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
     const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
-    const [friends, setFriends] = useState<UserProfile[]>([]);
-    const [addingMember, setAddingMember] = useState(false);
-    const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-    
-    // Feature: Polls
-    const [showPollCreator, setShowPollCreator] = useState(false);
-    const [pollQuestion, setPollQuestion] = useState('');
-    const [pollOptions, setPollOptions] = useState(['', '']);
-
-    // Feature: GIF Picker
-    const [showGifPicker, setShowGifPicker] = useState(false);
-
-    // Feature: Edit Group Name
-    const [groupName, setGroupName] = useState(selectedGroup.name);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [showGroupSettings, setShowGroupSettings] = useState(false);
-
-    // Feature: Message Editing
-    const [editingId, setEditingId] = useState<string | null>(null);
-
-    // Feature: Typing Indicators
     const [remoteDrafts, setRemoteDrafts] = useState<Record<string, string>>({});
-    const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const [showGifPicker, setShowGifPicker] = useState(false);
+    const [gifCategory, setGifCategory] = useState("Trending");
+    const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const typingTimeouts = useRef<Record<string, any>>({});
     const lastTypingBroadcast = useRef<number>(0);
     const [groupChannel, setGroupChannel] = useState<any>(null);
-
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const { showAlert, showConfirm } = useModal();
 
-    // Owner Check
-    const isOwner = selectedGroup.created_by === currentUser.id;
-
-    // Feature: Pinned Messages (Last message with '📌' reaction)
-    const pinnedMessage = useMemo(() => {
-        return messages.slice().reverse().find(m => m.reactions?.['📌']?.length! > 0);
-    }, [messages]);
-
-    // Load Emojis
     useEffect(() => {
-        fetch(EMOJI_SOURCE_URL).then(res => res.json()).then(data => {
-            if (Array.isArray(data)) setEmojiList(data.map((i:any) => i.char || i).filter(Boolean).slice(0, 100));
-        }).catch(() => {});
-    }, []);
-
-    // Load Group Data & Setup Realtime
-    useEffect(() => {
-        setGroupName(selectedGroup.name);
-        
-        const fetchMessages = async () => {
+        const load = async () => {
             setLoading(true);
-            const { data } = await supabase.from('messages')
-                .select('*, sender:sender_id(email, avatar_url)')
-                .eq('group_id', selectedGroup.id)
-                .order('created_at', { ascending: true });
+            const { data } = await supabase.from('messages').select('*, sender:sender_id(email, avatar_url)').eq('group_id', selectedGroup.id).order('created_at', { ascending: true });
             if (data) setMessages(data.map(m => ({ ...m, status: 'sent' })));
             setLoading(false);
         };
-        fetchMessages();
-
+        load();
         const channel = supabase.channel(`group:${selectedGroup.id}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, async (payload) => {
-                // Skip if we already added it optimistically
-                setMessages(prev => {
-                    if (prev.find(m => m.id === payload.new.id)) return prev;
-                    return prev; 
-                });
-
-                // Fetch sender details for incoming messages from others
                 if (payload.new.sender_id !== currentUser.id) {
                      const { data } = await supabase.from('profiles').select('email, avatar_url').eq('id', payload.new.sender_id).single();
                      setMessages(prev => [...prev, { ...payload.new, sender: data, status: 'sent' } as Message]);
-                     setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.new.sender_id]; return n; });
                 }
             })
-            // Realtime Update (Reactions/Edits)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (payload) => {
-                 setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
-            })
-            // Realtime Delete
-            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (payload) => {
-                 setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-            })
-            // Realtime listener for member additions
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `group_id=eq.${selectedGroup.id}` }, () => {
-                fetchMembers(); // Reload members if someone else adds one or leaves
-            })
-            // Realtime Group Name updates
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups', filter: `id=eq.${selectedGroup.id}` }, (payload) => {
-                setGroupName(payload.new.name);
-            })
-            // Feature: Typing Indicators Broadcast
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (p) => setMessages(prev => prev.map(m => m.id === p.new.id ? { ...m, ...p.new } : m)))
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `group_id=eq.${selectedGroup.id}` }, (p) => setMessages(prev => prev.filter(m => m.id !== p.old.id)))
             .on('broadcast', { event: 'typing' }, ({ payload }) => {
                 if (payload.userId === currentUser.id) return;
-                
                 if (typingTimeouts.current[payload.userId]) clearTimeout(typingTimeouts.current[payload.userId]);
-                
-                if (payload.content) {
-                    setRemoteDrafts(prev => ({ ...prev, [payload.userId]: payload.content }));
-                    typingTimeouts.current[payload.userId] = setTimeout(() => {
-                        setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.userId]; return n; });
-                    }, 3000);
-                } else {
-                    setRemoteDrafts(prev => { const n = {...prev}; delete n[payload.userId]; return n; });
-                }
+                setRemoteDrafts(prev => ({ ...prev, [payload.userId]: payload.content }));
+                if (payload.content) typingTimeouts.current[payload.userId] = setTimeout(() => setRemoteDrafts(p => { const n={...p}; delete n[payload.userId]; return n; }), 3000);
+                else setRemoteDrafts(p => { const n={...p}; delete n[payload.userId]; return n; });
             })
             .subscribe();
-
         setGroupChannel(channel);
-        // Initial member load
-        fetchMembers();
-
         return () => { supabase.removeChannel(channel); };
     }, [selectedGroup.id, currentUser.id]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length, remoteDrafts]);
-
-    const fetchMembers = async () => {
-        const { data: memberRows, error } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
-        if (error) { console.error("Error fetching group members:", error); return; }
-
-        if (memberRows) {
-            const { data: profiles } = await supabase.from('profiles').select('*').in('id', memberRows.map(m => m.user_id));
-            if (profiles) setGroupMembers(profiles);
-        }
-    };
-
-    const fetchFriendsToAdd = async () => {
-        // 1. Get friends
-        const { data: requests } = await supabase.from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted')
-            .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
-        const friendIds = new Set<string>();
-        requests?.forEach(req => friendIds.add(req.sender_id === currentUser.id ? req.receiver_id : req.sender_id));
-
-        if (friendIds.size === 0) { setFriends([]); return; }
-
-        // 2. Exclude current members
-        const { data: current } = await supabase.from('group_members').select('user_id').eq('group_id', selectedGroup.id);
-        const currentIds = new Set(current?.map(m => m.user_id));
-        const available = Array.from(friendIds).filter(id => !currentIds.has(id));
-
-        if (available.length > 0) {
-            const { data } = await supabase.from('profiles').select('*').in('id', available);
-            setFriends(data || []);
-        } else {
-            setFriends([]);
-        }
-    };
-
-    const handleAddMember = async (userId: string) => {
-        setAddingMember(true);
-        const { error } = await supabase.from('group_members').insert({ group_id: selectedGroup.id, user_id: userId });
-        
-        if (!error) {
-            setFriends(prev => prev.filter(f => f.id !== userId));
-            showAlert("Success", "Member added!");
-            fetchMembers();
-        } else {
-            if (error.code === '23505') {
-                 showAlert("Member Exists", "This user is already in the group.");
-                 setFriends(prev => prev.filter(f => f.id !== userId));
-                 fetchMembers();
-            } else {
-                 showAlert("Error", "Failed to add member: " + error.message);
-            }
-        }
-        setAddingMember(false);
-    };
-
-    const handleRemoveMember = async (userId: string) => {
-        const confirmed = await showConfirm("Remove Member", "Are you sure you want to remove this user?");
-        if (!confirmed) return;
-        
-        const { error } = await supabase.from('group_members').delete().match({ group_id: selectedGroup.id, user_id: userId });
-        if (error) {
-            showAlert("Error", "Failed to remove member: " + error.message);
-        }
-    };
-
-    // Feature: Group Rename
-    const handleRenameGroup = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsEditingName(false);
-        const trimmed = groupName.trim();
-        
-        if (!trimmed) {
-            setGroupName(selectedGroup.name);
-            return;
-        }
-        
-        if (trimmed === selectedGroup.name) return;
-        
-        const { error } = await supabase.from('groups').update({ name: trimmed }).eq('id', selectedGroup.id);
-        if (error) {
-            showAlert("Error", "Failed to update group name.");
-            setGroupName(selectedGroup.name);
-        }
-    };
-
-    // Feature: Leave Group
-    const handleLeaveGroup = async () => {
-        const confirmed = await showConfirm("Leave Group", "Are you sure you want to leave this group? You won't be able to rejoin unless invited.");
-        if (confirmed) {
-            const { error } = await supabase.from('group_members').delete().match({ group_id: selectedGroup.id, user_id: currentUser.id });
-            if (!error) {
-                navigate('/conversations');
-            } else {
-                showAlert("Error", "Failed to leave group: " + error.message);
-            }
-        }
-    };
-
-    // Feature: Delete Group
-    const handleDeleteGroup = async () => {
-        const confirmed = await showConfirm("Delete Group", "Are you sure? This will delete the group and all messages for everyone. This action cannot be undone.", "Delete Forever");
-        if (confirmed) {
-            const { error } = await supabase.from('groups').delete().eq('id', selectedGroup.id);
-            if (!error) {
-                navigate('/conversations');
-            } else {
-                showAlert("Error", "Failed to delete group: " + error.message);
-            }
-        }
-    };
-
-    const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setNewMessage(val);
-        const now = Date.now();
-        if (now - lastTypingBroadcast.current > 200) {
-            groupChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, content: val } });
-            lastTypingBroadcast.current = now;
-        }
-    };
-
-    // Feature: Create Poll
-    const handleCreatePoll = async () => {
-        if (!pollQuestion.trim() || pollOptions.some(o => !o.trim())) return;
-        const pollContent = JSON.stringify({
-            question: pollQuestion,
-            options: pollOptions.filter(o => o.trim())
-        });
-        
-        // Use standard send but with special prefix
-        await supabase.from('messages').insert({
-            sender_id: currentUser.id,
-            group_id: selectedGroup.id,
-            content: POLL_PREFIX + pollContent
-        });
-        
-        setShowPollCreator(false);
-        setPollQuestion('');
-        setPollOptions(['', '']);
-    };
+    useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length, remoteDrafts]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e && e.preventDefault();
@@ -472,68 +211,80 @@ export const GroupWindow: React.FC<GroupWindowProps> = ({ currentUser, selectedG
         if (!content.trim()) return;
         setNewMessage('');
         setShowGifPicker(false);
-        
         if (editingId) {
-            // Edit Existing Message
-            const { error } = await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', editingId);
-            if (error) showAlert("Error", "Failed to update message.");
+            await supabase.from('messages').update({ content, updated_at: new Date().toISOString() }).eq('id', editingId);
             setEditingId(null);
             return;
         }
-
-        // Send New Message
         const tempId = Math.random().toString();
-        const optimisticMsg: Message = { 
-            id: tempId, 
-            sender_id: currentUser.id, 
-            group_id: selectedGroup.id, 
-            content, 
-            created_at: new Date().toISOString(),
-            status: 'sending',
-            sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } 
-        };
-        
-        setMessages(prev => [...prev, optimisticMsg]);
-
-        const { data, error } = await supabase.from('messages').insert({
-            sender_id: currentUser.id,
-            group_id: selectedGroup.id,
-            receiver_id: null, 
-            content
-        }).select().single();
-
-        if (error) {
-            console.error("Group message failed:", error);
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
-        } else {
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: optimisticMsg.sender, status: 'sent' } : m));
-        }
+        setMessages(prev => [...prev, { id: tempId, sender_id: currentUser.id, group_id: selectedGroup.id, content, created_at: new Date().toISOString(), status: 'sending', sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } } as Message]);
+        const { data, error } = await supabase.from('messages').insert({ sender_id: currentUser.id, group_id: selectedGroup.id, content }).select().single();
+        if (error) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+        else setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: { email: currentUser.email, avatar_url: currentUser.avatar_url }, status: 'sent' } : m));
     };
 
-    // Feature: Send GIF
     const handleSendGif = (url: string) => {
-        // Send as content url
         setNewMessage(url);
-        // Trigger manual send immediately (mocking event)
         setTimeout(() => handleSendMessage(null as any), 0);
     };
 
-    // Feature: Delete Message
-    const handleDeleteMessage = async (id: string) => {
-        const { error } = await supabase.from('messages').delete().eq('id', id);
-        if (error) {
-            console.error("Delete failed", error);
-            showAlert("Error", "Could not delete message.");
-        }
+    const handleReaction = async (msg: Message, emoji: string) => {
+        const current = msg.reactions || {};
+        const users = current[emoji] || [];
+        const updated = users.includes(currentUser.id) ? users.filter(u => u !== currentUser.id) : [...users, currentUser.id];
+        const newReactions = { ...current, [emoji]: updated };
+        if (updated.length === 0) delete newReactions[emoji];
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, reactions: newReactions } : m));
+        await supabase.from('messages').update({ reactions: newReactions }).eq('id', msg.id);
     };
 
-    const handleRetry = async (msg: Message) => {
-        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sending' } : m));
-        const { data, error } = await supabase.from('messages').insert({
-            sender_id: currentUser.id,
-            group_id: selectedGroup.id,
-            receiver_id: null,
-            content: msg.content
-        }).select().single();
+    const handlePin = async (msg: Message) => handleReaction(msg, '📌');
+    const handleDeleteMessage = (id: string) => supabase.from('messages').delete().eq('id', id);
 
-        if (error) {
+    return (
+        <div className="flex flex-col h-full bg-[#030014] relative font-['Outfit']">
+            <div className="px-6 py-4 flex justify-between items-center bg-[#030014]/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 flex items-center justify-center text-white font-bold text-lg shadow-lg border border-white/10">{selectedGroup.name[0].toUpperCase()}</div>
+                    <div><h2 className="font-bold text-white text-lg tracking-tight">{selectedGroup.name}</h2><span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Group Chat</span></div>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2 no-scrollbar scroll-smooth">
+                {messages.map(msg => (
+                    <MessageItem key={msg.id} msg={msg} isMe={msg.sender_id === currentUser.id} currentUser={currentUser} onReaction={handleReaction} onEdit={(m) => { setEditingId(m.id); setNewMessage(m.content); }} onDelete={handleDeleteMessage} onPin={handlePin} availableEmojis={emojiList} onImageClick={setLightboxImage} />
+                ))}
+                <div ref={messagesEndRef} />
+            </div>
+
+            {showGifPicker && (
+                <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20] border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up w-80">
+                    <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+                        {Object.keys(GIF_CATEGORIES).map(cat => (
+                            <button key={cat} onClick={() => setGifCategory(cat)} className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap ${gifCategory === cat ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}>{cat}</button>
+                        ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar">
+                        {GIF_CATEGORIES[gifCategory].map((gif, i) => (
+                            <img key={i} src={gif} alt="GIF" className="w-full h-24 object-cover rounded-lg cursor-pointer hover:scale-105 transition" onClick={() => handleSendGif(gif)} />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md">
+                <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/30">
+                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
+                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" placeholder="Group message..." />
+                    <button type="submit" className="p-2.5 rounded-full text-white font-bold transition shadow-lg" style={{ background: 'var(--theme-gradient)' }}><svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg></button>
+                </form>
+            </div>
+
+            {lightboxImage && (
+                <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-md flex items-center justify-center animate-fade-in" onClick={() => setLightboxImage(null)}>
+                    <img src={lightboxImage} className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl animate-scale-in" />
+                </div>
+            )}
+        </div>
+    );
+};
