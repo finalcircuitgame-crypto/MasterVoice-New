@@ -38,6 +38,14 @@ const triggerConfetti = () => {
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
 
+const FALLBACK_GIR_GIFS = [
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/V2mS31M44xLJC/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/mSguM0eKjF3mE/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9S5iSgtLzU9Y170tH4/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Zf8q6n1oG7Y/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6uMqzcbWRhoT6/giphy.gif"
+];
+
 const POLL_PREFIX = "$$POLL$$";
 const VOTE_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
 
@@ -145,6 +153,7 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
     const [gifSearch, setGifSearch] = useState('Gir');
     const [gifs, setGifs] = useState<any[]>([]);
     const [loadingGifs, setLoadingGifs] = useState(false);
+    const [gifError, setGifError] = useState(false);
     
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -173,19 +182,36 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
 
     useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length]);
 
-    // GIPHY Fetch Logic
+    // GIPHY Fetch Logic with Fallback
     useEffect(() => {
         if (!showGifPicker) return;
         const fetchGifs = async () => {
             setLoadingGifs(true);
+            setGifError(false);
             try {
-                const endpoint = gifSearch.trim() 
-                    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=20`
-                    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`;
+                const queryStr = gifSearch.trim() || 'Gir';
+                const endpoint = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(queryStr)}&limit=25`;
                 const res = await fetch(endpoint);
+                
+                if (res.status === 403 || !res.ok) {
+                    throw new Error("Giphy API Key blocked or limited");
+                }
+                
                 const json = await res.json();
+                if (!json.data || json.data.length === 0) throw new Error("No results");
                 setGifs(json.data || []);
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                console.warn("Giphy Fetch Error, using fallbacks:", e);
+                setGifError(true);
+                // Inject fallback Girs
+                setGifs(FALLBACK_GIR_GIFS.map((url, i) => ({
+                    id: `fallback-${i}`,
+                    images: {
+                        fixed_height_small: { url },
+                        original: { url }
+                    }
+                })));
+            }
             finally { setLoadingGifs(false); }
         };
         const timer = setTimeout(fetchGifs, 500);
@@ -274,6 +300,7 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
                          {loadingGifs && <div className="absolute right-3 top-2.5 w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>}
                     </div>
                     <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                        {gifError && <div className="col-span-2 text-center py-2 text-[10px] text-amber-500 bg-amber-500/10 rounded mb-2">Showing local cache (API Limited)</div>}
                         {gifs.length === 0 && !loadingGifs && <div className="col-span-2 text-center py-10 text-xs text-gray-500">No GIFs found</div>}
                         {gifs.map((gif, i) => (
                             <img 
@@ -285,7 +312,7 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
                             />
                         ))}
                     </div>
-                    <div className="mt-2 text-[8px] text-gray-600 uppercase tracking-widest text-center">Powered by Giphy</div>
+                    <div className="mt-2 text-[8px] text-gray-600 uppercase tracking-widest text-center">{gifError ? 'Gir Cache Active' : 'Powered by Giphy'}</div>
                 </div>
             )}
 
