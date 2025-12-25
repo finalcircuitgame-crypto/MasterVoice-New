@@ -12,8 +12,9 @@ export const ICE_SERVERS: RTCIceServer[] = [
       "turn:relay1.expressturn.com:3480?transport=udp",
       "turn:relay1.expressturn.com:3480?transport=tcp"
     ],
-    username: "000000002080624754",
-    credential: "TplmyCeWBfBAapvocrUf2IQx5u8="
+    // Using environment variables for protected credentials
+    username: process.env.ICE_USERNAME || "000000002080624754",
+    credential: process.env.ICE_CREDENTIAL || "TplmyCeWBfBAapvocrUf2IQx5u8="
   }
 ];
 

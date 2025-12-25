@@ -68,8 +68,8 @@ interface MessageItemProps {
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 
-// GIPHY API Integration
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; 
+// GIPHY API Integration - Using environment variable for protected stuff
+const GIPHY_API_KEY = process.env.GIPHY_API_KEY || 'dc6zaTOxFJmzC'; 
 
 // "Grab every Gir GIF" - Fallback engine
 const FALLBACK_GIR_GIFS = [
@@ -338,7 +338,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md relative z-10">
                 <div className="max-w-4xl mx-auto flex flex-col gap-2">
                     <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl transition-all focus-within:ring-2 focus-within:ring-indigo-500/30">
-                        <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
+                        <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg></button>
                         <input ref={inputRef} type="text" value={newMessage} onChange={(e) => { setNewMessage(e.target.value); const now = Date.now(); if (now - lastTypingBroadcast.current > 200) { chatChannel?.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUser.id, content: e.target.value } }); lastTypingBroadcast.current = now; } }} className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" placeholder="Message..." />
                         <button type="submit" disabled={!newMessage.trim()} className="p-2.5 rounded-full text-white font-bold transition shadow-lg hover:scale-105 active:scale-95" style={{ background: 'var(--theme-gradient)' }}><svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg></button>
                     </form>

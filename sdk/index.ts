@@ -1,4 +1,3 @@
-
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
@@ -30,11 +29,11 @@ const TIER_CONFIGS = {
   pro: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // Standard TURN (UDP) via Expressturn
+      // Standard TURN (UDP) via Expressturn - Using environment variables
       { 
         urls: 'turn:relay1.expressturn.com:3480?transport=udp', 
-        username: '000000002080624754', 
-        credential: 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
+        username: process.env.ICE_USERNAME || '000000002080624754', 
+        credential: process.env.ICE_CREDENTIAL || 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
       }
     ],
     iceTransportPolicy: 'relay' as RTCIceTransportPolicy, // Force Relay for stability
@@ -43,11 +42,11 @@ const TIER_CONFIGS = {
   elite: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // Premium Relay (TCP) via Expressturn for firewall traversal
+      // Premium Relay (TCP) via Expressturn for firewall traversal - Using environment variables
       { 
         urls: 'turn:relay1.expressturn.com:3480?transport=tcp', 
-        username: '000000002080624754', 
-        credential: 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
+        username: process.env.ICE_USERNAME || '000000002080624754', 
+        credential: process.env.ICE_CREDENTIAL || 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
       }
     ],
     iceTransportPolicy: 'all' as RTCIceTransportPolicy,

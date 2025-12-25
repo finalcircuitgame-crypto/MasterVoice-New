@@ -31,7 +31,8 @@ const triggerConfetti = () => {
 };
 
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
+// Using environment variable for protected Giphy API key
+const GIPHY_API_KEY = process.env.GIPHY_API_KEY || 'dc6zaTOxFJmzC';
 const FALLBACK_GIR_GIFS = ["https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/V2mS31M44xLJC/giphy.gif", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/mSguM0eKjF3mE/giphy.gif", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3Z6ZnB6OHRwaHpxeG85M3Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5Z2Z5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9S5iSgtLzU9Y170tH4/giphy.gif"];
 const POLL_PREFIX = "$$POLL$$";
 const VOTE_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
