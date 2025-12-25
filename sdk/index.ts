@@ -19,13 +19,17 @@ export interface CallConfig {
 }
 
 export interface TelemetryData {
+  id: string;
   timestamp: string;
-  rtt: number;
-  jitter: number;
-  packetLoss: number;
-  activeNodes: number;
   region: string;
-  load: number;
+  metrics: {
+    rtt: number;
+    jitter: number;
+    packet_loss: number;
+    cpu_load: number;
+    active_streams: number;
+  };
+  status: 'operational' | 'degraded' | 'down';
 }
 
 // --- ICE Server Configurations ---
@@ -101,27 +105,23 @@ export class MasterVoice {
   }
 
   /**
-   * Simulated /v2/telemetry REST endpoint call.
-   * In production, this would be a fetch to our Go/Rust edge-proxy.
+   * Fetches health data from the /v2/telemetry REST endpoint.
+   * Handled by the Service Worker to return actual JSON.
    */
   public async fetchTelemetry(): Promise<TelemetryData[]> {
-    if (this.plan !== 'elite') {
-        throw new Error("Access Denied: /v2/telemetry requires ELITE tier credentials.");
+    const response = await fetch('/v2/telemetry', {
+      headers: {
+        'Authorization': this.apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to fetch telemetry");
     }
 
-    // Simulate network delay
-    await new Promise(r => setTimeout(r, 400));
-
-    const regions = ['EU-WEST-1', 'US-EAST-1', 'US-WEST-2', 'AP-SOUTH-1'];
-    return regions.map(region => ({
-        timestamp: new Date().toISOString(),
-        region,
-        rtt: Math.floor(Math.random() * 40) + 10,
-        jitter: Math.floor(Math.random() * 5) + 1,
-        packetLoss: parseFloat((Math.random() * 0.1).toFixed(3)),
-        activeNodes: Math.floor(Math.random() * 100) + 50,
-        load: Math.floor(Math.random() * 30) + 10
-    }));
+    return response.json();
   }
 
   public async initializeCall(roomId: string, userId: string) {
@@ -132,8 +132,8 @@ export class MasterVoice {
     });
 
     this.pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.signalingChannel?.send({
+      if (event.candidate && this.signalingChannel) {
+        this.signalingChannel.send({
           type: 'broadcast',
           event: 'signal',
           payload: { type: 'candidate', candidate: event.candidate, userId }

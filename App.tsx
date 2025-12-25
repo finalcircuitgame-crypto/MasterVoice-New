@@ -19,7 +19,8 @@ import {
   DevPage, 
   MauLimitPage, 
   ThemeEditorPage,
-  TelemetryPage
+  TelemetryPage,
+  TelemetryApiResponse
 } from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
@@ -281,6 +282,7 @@ const App: React.FC = () => {
 
   const renderPublicView = () => {
       switch (path) {
+          case '/v2/telemetry': return <TelemetryApiResponse />;
           case '/login': return <Auth mode="signin" onBack={() => navigate('/')} onSwitchMode={() => navigate('/register')} />;
           case '/register': return <Auth mode="signup" onBack={() => navigate('/')} onSwitchMode={() => navigate('/login')} />;
           case '/privacy': return <PrivacyPolicy onBack={() => navigate('/')} />;
