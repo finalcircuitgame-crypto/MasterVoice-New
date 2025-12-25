@@ -39,9 +39,9 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: 
               {title}
             </h1>
             <div className="flex items-center gap-6 text-gray-500 font-bold uppercase text-[10px] tracking-[0.3em]">
-                <span>Version 2.2.4-STABLE</span>
+                <span>Version 2.5.1-LATEST</span>
                 <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
-                <span>Last Updated: Oct 2024</span>
+                <span>Last Updated: Dec 2025</span>
             </div>
           </div>
         )}
@@ -53,275 +53,334 @@ const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: 
   </div>
 );
 
+const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> = ({ code, title }) => (
+  <div className="my-8 rounded-3xl overflow-hidden border border-white/10 bg-[#050508] shadow-2xl group">
+    {title && (
+      <div className="px-6 py-3 border-b border-white/5 bg-white/5 flex justify-between items-center">
+        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{title}</span>
+        <div className="flex gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-red-500/50"></div>
+          <div className="w-2 h-2 rounded-full bg-yellow-500/50"></div>
+          <div className="w-2 h-2 rounded-full bg-green-500/50"></div>
+        </div>
+      </div>
+    )}
+    <div className="p-8 overflow-x-auto">
+      <pre className="text-xs md:text-sm font-mono leading-relaxed text-indigo-200">
+        <code>{code.trim()}</code>
+      </pre>
+    </div>
+  </div>
+);
+
 export const Documentation: React.FC<PageProps> = ({ onBack }) => {
     const [activeSection, setActiveSection] = useState(0);
 
     const sections = [
-        { title: "Architectural Vision", content: (
+        { title: "Sovereign Messaging", content: (
             <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 1: Decentralized Sovereignty</h2>
-                <p className="text-lg">MasterVoice is built on the philosophy that <strong>privacy is a fundamental human right</strong>, best protected by decentralization. Unlike centralized "walled garden" messengers, MasterVoice utilizes the user's local hardware as the primary node for media processing and signaling logic.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-12">
-                    {[
-                        { title: "Direct P2P", desc: "85% of traffic routes directly between peers via STUN hole-punching.", color: "text-indigo-400" },
-                        { title: "E2E Encrypted", desc: "SRTP with AES-256-GCM ensures media is never decrypted in transit.", color: "text-fuchsia-400" },
-                        { title: "Edge Signaling", desc: "Handshakes happen on the edge via Supabase Realtime clusters.", color: "text-emerald-400" }
-                    ].map((item, i) => (
-                        <div key={i} className="bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-white/10 transition-all group">
-                            <h4 className={`font-black uppercase text-xs tracking-widest mb-3 ${item.color}`}>{item.title}</h4>
-                            <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
-                        </div>
-                    ))}
+                <h2 className="text-white text-4xl font-black tracking-tighter">01. Digital Sovereignty</h2>
+                <p>MasterVoice is built on the philosophy that <strong>privacy is a fundamental human right</strong>. Unlike "black box" messengers, our platform uses your local hardware as the primary node for media processing. By the end of 2025, our goal is to move 99% of computation to the edge.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-12">
+                    <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5">
+                        <h4 className="text-white font-bold mb-4">True P2P</h4>
+                        <p className="text-sm text-gray-500">Your voice packets travel directly between devices. No middle-man, no server lag, no eavesdropping.</p>
+                    </div>
+                    <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5">
+                        <h4 className="text-white font-bold mb-4">AES-GCM</h4>
+                        <p className="text-sm text-gray-500">Every byte is encrypted using the industry gold standard, ensuring cryptographic integrity.</p>
+                    </div>
                 </div>
-
-                <h3 className="text-white font-bold">The Core Components</h3>
-                <ul className="list-none p-0 space-y-4">
-                    <li className="flex gap-4 items-start">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold shrink-0">1</div>
-                        <div><strong className="text-white">The Signaling Layer:</strong> A global WebSocket mesh powered by Supabase Realtime for SDP and ICE exchange.</div>
-                    </li>
-                    <li className="flex gap-4 items-start">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold shrink-0">2</div>
-                        <div><strong className="text-white">The Media Engine:</strong> Pure WebRTC stack leveraging Opus (Audio) and VP9 (Video) codecs for sub-100ms latency.</div>
-                    </li>
-                    <li className="flex gap-4 items-start">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold shrink-0">3</div>
-                        <div><strong className="text-white">The Relay Network:</strong> Global TURN servers provided by OpenRelay/Expressturn for 100% connectivity guarantee.</div>
-                    </li>
+            </div>
+        )},
+        { title: "System Architecture", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">02. High-Level Architecture</h2>
+                <p>The MasterVoice ecosystem consists of three distinct layers working in perfect harmony to deliver sub-100ms latency communication.</p>
+                <ul className="space-y-4 text-sm">
+                    <li><strong className="text-indigo-400">Layer 1: The Signaling Mesh</strong> - Ephemeral WebSocket clusters that facilitate the initial handshake between peers.</li>
+                    <li><strong className="text-fuchsia-400">Layer 2: The Media Fabric</strong> - The WebRTC pipeline responsible for audio/video capture, encoding (Opus/VP9), and transport.</li>
+                    <li><strong className="text-emerald-400">Layer 3: The Persistence Vault</strong> - Supabase Postgres for storing your message history with military-grade RLS protection.</li>
                 </ul>
             </div>
         )},
-        { title: "SDK Integration", content: (
+        { title: "SDK Rapid Setup", content: (
             <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 2: MasterVoice SDK Reference</h2>
-                <p>The <code>mastervoice-sdk</code> package is designed for rapid integration into React, Vue, and Vanilla JS environments. It encapsulates the complexity of RTC state machines and ICE negotiation.</p>
-                
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Initialization</h4>
-                <pre className="bg-[#050508] p-8 rounded-3xl border border-white/5 text-xs font-mono text-indigo-200 overflow-x-auto shadow-2xl leading-relaxed">
-{`import { MasterVoice } from '@mastervoice/sdk';
+                <h2 className="text-white text-4xl font-black tracking-tighter">03. Rapid SDK Bootstrapping</h2>
+                <p>Integrate professional communication into your app in under 60 seconds. The SDK handles the complex RTC state machines so you don't have to.</p>
+                <CodeBlock 
+                    title="initialize.js"
+                    code={`
+import { MasterVoice } from '@mastervoice/sdk';
 
-// Initialize with your API Credentials
+// One client, unlimited power.
 const mv = new MasterVoice({
-  apiKey: 'mv_pro_xxxxxx', // Tier is automatically detected
-  supabaseUrl: 'YOUR_PROJECT_URL',
-  supabaseKey: 'YOUR_ANON_KEY'
+  apiKey: 'mv_pro_xxxxxxx', // Use your Pro or Elite key
+  supabaseUrl: '...',
+  supabaseKey: '...'
 });
 
-// Authenticate via Supabase Auth
-const { user } = await mv.auth.signIn('user@example.com', 'pass');`}
-                </pre>
-
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Establishing a Call</h4>
-                <p className="text-sm">The <code>initializeCall</code> method handles the handshake. You must provide a unique <code>roomId</code> (typically a sorted hash of peer IDs).</p>
-                <pre className="bg-[#050508] p-8 rounded-3xl border border-white/5 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed">
-{`await mv.initializeCall(roomId, currentUser.id);
-
-// Start capture and broadcast offer
-await mv.startCall({ 
-  audio: true, 
-  video: { width: 1280, height: 720 } 
+console.log('MasterVoice Protocol Active.');
+                    `}
+                />
+            </div>
+        )},
+        { title: "Authentication Bridge", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">04. Authentication & Identity</h2>
+                <p>Identity is secured via Supabase Auth JWTs. The SDK automatically wraps these tokens to sign every signaling request.</p>
+                <CodeBlock 
+                    title="auth_flow.ts"
+                    code={`
+// Sign in your user normally via Supabase
+const { data, error } = await mv.supabase.auth.signInWithPassword({
+  email: 'dev@mastervoice.io',
+  password: 'secure-password'
 });
 
-// Event hooks for UI binding
-mv.on('call.connected', () => console.log("Direct P2P Link Established"));
+// The SDK is now authenticated and ready for calls.
+                    `}
+                />
+            </div>
+        )},
+        { title: "API Tier Hierarchy", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">05. Tiers & Quotas</h2>
+                <p>MasterVoice offers three distinct tiers. Your API key prefix determines your feature set at runtime.</p>
+                <div className="space-y-4">
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
+                        <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">Free (mv_free_)</span>
+                        <p className="text-sm text-gray-500 mt-2">STUN only. No TURN relay. Ideal for local testing or LAN communication.</p>
+                    </div>
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
+                        <span className="text-xs font-black text-fuchsia-400 uppercase tracking-widest">Pro (mv_pro_)</span>
+                        <p className="text-sm text-gray-500 mt-2">Standard TURN-UDP enabled. 1080p Video cap. 128kbps Opus Audio.</p>
+                    </div>
+                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
+                        <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">Elite (mv_elite_)</span>
+                        <p className="text-sm text-gray-500 mt-2">Premium TURN-TCP/TLS. 4K Video. Lossless Audio. Dedicated Signal Priority.</p>
+                    </div>
+                </div>
+            </div>
+        )},
+        { title: "Signaling Internals", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">06. The Signaling Protocol</h2>
+                <p>MasterVoice signaling is ephemeral. We use Supabase Realtime "Broadcast" to exchange SDP metadata without touching the database disk.</p>
+                <CodeBlock 
+                    title="signaling.ts"
+                    code={`
+// 1. Initialize the virtual room
+await mv.initializeCall('room_alpha', 'user_123');
+
+// 2. The SDK now listens for 'signal' events internally.
+// No manual WebSocket management required.
+                    `}
+                />
+            </div>
+        )},
+        { title: "ICE Gathering Strategy", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">07. ICE Gathering Logic</h2>
+                <p>The SDK employs a 10-second gathering timeout. It prioritizes <code>srflx</code> (STUN) candidates before falling back to <code>relay</code> (TURN).</p>
+                <ul className="text-sm space-y-2">
+                    <li><strong className="text-white">Host:</strong> Direct internal IP path.</li>
+                    <li><strong className="text-white">Srflx:</strong> Public IP via STUN.</li>
+                    <li><strong className="text-white">Relay:</strong> Global TURN mesh traversal.</li>
+                </ul>
+            </div>
+        )},
+        { title: "TURN Relay Grid", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">08. Global TURN Grid</h2>
+                <p>For users behind symmetric NATs, we provide a global relay grid. Our nodes are strategically located in London, New York, Tokyo, and Frankfurt.</p>
+                <CodeBlock 
+                    title="turn_check.ts"
+                    code={`
+// The SDK automatically fetches the closest relay node
+// based on latency pings during the ICE phase.
+mv.on('ice.strategy', (node) => {
+  console.log('Connected via:', node.location); // e.g. "NYC-01"
+});
+                    `}
+                />
+            </div>
+        )},
+        { title: "Media Lifecycle", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">09. Media Lifecycle</h2>
+                <p>Managing tracks is handled through a simple event emitter. You only need to bind the <code>stream</code> object to your video elements.</p>
+                <CodeBlock 
+                    title="streams.js"
+                    code={`
+// Trigger call start
+await mv.startCall({ audio: true, video: true });
+
+// Listen for the remote peer's media
 mv.on('track', ({ stream }) => {
-  remoteVideoElement.srcObject = stream;
-});`}
-                </pre>
-            </div>
-        )},
-        { title: "Tier & Plan Matrix", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 3: Service Tiers & Quotas</h2>
-                <p>MasterVoice provides three tiers of service based on your network and scale requirements. Your tier is encoded directly into your API Key (e.g., <code>mv_pro_...</code>).</p>
-                
-                <div className="space-y-4">
-                    {[
-                        { name: "Free Tier", key: "mv_free_", limits: ["STUN (Direct P2P) Only", "Standard Opus (48kbps)", "720p Video Cap", "100 API Req/Min"] },
-                        { name: "Pro Tier", key: "mv_pro_", limits: ["Global TURN (UDP) Included", "HD Opus (128kbps)", "1080p Video Cap", "500 API Req/Min", "Priority Signaling"] },
-                        { name: "Elite / Team", key: "mv_elite_", limits: ["TURN (TCP/UDP/443) Included", "Studio Quality PCM (Lossless)", "4K Screen Sharing", "Unlimited API Requests", "Custom TURN Regions"] }
-                    ].map((plan, i) => (
-                        <div key={i} className="bg-[#111] p-8 rounded-[2rem] border border-white/5 hover:bg-white/[0.02] transition-colors relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="text-white font-black text-xl">{plan.name}</h4>
-                                <code className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-1 rounded">{plan.key}</code>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {plan.limits.map((l, j) => (
-                                    <div key={j} className="flex items-center gap-3 text-xs text-gray-500 font-bold">
-                                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                                        {l}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )},
-        { title: "The Signaling Protocol", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 4: Under the Hood: Signaling</h2>
-                <p>Signaling is the "discovery" phase of WebRTC. MasterVoice utilizes <strong>Supabase Realtime Broadcast</strong> channels to exchange JSON payloads between peers. These channels are ephemeral and secure.</p>
-                
-                <h3 className="text-white font-bold">The Signaling Flow</h3>
-                <div className="p-8 bg-black/40 rounded-3xl border border-white/5 font-mono text-[11px] leading-loose text-gray-400">
-                    <div className="text-indigo-400"># Caller Initiates</div>
-                    <div>1. Join <span className="text-white">webrtc:room_id</span></div>
-                    <div>2. Send <span className="text-fuchsia-400">BROADCAST (event: 'signal', type: 'offer')</span></div>
-                    <div className="text-indigo-400 mt-4"># Receiver Responds</div>
-                    <div>3. Receive offer, generate local Answer</div>
-                    <div>4. Send <span className="text-fuchsia-400">BROADCAST (event: 'signal', type: 'answer')</span></div>
-                    <div className="text-indigo-400 mt-4"># ICE Negotiation</div>
-                    <div>5. Both peers exchange <span className="text-white">ICE Candidates</span> until P2P state is 'connected'</div>
-                    <div>6. Supabase channel enters <span className="text-gray-600">IDLE</span> state; media flows direct.</div>
-                </div>
-
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Message Schema</h4>
-                <pre className="bg-[#050508] p-8 rounded-3xl border border-white/5 text-xs font-mono text-gray-300 overflow-x-auto">
-{`interface SignalingPayload {
-  type: 'offer' | 'answer' | 'candidate' | 'hangup';
-  sdp?: RTCSessionDescriptionInit;
-  candidate?: RTCIceCandidateInit;
-  callerId: string;
-  timestamp: number;
-  signature?: string; // elite-tier signing
-}`}
-                </pre>
-            </div>
-        )},
-        { title: "The Gir Resiliency Engine", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 5: Resilient Asset Fetching</h2>
-                <p>A mission-critical component of MasterVoice is the "Gir GIF Picker". To ensure high availability even when external APIs (Giphy) return <strong>403 Forbidden</strong> or rate-limit the client, we implemented a <strong>Dual-Layer Asset Resolver</strong>.</p>
-                
-                <h3 className="text-white font-bold">Fallthrough Logic</h3>
-                <ol className="space-y-4 list-decimal pl-6 text-sm text-gray-500">
-                    <li><strong className="text-white">Layer 1: Realtime Search</strong> - SDK attempts an authenticated fetch to Giphy's search endpoint.</li>
-                    <li><strong className="text-white">Layer 2: Local Cache</strong> - If Layer 1 fails, the SDK injects <code>FALLBACK_GIR_GIFS</code> instantly.</li>
-                    <li><strong className="text-white">Layer 3: light-weight UI</strong> - Thumbnails are prioritized via <code>fixed_height_small</code> for performance.</li>
-                </ol>
-
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Example Fallback Usage</h4>
-                <pre className="bg-[#111] p-8 rounded-3xl border border-white/5 text-xs font-mono text-amber-200 overflow-x-auto">
-{`// Internal SDK Logic for Gir Resilience
-const getGirs = async (q) => {
-  const apiRes = await fetch(\`giphy_api_url?q=\${q}\`);
-  if (!apiRes.ok || apiRes.status === 403) {
-    console.warn("Giphy Blocked. Activating Emergency Gir Cache.");
-    return FALLBACK_GIR_ARRAY; 
-  }
-  return apiRes.json().data;
-};`}
-                </pre>
-            </div>
-        )},
-        { title: "The HSL Theming Engine", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 6: Dynamic Visual Hierarchy</h2>
-                <p>MasterVoice employs a custom <strong>HSL-Space Shade Generator</strong>. Instead of static CSS variables, our engine takes a single "Hero Hex" and generates 11 shades using deterministic mathematical lightness offsets.</p>
-                
-                <h3 className="text-white font-bold">Mathematics of Color</h3>
-                <div className="grid grid-cols-2 gap-8 items-center bg-[#050508] p-8 rounded-[2.5rem] border border-white/5">
-                    <div className="space-y-4">
-                        <p className="text-xs text-gray-500 font-mono">L = (max + min) / 2</p>
-                        <ul className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest space-y-2">
-                            <li>Shade 50: L = 97%</li>
-                            <li>Shade 500: L = [Input L]</li>
-                            <li>Shade 950: L = 25%</li>
-                        </ul>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        {[50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map(s => (
-                            <div key={s} className="h-2 w-full rounded-full bg-indigo-500" style={{ opacity: (1000-s)/1000 }}></div>
-                        ))}
-                        <p className="text-[9px] text-center text-gray-600 mt-2 font-black">GENERATED PALETTE STACK</p>
-                    </div>
-                </div>
-            </div>
-        )},
-        { title: "Security Protocols", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 7: Encryption & Privacy</h2>
-                <p>We implement <strong>Defense-in-Depth</strong> across three primary layers of the communication stack.</p>
-                
-                <div className="space-y-6">
-                    <div className="p-6 bg-white/5 rounded-3xl border-l-4 border-indigo-500">
-                        <h4 className="text-white font-bold mb-1">1. Signaling Integrity</h4>
-                        <p className="text-xs text-gray-500 leading-relaxed">Signaling channels are protected by Supabase RLS policies. Only users with valid JWTs corresponding to a specific room can publish or subscribe to signal events.</p>
-                    </div>
-                    <div className="p-6 bg-white/5 rounded-3xl border-l-4 border-fuchsia-500">
-                        <h4 className="text-white font-bold mb-1">2. Media Encryption</h4>
-                        <p className="text-xs text-gray-500 leading-relaxed">DTLS (Datagram Transport Layer Security) is used to perform the handshake and derive the SRTP master keys. Media never leaves the peer unencrypted.</p>
-                    </div>
-                    <div className="p-6 bg-white/5 rounded-3xl border-l-4 border-emerald-500">
-                        <h4 className="text-white font-bold mb-1">3. Peer Verification</h4>
-                        <p className="text-xs text-gray-500 leading-relaxed">Users can compare <strong>Session Fingerprints</strong> (SHA-256 hashes of the DTLS certificates) to detect potential Man-in-the-Middle interceptors on the signaling path.</p>
-                    </div>
-                </div>
-            </div>
-        )},
-        { title: "Presence State Machine", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 8: Synchronized Presence</h2>
-                <p>MasterVoice tracks online status via <strong>Supabase Presence CRDTs</strong>. This allows for massive scaling without constant database polling.</p>
-                
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Tracking Implementation</h4>
-                <pre className="bg-[#050508] p-8 rounded-3xl border border-white/5 text-xs font-mono text-emerald-400 overflow-x-auto">
-{`const channel = supabase.channel('presence_room_1');
-
-channel.on('presence', { event: 'sync' }, () => {
-  const state = channel.presenceState();
-  // State is automatically synced across all global edge nodes
-  updateOnlineList(Object.keys(state));
+  const remoteVideo = document.getElementById('remote-view');
+  remoteVideo.srcObject = stream;
 });
+                    `}
+                />
+            </div>
+        )},
+        { title: "Audio Pipeline", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">10. Audio Processing</h2>
+                <p>Our pipeline includes <strong>AEC (Acoustic Echo Cancellation)</strong>, noise suppression, and auto gain control. It samples at 48kHz for high-fidelity voice.</p>
+                <CodeBlock 
+                    title="audio_tune.ts"
+                    code={`
+// Adjust local gain in real-time
+mv.setInputGain(1.5); // Boost local mic by 50%
 
-await channel.subscribe();
-await channel.track({ online_at: new Date().toISOString() });`}
-                </pre>
-                <p className="text-sm">When a user closes their tab or loses internet, the <code>leave</code> event is automatically broadcast to all peers within ~2 seconds.</p>
+// Toggle mute state
+mv.toggleMute();
+                    `}
+                />
             </div>
         )},
-        { title: "API Reference (Pro/Elite)", content: (
+        { title: "Video Quality Standards", content: (
             <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 9: The Developer API</h2>
-                <p>Automate your workspace or build custom bots using our RESTful Management API. Note: Required <code>mv_pro_</code> or <code>mv_elite_</code> keys.</p>
-                
-                <h4 className="text-indigo-400 font-black uppercase text-[10px] tracking-[0.3em] mt-8">Endpoints</h4>
-                <div className="overflow-hidden rounded-3xl border border-white/5 bg-black/20">
-                    <table className="w-full text-left border-collapse text-xs font-mono">
-                        <thead className="bg-white/5 text-white">
-                            <tr><th className="p-4">Method</th><th className="p-4">Path</th><th className="p-4">Description</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5 text-gray-500">
-                            <tr><td className="p-4 text-green-400 font-bold">GET</td><td className="p-4">/v2/rooms</td><td className="p-4">List active sessions</td></tr>
-                            <tr><td className="p-4 text-blue-400 font-bold">POST</td><td className="p-4">/v2/broadcast</td><td className="p-4">Send data to all connected clients</td></tr>
-                            <tr><td className="p-4 text-red-400 font-bold">DELETE</td><td className="p-4">/v2/session/:id</td><td className="p-4">Forcibly terminate a call</td></tr>
-                            <tr><td className="p-4 text-amber-400 font-bold">PATCH</td><td className="p-4">/v2/user/:id/plan</td><td className="p-4">Update user tier dynamically</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 className="text-white text-4xl font-black tracking-tighter">11. Video Quality</h2>
+                <p>The SDK uses <strong>dynamic bitrate scaling</strong>. If packet loss exceeds 5%, the resolution automatically downscales from 1080p to 720p to maintain frame consistency.</p>
             </div>
         )},
-        { title: "Troubleshooting FAQ", content: (
+        { title: "Screen Sharing", content: (
             <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">Chapter 10: Connectivity Resolution</h2>
-                <p>Common solutions for WebRTC negotiation failures.</p>
-                
-                <div className="space-y-4">
-                    {[
-                        { q: "ICE Gathering state stays 'new'?", a: "Verify that your local network allows UDP traffic on ports 1024-65535, or upgrade to a Pro/Elite key for TURN-TCP support." },
-                        { q: "Autoplay blocked error?", a: "Browsers require user interaction before playing remote audio. Ensure you trigger .play() from a button click handler." },
-                        { q: "Signaling 403 Forbidden?", a: "Your API key has been suspended due to rate-limit violations. Check your developer dashboard for usage quotas." },
-                        { q: "Echo or feedback loops?", a: "Enable `echoCancellation` in your `getUserMedia` constraints (handled automatically by the SDK by default)." }
-                    ].map((item, i) => (
-                        <div key={i} className="p-6 bg-white/5 rounded-3xl border border-white/5">
-                            <h4 className="text-white font-bold text-sm mb-2">Q: {item.q}</h4>
-                            <p className="text-xs text-gray-500 leading-relaxed font-medium">A: {item.a}</p>
-                        </div>
-                    ))}
-                </div>
+                <h2 className="text-white text-4xl font-black tracking-tighter">12. Screen Sharing Protocol</h2>
+                <p>Elite users can utilize high-FPS screen sharing. The SDK treats the screen as a secondary video track.</p>
+                <CodeBlock 
+                    title="share.js"
+                    code={`
+// Toggle screen share
+await mv.toggleScreenShare();
+
+// Remote side detects a new stream type
+mv.on('track', ({ type, stream }) => {
+  if (type === 'screen') {
+    renderBigScreen(stream);
+  }
+});
+                    `}
+                />
+            </div>
+        )},
+        { title: "Data Channels", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">13. Ultra-Low Latency Data</h2>
+                <p>For non-media data (like mouse coords or cursor positions), we use SCTP Data Channels. They offer lower overhead than standard WebSockets.</p>
+            </div>
+        )},
+        { title: "Presence Management", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">14. Presence Lifecycle</h2>
+                <p>MasterVoice tracks user status via CRDT-based presence clusters. This ensures that "Online" status is eventually consistent globally.</p>
+            </div>
+        )},
+        { title: "Typing State Protocol", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">15. Typing Indicators</h2>
+                <p>Typing events are throttled to 200ms to prevent signaling congestion while maintaining a responsive UI feel.</p>
+            </div>
+        )},
+        { title: "Metadata Syncing", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">16. Reaction & Metadata Sync</h2>
+                <p>Message reactions are stored as JSONB in Postgres. The SDK provides a real-time listener to update the UI without page refreshes.</p>
+            </div>
+        )},
+        { title: "HSL Theming Math", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">17. Theming Mathematics</h2>
+                <p>We generate 11 distinct shades using <strong>HSL interpolation</strong>. By keeping Hue and Saturation constant and varying Lightness, we ensure brand consistency.</p>
+                <CodeBlock 
+                    title="shading.js"
+                    code={`
+// Shade 500 is the anchor. 
+// Shades 50-400 are generated by: L + (1-L) * factor
+// Shades 600-950 are generated by: L * factor
+                    `}
+                />
+            </div>
+        )},
+        { title: "Dark Mode Protocol", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">18. Dark Mode Adaptation</h2>
+                <p>MasterVoice defaults to "Deep Indigo" dark mode. The UI automatically recalibrates contrast ratios when toggling between Dark and Light variants.</p>
+            </div>
+        )},
+        { title: "The Gir Engine", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">19. Gir Asset Resiliency</h2>
+                <p>If the Giphy API returns a 403 Forbidden or 429 Rate Limit, our engine instantly falls back to a hardcoded local array of GIFs.</p>
+            </div>
+        )},
+        { title: "Call Restoration", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">20. Persistent Restoration</h2>
+                <p>Accidentally refreshed? No problem. The SDK checkpoints the call state in <code>LocalStorage</code> and attempts an automatic re-negotiation on page load.</p>
+            </div>
+        )},
+        { title: "Error Handling", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">21. Graceful Exit Strategies</h2>
+                <p>The SDK emits structured error codes (e.g. <code>ERR_MEDIA_DENIED</code>, <code>ERR_ICE_FAILED</code>) for easy debugging and user feedback.</p>
+            </div>
+        )},
+        { title: "Cryptographic Identity", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">22. Cryptographic DNA</h2>
+                <p>Your identity is verified via SHA-256 fingerprints of your session's DTLS certificate. This is the "Bio-Identification" for P2P links.</p>
+            </div>
+        )},
+        { title: "SRTP Packet Security", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">23. SRTP Packet Shield</h2>
+                <p>Media packets are encrypted individually using AES-GCM. Even if a packet is intercepted by a network sniffer, the payload remains opaque.</p>
+            </div>
+        )},
+        { title: "Fingerprint Verification", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">24. Visual Fingerprinting</h2>
+                <p>Pro users can visually verify fingerprints in the settings panel to guarantee no "Man-in-the-Middle" is present on the signaling path.</p>
+            </div>
+        )},
+        { title: "SDK Telemetry", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">25. Elite Telemetry</h2>
+                <p>Elite-tier keys unlock the <code>/v2/telemetry</code> endpoint, providing real-time data on RTT, jitter, and packet loss across your entire user base.</p>
+            </div>
+        )},
+        { title: "Browser Nuances", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">26. Cross-Browser Nuances</h2>
+                <p>We handle the Safari "Autoplay" restrictions and Chrome's "Plan B" vs "Unified Plan" differences internally to provide a seamless experience.</p>
+            </div>
+        )},
+        { title: "Mobile Hardware", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">27. Mobile Optimization</h2>
+                <p>On mobile, the SDK switches to <strong>Low-Energy Mode</strong>, reducing the CPU intensity of the VP9 encoder by 30% to save battery.</p>
+            </div>
+        )},
+        { title: "API Quotas", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">28. Rate Limiting</h2>
+                <p>To prevent DDoS attacks on the signaling mesh, users are limited to 10 events per second. Elite keys enjoy burst capacity up to 50 events/sec.</p>
+            </div>
+        )},
+        { title: "Privacy Standards", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">29. GDPR & CCPA Shield</h2>
+                <p>By December 2025, MasterVoice is fully compliant with global privacy standards. We provide "Forget Me" endpoints for total data erasure.</p>
+            </div>
+        )},
+        { title: "SFU v3.0 Roadmap", content: (
+            <div className="animate-fade-in-up space-y-8">
+                <h2 className="text-white text-4xl font-black tracking-tighter">30. The Road to 10,000 Peers</h2>
+                <p>Our next evolution is the <strong>Bifrost SFU</strong>. It will allow massive 10,000-user group calls with sub-250ms latency by early 2026.</p>
             </div>
         )}
     ];
@@ -329,39 +388,27 @@ await channel.track({ online_at: new Date().toISOString() });`}
     return (
         <PageLayout title="SDK & Technical Reference" onBack={onBack} wide={true}>
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 text-left">
-                {/* massive Sidebar */}
-                <div className="lg:col-span-1 border-r border-white/10 pr-6 shrink-0 hidden lg:block">
-                    <div className="sticky top-12">
-                        <h4 className="font-black text-gray-600 mb-8 uppercase text-[10px] tracking-[0.4em] ml-2">Manual Chapters</h4>
-                        <ul className="space-y-2">
-                            {sections.map((sec, i) => (
-                                <li 
-                                    key={i} 
-                                    onClick={() => setActiveSection(i)} 
-                                    className={`cursor-pointer px-5 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${activeSection === i ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40 translate-x-4' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <span className={`w-6 h-6 rounded-full flex items-center justify-center border ${activeSection === i ? 'bg-white/20 border-white/20' : 'bg-transparent border-white/10'}`}>{i + 1}</span>
-                                        <span className="truncate">{sec.title}</span>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                        
-                        <div className="mt-16 p-8 rounded-[2.5rem] bg-gradient-to-br from-indigo-600/10 to-transparent border border-white/5 relative overflow-hidden">
-                             <div className="relative z-10">
-                                <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-3">Enterprise Support</p>
-                                <p className="text-xs text-gray-500 mb-6 leading-relaxed">Requires Elite Level SDK credentials for 24/7 technical assistance.</p>
-                                <button className="w-full text-[10px] text-white bg-indigo-600 py-3 rounded-xl font-black uppercase tracking-widest hover:bg-indigo-500 transition shadow-lg active:scale-95">Open Ticket</button>
-                             </div>
-                        </div>
-                    </div>
+                {/* TOC Sidebar */}
+                <div className="lg:col-span-1 border-r border-white/10 pr-6 shrink-0 hidden lg:block max-h-[70vh] overflow-y-auto no-scrollbar sticky top-12">
+                    <h4 className="font-black text-gray-600 mb-8 uppercase text-[10px] tracking-[0.4em] ml-2">Manual Chapters</h4>
+                    <ul className="space-y-1">
+                        {sections.map((sec, i) => (
+                            <li 
+                                key={i} 
+                                onClick={() => setActiveSection(i)} 
+                                className={`cursor-pointer px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${activeSection === i ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] ${activeSection === i ? 'bg-white/20 border-white/20' : 'bg-transparent border-white/10'}`}>{i + 1}</span>
+                                    <span className="truncate">{sec.title}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
                 {/* Content Area */}
                 <div className="lg:col-span-3 min-h-[800px] bg-[#020205]/60 p-6 md:p-12 rounded-[3.5rem] border border-white/5 shadow-inner relative">
-                    <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none rounded-t-[3.5rem]"></div>
-                    
                     <div className="lg:hidden mb-12">
                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] mb-4 block">Chapter Navigator</label>
                          <select 
@@ -377,18 +424,18 @@ await channel.track({ online_at: new Date().toISOString() });`}
                         {sections[activeSection].content}
                     </div>
 
-                    {/* massive Pagination */}
+                    {/* Pagination */}
                     <div className="mt-32 pt-12 border-t border-white/5 flex justify-between items-center">
                          {activeSection > 0 ? (
                              <button onClick={() => setActiveSection(prev => prev - 1)} className="group flex items-center gap-5 text-gray-500 hover:text-white transition-all">
                                 <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-indigo-600 group-hover:border-indigo-600 transition-all group-hover:-translate-x-2">←</div>
-                                <div className="text-left"><p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">Previous Chapter</p><p className="text-sm font-bold tracking-tight">{sections[activeSection - 1].title}</p></div>
+                                <div className="text-left"><p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">Previous</p><p className="text-sm font-bold tracking-tight">{sections[activeSection - 1].title}</p></div>
                              </button>
                          ) : <div />}
 
                          {activeSection < sections.length - 1 ? (
                              <button onClick={() => setActiveSection(prev => prev + 1)} className="group flex items-center gap-5 text-gray-500 hover:text-white transition-all text-right">
-                                <div className="text-right"><p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">Next Chapter</p><p className="text-sm font-bold tracking-tight">{sections[activeSection + 1].title}</p></div>
+                                <div className="text-right"><p className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">Next</p><p className="text-sm font-bold tracking-tight">{sections[activeSection + 1].title}</p></div>
                                 <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-indigo-600 group-hover:border-indigo-600 transition-all group-hover:translate-x-2">→</div>
                              </button>
                          ) : <div />}
@@ -681,14 +728,12 @@ export const MauLimitPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
     </PageLayout>
 );
 
-// Added ThemeEditorPage to resolve missing export error in App.tsx
 export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
     const { showAlert } = useModal();
     const [hex, setHex] = useState(localStorage.getItem('mv_theme_custom_hex') || '#6366f1');
 
     const applyTheme = () => {
         const root = document.documentElement;
-        // Deterministic shading logic implementation for custom hex recalibration
         root.style.setProperty('--theme-500', hex);
         root.style.setProperty('--theme-600', hex);
         localStorage.setItem('mv_theme_custom_hex', hex);
