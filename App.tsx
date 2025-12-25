@@ -6,13 +6,26 @@ import { ChatList } from './components/ChatList';
 import { ChatWindow } from './components/ChatWindow';
 import { GroupWindow } from './components/GroupWindow';
 import { LandingPage } from './components/LandingPage';
-import { PrivacyPolicy, TermsOfService, ContactSupport, PlansPage, ComparePlansPage, NotFoundPage, Documentation, ApiKeyPage, VerifyPage, DevPage, MauLimitPage, ThemeEditorPage } from './components/Pages';
+import { 
+  PrivacyPolicy, 
+  TermsOfService, 
+  ContactSupport, 
+  PlansPage, 
+  ComparePlansPage, 
+  NotFoundPage, 
+  Documentation, 
+  ApiKeyPage, 
+  VerifyPage, 
+  DevPage, 
+  MauLimitPage, 
+  ThemeEditorPage,
+  TelemetryPage
+} from './components/Pages';
 import { useRouter } from './hooks/useRouter';
 import { useWebRTC } from './hooks/useWebRTC';
 import { VoiceCallOverlay } from './components/VoiceCallOverlay';
 
 // --- LAZY LOADING ---
-// Use magic comment to force deterministic chunk name "Settings.js"
 const Settings = React.lazy(() => import(/* webpackChunkName: "Settings" */ './components/Settings'));
 
 const App: React.FC = () => {
@@ -23,11 +36,9 @@ const App: React.FC = () => {
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
-  // Call Persistence & UI State
   const [activeCallContact, setActiveCallContact] = useState<UserProfile | null>(null);
   const [isCallMaximized, setIsCallMaximized] = useState(false);
 
-  // Sound Logic
   useEffect(() => {
       const playTone = (freq: number, type: 'sine'|'square'|'triangle' = 'sine', duration: number = 0.1) => {
           try {
@@ -45,8 +56,8 @@ const App: React.FC = () => {
           } catch(e) {}
       };
 
-      const handleIncoming = () => playTone(880, 'sine', 0.2); // High beep
-      const handleSent = () => playTone(440, 'triangle', 0.1); // Lower pop
+      const handleIncoming = () => playTone(880, 'sine', 0.2); 
+      const handleSent = () => playTone(440, 'triangle', 0.1); 
 
       window.addEventListener('play-notification', handleIncoming);
       window.addEventListener('play-sent', handleSent);
@@ -58,26 +69,21 @@ const App: React.FC = () => {
 
   const { path, navigate, query } = useRouter();
 
-  // Resize Listener
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- HOISTED WEBRTC LOGIC ---
   const webrtcTargetUser = activeCallContact || selectedUser;
   const rtcRoomId = (currentUser && webrtcTargetUser) ? [currentUser.id, webrtcTargetUser.id].sort().join('_') : null;
 
-  // Handle call ending (local or remote) to clear persistence
   const handleCallEnded = () => {
-      console.log("App: Call ended signal received. Clearing persistence.");
       localStorage.removeItem('mv_active_call');
       setActiveCallContact(null);
       setIsCallMaximized(false);
   };
 
-  // Determine Plan (Mock logic or based on is_family flag)
   const userPlan = currentUser?.plan || (currentUser?.is_family ? 'pro' : 'free');
 
   const { 
@@ -101,7 +107,6 @@ const App: React.FC = () => {
     inputGain
   } = useWebRTC(rtcRoomId, currentUser?.id || '', userPlan, handleCallEnded);
 
-  // --- PERSISTENCE RESTORATION ---
   useEffect(() => {
       const restoreCall = async () => {
           const stored = localStorage.getItem('mv_active_call');
@@ -116,7 +121,6 @@ const App: React.FC = () => {
                       }
                   }
               } catch (e) {
-                  console.error("Failed to restore call", e);
                   localStorage.removeItem('mv_active_call');
               }
           }
@@ -158,7 +162,6 @@ const App: React.FC = () => {
       setIsCallMaximized(true);
   };
 
-  // Lock contact on incoming
   useEffect(() => {
       if (callState === CallState.RECEIVING && !activeCallContact && selectedUser) {
           setActiveCallContact(selectedUser);
@@ -166,7 +169,6 @@ const App: React.FC = () => {
       }
   }, [callState, selectedUser, activeCallContact]);
 
-  // Presence logic
   useEffect(() => {
     if (!currentUser) return;
     const presenceChannel = supabase.channel('global_presence', { config: { presence: { key: currentUser.id } } });
@@ -225,14 +227,10 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // --- ROUTING LOGIC ---
   useEffect(() => {
     if (!currentUser) return;
-    
     const userIdParam = query.get('userId');
     const pathParts = window.location.pathname.split('/');
-    
-    // Group Route: /conversations/groups/:id
     const isGroupRoute = window.location.pathname.startsWith('/conversations/groups/');
     const groupIdFromPath = isGroupRoute && pathParts.length >= 4 ? pathParts[3] : null;
 
@@ -297,6 +295,7 @@ const App: React.FC = () => {
           case '/verify': return <VerifyPage onBack={() => navigate('/')} onNavigate={navigate} />;
           case '/dev': return <DevPage onNavigate={navigate} onBack={() => navigate('/')} />;
           case '/theme-editor': return <ThemeEditorPage onBack={() => navigate('/settings')} onNavigate={navigate} />;
+          case '/telemetry': return <TelemetryPage onBack={() => navigate('/dev')} onNavigate={navigate} />;
           case '/': return <LandingPage onNavigate={navigate} isAuthenticated={!!currentUser} />;
           default: if (showChatInterface) return null; return <NotFoundPage onBack={() => navigate('/')} />;
       }
@@ -337,8 +336,6 @@ const App: React.FC = () => {
   return (
     <div className="relative h-screen w-screen bg-[#030014] overflow-hidden">
         <div className={`absolute inset-0 flex transition-all duration-500 ease-in-out ${isSettingsOpen ? 'scale-[0.98] opacity-30 pointer-events-none blur-sm' : 'opacity-100 scale-100'}`}>
-              
-              {/* Chat List Column */}
               {(!isMobile || !isChatOpen) && (
                   <div className={`flex-none w-full md:w-80 h-full ${isChatOpen ? 'hidden md:block' : 'block'}`}>
                     <ChatList 
@@ -350,12 +347,9 @@ const App: React.FC = () => {
                     />
                   </div>
               )}
-
-              {/* Window Column */}
               <div className={`flex-1 h-full flex flex-col relative ${!isChatOpen ? 'hidden md:flex' : 'flex'}`}>
                 {isChatOpen && !isSettingsOpen ? (
                     <>
-                        {/* Mobile Header for Back Nav */}
                         <div className="md:hidden bg-[#060609] p-4 pt-4 border-b border-white/5 flex items-center gap-3">
                             <button onClick={() => { setSelectedUser(null); setSelectedGroup(null); navigate('/conversations'); }} className="text-gray-400 hover:text-white p-2 -ml-2 rounded-full hover:bg-white/10 transition">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -367,7 +361,6 @@ const App: React.FC = () => {
                                 <span className="font-bold text-white">{selectedGroup ? selectedGroup.name : selectedUser?.email.split('@')[0]}</span>
                             </div>
                         </div>
-
                         {selectedGroup ? (
                             <GroupWindow
                                 key={`group_${selectedGroup.id}`}
@@ -403,7 +396,6 @@ const App: React.FC = () => {
                 )}
               </div>
         </div>
-
         {isSettingsOpen && (
              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                 <Suspense fallback={
@@ -418,7 +410,6 @@ const App: React.FC = () => {
                 </Suspense>
              </div>
         )}
-
         <VoiceCallOverlay 
             callState={callState} 
             remoteStream={remoteStream}

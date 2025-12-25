@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PricingCard } from './LandingPage';
 import { useModal } from './ModalContext';
+import { useMasterVoice, TelemetryData } from '../sdk';
 
 interface PageProps {
   onBack: () => void;
@@ -9,7 +10,6 @@ interface PageProps {
 
 const PageLayout: React.FC<{ title: string; children: React.ReactNode; onBack?: () => void; wide?: boolean }> = ({ title, children, onBack, wide }) => (
   <div className="min-h-screen bg-[#030014] text-white overflow-y-auto animate-slide-up relative font-['Outfit'] selection:bg-indigo-500/30">
-    {/* Background Effects */}
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-600/10 rounded-full blur-[100px]" />
        <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-fuchsia-600/10 rounded-full blur-[100px]" />
@@ -73,6 +73,83 @@ const CodeBlock: React.FC<{ code: string; language?: string; title?: string }> =
   </div>
 );
 
+export const TelemetryPage: React.FC<PageProps> = ({ onBack }) => {
+    const mv = useMasterVoice();
+    const [data, setData] = useState<TelemetryData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const refresh = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const stats = await mv.fetchTelemetry();
+            setData(stats);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { refresh(); }, []);
+
+    return (
+        <PageLayout title="Global NOC Dashboard" onBack={onBack} wide={true}>
+            <div className="flex justify-between items-center mb-8">
+                <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Real-time Network Operations Center - ELITE Tier</p>
+                <button onClick={refresh} disabled={loading} className="px-4 py-2 bg-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-500 transition disabled:opacity-50">
+                    {loading ? 'Refreshing Signal...' : 'Force Refresh'}
+                </button>
+            </div>
+
+            {error ? (
+                <div className="bg-red-500/10 border border-red-500/20 p-12 rounded-[2.5rem] text-center">
+                    <h3 className="text-xl font-bold text-red-400 mb-2">Access Restriced</h3>
+                    <p className="text-sm text-gray-500">{error}</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {data.map((node, i) => (
+                        <div key={i} className="bg-[#111] p-6 rounded-[2rem] border border-white/5 relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/5 blur-2xl"></div>
+                            <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                                {node.region}
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            </h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-[10px] text-gray-600 font-bold uppercase mb-1">Latency (RTT)</p>
+                                    <p className="text-2xl font-black text-white">{node.rtt}ms</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[9px] text-gray-600 font-bold uppercase mb-0.5">Jitter</p>
+                                        <p className="text-sm font-bold text-indigo-400">{node.jitter}ms</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] text-gray-600 font-bold uppercase mb-0.5">Loss</p>
+                                        <p className="text-sm font-bold text-fuchsia-400">{node.packetLoss}%</p>
+                                    </div>
+                                </div>
+                                <div className="pt-4 border-t border-white/5">
+                                    <div className="flex justify-between text-[9px] font-bold uppercase mb-1">
+                                        <span className="text-gray-500">Node Load</span>
+                                        <span className="text-white">{node.load}%</span>
+                                    </div>
+                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500" style={{ width: `${node.load}%` }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </PageLayout>
+    );
+};
+
 export const Documentation: React.FC<PageProps> = ({ onBack }) => {
     const [activeSection, setActiveSection] = useState(0);
 
@@ -113,9 +190,8 @@ export const Documentation: React.FC<PageProps> = ({ onBack }) => {
                     code={`
 import { MasterVoice } from '@mastervoice/sdk';
 
-// One client, unlimited power.
 const mv = new MasterVoice({
-  apiKey: 'mv_pro_xxxxxxx', // Use your Pro or Elite key
+  apiKey: 'mv_pro_xxxxxxx',
   supabaseUrl: '...',
   supabaseKey: '...'
 });
@@ -125,256 +201,24 @@ console.log('MasterVoice Protocol Active.');
                 />
             </div>
         )},
-        { title: "Authentication Bridge", content: (
+        { title: "RESTful Telemetry", content: (
             <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">04. Authentication & Identity</h2>
-                <p>Identity is secured via Supabase Auth JWTs. The SDK automatically wraps these tokens to sign every signaling request.</p>
+                <h2 className="text-white text-4xl font-black tracking-tighter">25. /v2/telemetry Reference</h2>
+                <p>Elite-tier users can pull real-time health metrics for the entire global relay grid. This is essential for enterprise-grade NOC dashboards.</p>
                 <CodeBlock 
-                    title="auth_flow.ts"
+                    title="fetch_telemetry.ts"
                     code={`
-// Sign in your user normally via Supabase
-const { data, error } = await mv.supabase.auth.signInWithPassword({
-  email: 'dev@mastervoice.io',
-  password: 'secure-password'
-});
+// Authenticate with Elite Key
+const mv = new MasterVoice({ apiKey: 'mv_elite_...' });
 
-// The SDK is now authenticated and ready for calls.
-                    `}
-                />
-            </div>
-        )},
-        { title: "API Tier Hierarchy", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">05. Tiers & Quotas</h2>
-                <p>MasterVoice offers three distinct tiers. Your API key prefix determines your feature set at runtime.</p>
-                <div className="space-y-4">
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                        <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">Free (mv_free_)</span>
-                        <p className="text-sm text-gray-500 mt-2">STUN only. No TURN relay. Ideal for local testing or LAN communication.</p>
-                    </div>
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                        <span className="text-xs font-black text-fuchsia-400 uppercase tracking-widest">Pro (mv_pro_)</span>
-                        <p className="text-sm text-gray-500 mt-2">Standard TURN-UDP enabled. 1080p Video cap. 128kbps Opus Audio.</p>
-                    </div>
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                        <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">Elite (mv_elite_)</span>
-                        <p className="text-sm text-gray-500 mt-2">Premium TURN-TCP/TLS. 4K Video. Lossless Audio. Dedicated Signal Priority.</p>
-                    </div>
-                </div>
-            </div>
-        )},
-        { title: "Signaling Internals", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">06. The Signaling Protocol</h2>
-                <p>MasterVoice signaling is ephemeral. We use Supabase Realtime "Broadcast" to exchange SDP metadata without touching the database disk.</p>
-                <CodeBlock 
-                    title="signaling.ts"
-                    code={`
-// 1. Initialize the virtual room
-await mv.initializeCall('room_alpha', 'user_123');
+// Fetch real-time health across all regions
+const stats = await mv.fetchTelemetry();
 
-// 2. The SDK now listens for 'signal' events internally.
-// No manual WebSocket management required.
-                    `}
-                />
-            </div>
-        )},
-        { title: "ICE Gathering Strategy", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">07. ICE Gathering Logic</h2>
-                <p>The SDK employs a 10-second gathering timeout. It prioritizes <code>srflx</code> (STUN) candidates before falling back to <code>relay</code> (TURN).</p>
-                <ul className="text-sm space-y-2">
-                    <li><strong className="text-white">Host:</strong> Direct internal IP path.</li>
-                    <li><strong className="text-white">Srflx:</strong> Public IP via STUN.</li>
-                    <li><strong className="text-white">Relay:</strong> Global TURN mesh traversal.</li>
-                </ul>
-            </div>
-        )},
-        { title: "TURN Relay Grid", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">08. Global TURN Grid</h2>
-                <p>For users behind symmetric NATs, we provide a global relay grid. Our nodes are strategically located in London, New York, Tokyo, and Frankfurt.</p>
-                <CodeBlock 
-                    title="turn_check.ts"
-                    code={`
-// The SDK automatically fetches the closest relay node
-// based on latency pings during the ICE phase.
-mv.on('ice.strategy', (node) => {
-  console.log('Connected via:', node.location); // e.g. "NYC-01"
+stats.forEach(node => {
+  console.log(\`Node \${node.region}: \${node.rtt}ms RTT, \${node.packetLoss}% loss\`);
 });
                     `}
                 />
-            </div>
-        )},
-        { title: "Media Lifecycle", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">09. Media Lifecycle</h2>
-                <p>Managing tracks is handled through a simple event emitter. You only need to bind the <code>stream</code> object to your video elements.</p>
-                <CodeBlock 
-                    title="streams.js"
-                    code={`
-// Trigger call start
-await mv.startCall({ audio: true, video: true });
-
-// Listen for the remote peer's media
-mv.on('track', ({ stream }) => {
-  const remoteVideo = document.getElementById('remote-view');
-  remoteVideo.srcObject = stream;
-});
-                    `}
-                />
-            </div>
-        )},
-        { title: "Audio Pipeline", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">10. Audio Processing</h2>
-                <p>Our pipeline includes <strong>AEC (Acoustic Echo Cancellation)</strong>, noise suppression, and auto gain control. It samples at 48kHz for high-fidelity voice.</p>
-                <CodeBlock 
-                    title="audio_tune.ts"
-                    code={`
-// Adjust local gain in real-time
-mv.setInputGain(1.5); // Boost local mic by 50%
-
-// Toggle mute state
-mv.toggleMute();
-                    `}
-                />
-            </div>
-        )},
-        { title: "Video Quality Standards", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">11. Video Quality</h2>
-                <p>The SDK uses <strong>dynamic bitrate scaling</strong>. If packet loss exceeds 5%, the resolution automatically downscales from 1080p to 720p to maintain frame consistency.</p>
-            </div>
-        )},
-        { title: "Screen Sharing", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">12. Screen Sharing Protocol</h2>
-                <p>Elite users can utilize high-FPS screen sharing. The SDK treats the screen as a secondary video track.</p>
-                <CodeBlock 
-                    title="share.js"
-                    code={`
-// Toggle screen share
-await mv.toggleScreenShare();
-
-// Remote side detects a new stream type
-mv.on('track', ({ type, stream }) => {
-  if (type === 'screen') {
-    renderBigScreen(stream);
-  }
-});
-                    `}
-                />
-            </div>
-        )},
-        { title: "Data Channels", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">13. Ultra-Low Latency Data</h2>
-                <p>For non-media data (like mouse coords or cursor positions), we use SCTP Data Channels. They offer lower overhead than standard WebSockets.</p>
-            </div>
-        )},
-        { title: "Presence Management", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">14. Presence Lifecycle</h2>
-                <p>MasterVoice tracks user status via CRDT-based presence clusters. This ensures that "Online" status is eventually consistent globally.</p>
-            </div>
-        )},
-        { title: "Typing State Protocol", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">15. Typing Indicators</h2>
-                <p>Typing events are throttled to 200ms to prevent signaling congestion while maintaining a responsive UI feel.</p>
-            </div>
-        )},
-        { title: "Metadata Syncing", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">16. Reaction & Metadata Sync</h2>
-                <p>Message reactions are stored as JSONB in Postgres. The SDK provides a real-time listener to update the UI without page refreshes.</p>
-            </div>
-        )},
-        { title: "HSL Theming Math", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">17. Theming Mathematics</h2>
-                <p>We generate 11 distinct shades using <strong>HSL interpolation</strong>. By keeping Hue and Saturation constant and varying Lightness, we ensure brand consistency.</p>
-                <CodeBlock 
-                    title="shading.js"
-                    code={`
-// Shade 500 is the anchor. 
-// Shades 50-400 are generated by: L + (1-L) * factor
-// Shades 600-950 are generated by: L * factor
-                    `}
-                />
-            </div>
-        )},
-        { title: "Dark Mode Protocol", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">18. Dark Mode Adaptation</h2>
-                <p>MasterVoice defaults to "Deep Indigo" dark mode. The UI automatically recalibrates contrast ratios when toggling between Dark and Light variants.</p>
-            </div>
-        )},
-        { title: "The Gir Engine", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">19. Gir Asset Resiliency</h2>
-                <p>If the Giphy API returns a 403 Forbidden or 429 Rate Limit, our engine instantly falls back to a hardcoded local array of GIFs.</p>
-            </div>
-        )},
-        { title: "Call Restoration", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">20. Persistent Restoration</h2>
-                <p>Accidentally refreshed? No problem. The SDK checkpoints the call state in <code>LocalStorage</code> and attempts an automatic re-negotiation on page load.</p>
-            </div>
-        )},
-        { title: "Error Handling", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">21. Graceful Exit Strategies</h2>
-                <p>The SDK emits structured error codes (e.g. <code>ERR_MEDIA_DENIED</code>, <code>ERR_ICE_FAILED</code>) for easy debugging and user feedback.</p>
-            </div>
-        )},
-        { title: "Cryptographic Identity", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">22. Cryptographic DNA</h2>
-                <p>Your identity is verified via SHA-256 fingerprints of your session's DTLS certificate. This is the "Bio-Identification" for P2P links.</p>
-            </div>
-        )},
-        { title: "SRTP Packet Security", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">23. SRTP Packet Shield</h2>
-                <p>Media packets are encrypted individually using AES-GCM. Even if a packet is intercepted by a network sniffer, the payload remains opaque.</p>
-            </div>
-        )},
-        { title: "Fingerprint Verification", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">24. Visual Fingerprinting</h2>
-                <p>Pro users can visually verify fingerprints in the settings panel to guarantee no "Man-in-the-Middle" is present on the signaling path.</p>
-            </div>
-        )},
-        { title: "SDK Telemetry", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">25. Elite Telemetry</h2>
-                <p>Elite-tier keys unlock the <code>/v2/telemetry</code> endpoint, providing real-time data on RTT, jitter, and packet loss across your entire user base.</p>
-            </div>
-        )},
-        { title: "Browser Nuances", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">26. Cross-Browser Nuances</h2>
-                <p>We handle the Safari "Autoplay" restrictions and Chrome's "Plan B" vs "Unified Plan" differences internally to provide a seamless experience.</p>
-            </div>
-        )},
-        { title: "Mobile Hardware", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">27. Mobile Optimization</h2>
-                <p>On mobile, the SDK switches to <strong>Low-Energy Mode</strong>, reducing the CPU intensity of the VP9 encoder by 30% to save battery.</p>
-            </div>
-        )},
-        { title: "API Quotas", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">28. Rate Limiting</h2>
-                <p>To prevent DDoS attacks on the signaling mesh, users are limited to 10 events per second. Elite keys enjoy burst capacity up to 50 events/sec.</p>
-            </div>
-        )},
-        { title: "Privacy Standards", content: (
-            <div className="animate-fade-in-up space-y-8">
-                <h2 className="text-white text-4xl font-black tracking-tighter">29. GDPR & CCPA Shield</h2>
-                <p>By December 2025, MasterVoice is fully compliant with global privacy standards. We provide "Forget Me" endpoints for total data erasure.</p>
             </div>
         )},
         { title: "SFU v3.0 Roadmap", content: (
@@ -388,7 +232,6 @@ mv.on('track', ({ type, stream }) => {
     return (
         <PageLayout title="SDK & Technical Reference" onBack={onBack} wide={true}>
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 text-left">
-                {/* TOC Sidebar */}
                 <div className="lg:col-span-1 border-r border-white/10 pr-6 shrink-0 hidden lg:block max-h-[70vh] overflow-y-auto no-scrollbar sticky top-12">
                     <h4 className="font-black text-gray-600 mb-8 uppercase text-[10px] tracking-[0.4em] ml-2">Manual Chapters</h4>
                     <ul className="space-y-1">
@@ -407,7 +250,6 @@ mv.on('track', ({ type, stream }) => {
                     </ul>
                 </div>
 
-                {/* Content Area */}
                 <div className="lg:col-span-3 min-h-[800px] bg-[#020205]/60 p-6 md:p-12 rounded-[3.5rem] border border-white/5 shadow-inner relative">
                     <div className="lg:hidden mb-12">
                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] mb-4 block">Chapter Navigator</label>
@@ -424,7 +266,6 @@ mv.on('track', ({ type, stream }) => {
                         {sections[activeSection].content}
                     </div>
 
-                    {/* Pagination */}
                     <div className="mt-32 pt-12 border-t border-white/5 flex justify-between items-center">
                          {activeSection > 0 ? (
                              <button onClick={() => setActiveSection(prev => prev - 1)} className="group flex items-center gap-5 text-gray-500 hover:text-white transition-all">
@@ -561,7 +402,13 @@ export const DevPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
                 <div className="absolute top-0 right-0 w-24 h-24 bg-fuchsia-600/5 blur-3xl"></div>
                 <div className="w-14 h-14 rounded-[1.5rem] bg-fuchsia-500/10 flex items-center justify-center text-fuchsia-400 mb-8 group-hover:scale-110 transition border border-fuchsia-500/20 shadow-lg"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg></div>
                 <h3 className="text-3xl font-black text-white mb-3 tracking-tighter">API Credentials</h3>
-                <p className="text-gray-500 text-sm leading-relaxed font-medium">Secure provisioner for Free, Pro, and Elite level authorization tokens and network identity keys.</p>
+                <p className="text-gray-500 text-sm leading-relaxed font-medium">Secure provisioner for authorization tokens and network identity keys.</p>
+            </div>
+            <div onClick={() => onNavigate?.('/telemetry')} className="p-10 bg-[#13131a] border border-white/5 rounded-[3rem] cursor-pointer hover:bg-[#1a1a20] transition-all group hover:scale-[1.03] shadow-2xl relative overflow-hidden md:col-span-2">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 blur-3xl"></div>
+                <div className="w-14 h-14 rounded-[1.5rem] bg-green-500/10 flex items-center justify-center text-green-400 mb-8 group-hover:scale-110 transition border border-green-500/20 shadow-lg"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
+                <h3 className="text-3xl font-black text-white mb-3 tracking-tighter uppercase">NOC Telemetry</h3>
+                <p className="text-gray-500 text-sm leading-relaxed font-medium">Restricted /v2/telemetry endpoint dashboard. Real-time RTT and packet loss analysis for Elite users.</p>
             </div>
         </div>
     </PageLayout>
@@ -647,13 +494,7 @@ export const ApiKeyPage: React.FC<PageProps> = ({ onBack, onNavigate }) => {
                 <div className="space-y-8">
                     <div className="p-8 bg-indigo-500/10 border border-indigo-500/20 rounded-[2.5rem] shadow-2xl">
                         <h4 className="text-white font-black text-sm uppercase tracking-widest mb-4">Security Warning</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed font-bold">Treat your API keys as biological DNA. Any peer holding your token can spoof your identity across the signaling mesh. Rotate keys every 30 cycles.</p>
-                    </div>
-                    <div className="p-8 bg-white/5 border border-white/10 rounded-[2.5rem] space-y-4">
-                        <h4 className="text-gray-400 font-black text-[10px] uppercase tracking-widest">Live SDK Health</h4>
-                        <div className="flex justify-between items-center"><span className="text-xs text-gray-500">Signaling Mesh</span><span className="text-[9px] text-green-500 font-black uppercase">Operational</span></div>
-                        <div className="flex justify-between items-center"><span className="text-xs text-gray-500">Relay Clusters</span><span className="text-[9px] text-green-500 font-black uppercase">99.99% Up</span></div>
-                        <div className="flex justify-between items-center"><span className="text-xs text-gray-500">ICE Resolution</span><span className="text-[9px] text-indigo-400 font-black uppercase">Fast</span></div>
+                        <p className="text-xs text-gray-400 leading-relaxed font-bold">Treat your API keys as biological DNA. Rotate keys every 30 cycles.</p>
                     </div>
                 </div>
             </div>
@@ -675,7 +516,7 @@ export const ComparePlansPage: React.FC<PageProps> = ({ onBack, onNavigate }) =>
             { name: "Custom Theming (HSL)", free: "Presets", pro: "Full Engine Access", elite: "White-label / CSS Inject" },
             { name: "Metadata Storage", free: "30 Days", pro: "Unlimited", elite: "Custom Retention / Export" },
             { name: "SLA / Support", free: "Community", pro: "Business (24h)", elite: "Elite (1h Response)" },
-        ]}
+        ] }
     ];
     return (
         <PageLayout title="Technical Protocol Matrix" onBack={onBack} wide={true}>
@@ -719,10 +560,10 @@ export const MauLimitPage: React.FC<PageProps> = ({ onBack, onNavigate }) => (
     <PageLayout title="MAU Asset Quotas" onBack={onBack}>
         <p className="text-2xl text-white font-black mb-10 tracking-tighter uppercase">Bandwidth vs Scalability</p>
         <div className="space-y-8 text-lg">
-            <p className="text-gray-400 leading-relaxed">Monthly Active User (MAU) limits are the primary mechanism for balancing infrastructure costs associated with <strong>Realtime TURN Media Relay</strong>. Since P2P media consumes no MasterVoice bandwidth, direct calls do not count against your quota.</p>
+            <p className="text-gray-400 leading-relaxed">Monthly Active User (MAU) limits are the primary mechanism for balancing infrastructure costs associated with <strong>Realtime TURN Media Relay</strong>.</p>
             <div className="p-10 bg-indigo-600/10 border border-indigo-500/20 rounded-[3rem] shadow-xl">
                 <h5 className="text-white font-black text-xl mb-4 tracking-tight">Enterprise Scale Orchestration</h5>
-                <p className="text-sm text-gray-500 leading-relaxed font-medium">Organizations requiring massive concurrency (1M+ MAU) or dedicated region-locked relays (e.g. Frankfurt-Only) should contact our network orchestration department for a custom SLA proposal.</p>
+                <p className="text-sm text-gray-500 leading-relaxed font-medium">Organizations requiring massive concurrency (1M+ MAU) should contact our network orchestration department.</p>
             </div>
         </div>
     </PageLayout>
@@ -743,42 +584,20 @@ export const ThemeEditorPage: React.FC<PageProps> = ({ onBack, onNavigate }) => 
     return (
         <PageLayout title="Theme Orchestrator" onBack={onBack}>
             <div className="space-y-8 animate-fade-in-up">
-                <p className="text-gray-400 leading-relaxed">Modify the core visual identity of your MasterVoice terminal. Custom hex codes will override active presets across the decentralized mesh interface.</p>
+                <p className="text-gray-400 leading-relaxed">Modify the core visual identity of your MasterVoice terminal.</p>
                 <div className="bg-[#111] p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                         <div className="flex flex-col gap-2">
                              <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-1">Color Signature</label>
                              <div className="flex gap-4">
                                 <div className="w-16 h-16 rounded-2xl border-2 border-white/10 overflow-hidden relative shadow-inner">
-                                    <input 
-                                        type="color" 
-                                        value={hex} 
-                                        onChange={(e) => setHex(e.target.value)} 
-                                        className="absolute inset-0 w-[200%] h-[200%] -top-1/2 -left-1/2 cursor-pointer bg-transparent border-none" 
-                                    />
+                                    <input type="color" value={hex} onChange={(e) => setHex(e.target.value)} className="absolute inset-0 w-[200%] h-[200%] -top-1/2 -left-1/2 cursor-pointer bg-transparent border-none" />
                                 </div>
-                                <input 
-                                    type="text" 
-                                    value={hex} 
-                                    onChange={(e) => setHex(e.target.value)} 
-                                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-mono uppercase focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                />
-                             </div>
-                        </div>
-                        <div className="p-6 bg-white/5 rounded-2xl border border-white/5">
-                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-2">Live Preview</p>
-                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full shadow-lg" style={{ backgroundColor: hex }}></div>
-                                <div className="h-2 w-24 rounded-full" style={{ backgroundColor: hex, opacity: 0.3 }}></div>
+                                <input type="text" value={hex} onChange={(e) => setHex(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-mono uppercase focus:ring-2 focus:ring-indigo-500 outline-none" />
                              </div>
                         </div>
                     </div>
-                    <button 
-                        onClick={applyTheme} 
-                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition shadow-xl uppercase tracking-widest text-xs active:scale-95 shadow-indigo-600/20"
-                    >
-                        Commit Theme Update
-                    </button>
+                    <button onClick={applyTheme} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition shadow-xl uppercase tracking-widest text-xs active:scale-95 shadow-indigo-600/20">Commit Theme Update</button>
                 </div>
             </div>
         </PageLayout>

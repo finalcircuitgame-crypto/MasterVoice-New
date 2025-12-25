@@ -18,31 +18,39 @@ export interface CallConfig {
   screen?: boolean;
 }
 
+export interface TelemetryData {
+  timestamp: string;
+  rtt: number;
+  jitter: number;
+  packetLoss: number;
+  activeNodes: number;
+  region: string;
+  load: number;
+}
+
 // --- ICE Server Configurations ---
 
 const TIER_CONFIGS = {
   free: {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], // STUN Only (High failure rate on corp networks)
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], 
     iceTransportPolicy: 'all' as RTCIceTransportPolicy,
-    maxBitrate: 500000 // 500kbps cap
+    maxBitrate: 500000 
   },
   pro: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // Standard TURN (UDP) via Expressturn - Using environment variables
       { 
         urls: 'turn:relay1.expressturn.com:3480?transport=udp', 
         username: process.env.ICE_USERNAME || '000000002080624754', 
         credential: process.env.ICE_CREDENTIAL || 'TplmyCeWBfBAapvocrUf2IQx5u8=' 
       }
     ],
-    iceTransportPolicy: 'relay' as RTCIceTransportPolicy, // Force Relay for stability
-    maxBitrate: 2000000 // 2Mbps cap
+    iceTransportPolicy: 'relay' as RTCIceTransportPolicy, 
+    maxBitrate: 2000000 
   },
   elite: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      // Premium Relay (TCP) via Expressturn for firewall traversal - Using environment variables
       { 
         urls: 'turn:relay1.expressturn.com:3480?transport=tcp', 
         username: process.env.ICE_USERNAME || '000000002080624754', 
@@ -50,7 +58,7 @@ const TIER_CONFIGS = {
       }
     ],
     iceTransportPolicy: 'all' as RTCIceTransportPolicy,
-    maxBitrate: 10000000 // 10Mbps / Unlimited
+    maxBitrate: 10000000 
   }
 };
 
@@ -65,7 +73,6 @@ export class MasterVoice {
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   
-  // Event Listeners
   private listeners: Record<string, Function[]> = {};
 
   constructor(config: SDKConfig) {
@@ -76,10 +83,6 @@ export class MasterVoice {
     console.log(`[MasterVoice SDK] Initialized. Plan: ${this.plan.toUpperCase()}`);
   }
 
-  /**
-   * Determine plan based on API Key prefix.
-   * mv_free_..., mv_pro_..., mv_elite_...
-   */
   private determinePlan(key: string): SDKPlan {
     if (key.startsWith('mv_elite_')) return 'elite';
     if (key.startsWith('mv_pro_')) return 'pro';
@@ -98,17 +101,36 @@ export class MasterVoice {
   }
 
   /**
-   * Initialize WebRTC with Tier-specific config
+   * Simulated /v2/telemetry REST endpoint call.
+   * In production, this would be a fetch to our Go/Rust edge-proxy.
    */
+  public async fetchTelemetry(): Promise<TelemetryData[]> {
+    if (this.plan !== 'elite') {
+        throw new Error("Access Denied: /v2/telemetry requires ELITE tier credentials.");
+    }
+
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 400));
+
+    const regions = ['EU-WEST-1', 'US-EAST-1', 'US-WEST-2', 'AP-SOUTH-1'];
+    return regions.map(region => ({
+        timestamp: new Date().toISOString(),
+        region,
+        rtt: Math.floor(Math.random() * 40) + 10,
+        jitter: Math.floor(Math.random() * 5) + 1,
+        packetLoss: parseFloat((Math.random() * 0.1).toFixed(3)),
+        activeNodes: Math.floor(Math.random() * 100) + 50,
+        load: Math.floor(Math.random() * 30) + 10
+    }));
+  }
+
   public async initializeCall(roomId: string, userId: string) {
     const config = TIER_CONFIGS[this.plan];
-    
     this.pc = new RTCPeerConnection({
       iceServers: config.iceServers,
       iceTransportPolicy: this.plan === 'pro' ? 'relay' : 'all'
     });
 
-    // Handle ICE Candidates
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.signalingChannel?.send({
@@ -119,18 +141,16 @@ export class MasterVoice {
       }
     };
 
-    // Handle Remote Stream
     this.pc.ontrack = (event) => {
       const stream = event.streams[0];
       this.remoteStream = stream;
       this.emit('track', { track: event.track, stream });
     };
 
-    // Setup Signaling
     this.signalingChannel = this.supabase.channel(`room:${roomId}`);
     this.signalingChannel.on('broadcast', { event: 'signal' }, async ({ payload }) => {
       if (!this.pc) return;
-      if (payload.userId === userId) return; // Ignore self
+      if (payload.userId === userId) return;
 
       try {
         if (payload.type === 'offer') {
@@ -152,7 +172,6 @@ export class MasterVoice {
           await this.pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
         }
       } catch (err) {
-        console.error("Signaling Error:", err);
         this.emit('error', err);
       }
     }).subscribe();
@@ -160,22 +179,12 @@ export class MasterVoice {
 
   public async startCall(config: CallConfig = { audio: true, video: false }) {
     if (!this.pc) throw new Error("Initialize call first");
-
-    // Get Media
     this.localStream = await navigator.mediaDevices.getUserMedia(config);
     this.localStream.getTracks().forEach(track => {
       this.pc!.addTrack(track, this.localStream!);
     });
-
-    // Apply Bandwidth Constraints (SDP munging simulation)
-    // In a real implementation, usage of setParameters() on RtpSender is preferred
-    const maxBitrate = TIER_CONFIGS[this.plan].maxBitrate;
-    console.log(`[SDK] Applying bitrate limit: ${maxBitrate} bps`);
-
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
-
-    // Broadcast Offer
     await this.signalingChannel?.send({
       type: 'broadcast',
       event: 'signal',
@@ -191,8 +200,6 @@ export class MasterVoice {
     this.emit('call.ended');
   }
 }
-
-// --- React Integration ---
 
 const MasterVoiceContext = createContext<MasterVoice | null>(null);
 
