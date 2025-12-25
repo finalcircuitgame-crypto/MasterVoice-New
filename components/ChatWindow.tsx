@@ -68,23 +68,8 @@ interface MessageItemProps {
 const EMOJI_SOURCE_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/emoji.json';
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
 
-const GIF_CATEGORIES: Record<string, string[]> = {
-    "Trending": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif"
-    ],
-    "Reaction": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmQ2Z2F1YThqNXNreGZicmRqZjZ3YnJkbGY2d2JyZGxmNndicmRsZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKVUn7iM8FMEU24/giphy.gif"
-    ],
-    "Celebrate": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l2JI4z9s4YQYQ/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tOZ42Mg6XT6p2fe/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/artj92V8oWxcI/giphy.gif"
-    ]
-};
+// GIPHY API Integration
+const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public Beta Key
 
 // --- MARKDOWN PARSER (Basic) ---
 const parseMessageContent = (text: string) => {
@@ -121,7 +106,7 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
 
     // Detect if message is a single image/GIF URL
     const isUrl = msg.content && msg.content.trim().match(/^https?:\/\/[^\s]+$/);
-    const isImageUrl = isUrl && (msg.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || msg.content.includes('giphy.com/media'));
+    const isImageUrl = isUrl && (msg.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || msg.content.includes('giphy.com/media') || msg.content.includes('media.giphy.com'));
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -140,7 +125,6 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
     };
 
     const renderAttachment = () => {
-        // Handle explicit attachment objects
         if (msg.attachment) {
             return (
                 <div className="mb-2 rounded-lg overflow-hidden cursor-zoom-in" onClick={(e) => { e.stopPropagation(); onImageClick(msg.attachment!.url); }}>
@@ -148,7 +132,6 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
                 </div>
             );
         }
-        // Handle embedded URL images/GIFs
         if (isImageUrl) {
             return (
                 <div className="mb-2 rounded-lg overflow-hidden cursor-zoom-in" onClick={(e) => { e.stopPropagation(); onImageClick(msg.content); }}>
@@ -211,12 +194,6 @@ const MessageItem = React.memo<MessageItemProps>(({ msg, isMe, recipient, curren
                                     <p className="text-[10px] font-medium">{isSending ? 'Sending...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                     {isRecentlyEdited && <span className="text-[9px] italic opacity-70">edited</span>}
                                 </div>
-                                {isMe && !isSending && (
-                                    <div className="flex -space-x-1">
-                                        <span className="text-white/60 text-[10px]">✓</span>
-                                        <span className="text-white/60 text-[10px]">✓</span> 
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -248,8 +225,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
     const [loading, setLoading] = useState(true);
     const [emojiList, setEmojiList] = useState<string[]>(DEFAULT_EMOJI_LIST);
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+    
+    // GIF States
     const [showGifPicker, setShowGifPicker] = useState(false);
-    const [gifCategory, setGifCategory] = useState("Trending");
+    const [gifSearch, setGifSearch] = useState('Gir');
+    const [gifs, setGifs] = useState<any[]>([]);
+    const [loadingGifs, setLoadingGifs] = useState(false);
+    
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const [remoteDrafts, setRemoteDrafts] = useState<Record<string, string>>({});
@@ -276,6 +258,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             }
         }).catch(() => setEmojiList(DEFAULT_EMOJI_LIST));
     }, []);
+
+    // GIPHY Fetch Logic
+    useEffect(() => {
+        if (!showGifPicker) return;
+        const fetchGifs = async () => {
+            setLoadingGifs(true);
+            try {
+                const endpoint = gifSearch.trim() 
+                    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=20`
+                    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`;
+                const res = await fetch(endpoint);
+                const json = await res.json();
+                setGifs(json.data || []);
+            } catch (e) { console.error(e); }
+            finally { setLoadingGifs(false); }
+        };
+        const timer = setTimeout(fetchGifs, 500);
+        return () => clearTimeout(timer);
+    }, [gifSearch, showGifPicker]);
 
     useEffect(() => {
         const channel = supabase.channel(`chat_messages:${roomId}`);
@@ -446,19 +447,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, recipient, 
             )}
 
             {showGifPicker && (
-                <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20] border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up w-80">
-                    <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
-                        {Object.keys(GIF_CATEGORIES).map(cat => (
-                            <button key={cat} onClick={() => setGifCategory(cat)} className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap ${gifCategory === cat ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}>{cat}</button>
-                        ))}
+                <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up w-80">
+                    <div className="relative mb-3">
+                         <input 
+                            autoFocus
+                            type="text" 
+                            value={gifSearch} 
+                            onChange={(e) => setGifSearch(e.target.value)} 
+                            className="w-full bg-black/40 border border-white/10 rounded-full py-2 px-4 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500/50" 
+                            placeholder="Search GIFs..." 
+                         />
+                         {loadingGifs && <div className="absolute right-3 top-2.5 w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar">
-                        {GIF_CATEGORIES[gifCategory].map((gif, i) => (
-                            <div key={i} className="group relative rounded-lg overflow-hidden h-24 bg-black/20">
-                                <img src={gif} alt="GIF" className="w-full h-full object-cover cursor-pointer hover:scale-110 transition duration-300" onClick={() => handleSendGif(gif)} />
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                        {gifs.length === 0 && !loadingGifs && <div className="col-span-2 text-center py-10 text-xs text-gray-500">No GIFs found</div>}
+                        {gifs.map((gif, i) => (
+                            <div key={gif.id} className="group relative rounded-lg overflow-hidden h-24 bg-black/20">
+                                <img 
+                                    src={gif.images.fixed_height_small.url} 
+                                    alt="GIF" 
+                                    className="w-full h-full object-cover cursor-pointer hover:scale-110 transition duration-300" 
+                                    onClick={() => handleSendGif(gif.images.original.url)} 
+                                />
                             </div>
                         ))}
                     </div>
+                    <div className="mt-2 text-[8px] text-gray-600 uppercase tracking-widest text-center">Powered by Giphy</div>
                 </div>
             )}
 

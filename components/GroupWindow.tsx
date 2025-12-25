@@ -36,21 +36,7 @@ const triggerConfetti = () => {
 };
 
 const DEFAULT_EMOJI_LIST = ["👍", "👎", "❤️", "🔥", "😂", "😢", "😮", "😡", "🎉", "👀"];
-const GIF_CATEGORIES: Record<string, string[]> = {
-    "Trending": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHFRbmaZtBRhXG/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMHxhOfscxPfIfm/giphy.gif"
-    ],
-    "Reaction": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oKIPnAiaMCws8nOsE/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif"
-    ],
-    "Gaming": [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKpnO3gLp0W6r2o/giphy.gif",
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4Z2Y5M3Z5aGZ5Y3Z5aGZ5Y3Z5aGZ5YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif"
-    ]
-};
+const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
 
 const POLL_PREFIX = "$$POLL$$";
 const VOTE_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
@@ -77,7 +63,7 @@ const MessageItem = React.memo<{
     const isPinned = msg.reactions?.['📌'] && msg.reactions['📌'].length > 0;
 
     const isUrl = msg.content && msg.content.trim().match(/^https?:\/\/[^\s]+$/);
-    const isImageUrl = isUrl && (msg.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || msg.content.includes('giphy.com/media'));
+    const isImageUrl = isUrl && (msg.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || msg.content.includes('giphy.com/media') || msg.content.includes('media.giphy.com'));
 
     const isPoll = msg.content.startsWith(POLL_PREFIX);
     let pollData = null;
@@ -153,8 +139,13 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    
+    // GIF States
     const [showGifPicker, setShowGifPicker] = useState(false);
-    const [gifCategory, setGifCategory] = useState("Trending");
+    const [gifSearch, setGifSearch] = useState('Gir');
+    const [gifs, setGifs] = useState<any[]>([]);
+    const [loadingGifs, setLoadingGifs] = useState(false);
+    
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -181,6 +172,25 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
     }, [selectedGroup.id, currentUser.id]);
 
     useEffect(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length]);
+
+    // GIPHY Fetch Logic
+    useEffect(() => {
+        if (!showGifPicker) return;
+        const fetchGifs = async () => {
+            setLoadingGifs(true);
+            try {
+                const endpoint = gifSearch.trim() 
+                    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=20`
+                    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`;
+                const res = await fetch(endpoint);
+                const json = await res.json();
+                setGifs(json.data || []);
+            } catch (e) { console.error(e); }
+            finally { setLoadingGifs(false); }
+        };
+        const timer = setTimeout(fetchGifs, 500);
+        return () => clearTimeout(timer);
+    }, [gifSearch, showGifPicker]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e && e.preventDefault();
@@ -210,8 +220,14 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
     };
 
     const handleSendGif = (url: string) => {
-        setNewMessage(url);
-        setTimeout(() => handleSendMessage(null as any), 0);
+        const tempId = Math.random().toString();
+        const optimisticMsg: any = { id: tempId, sender_id: currentUser.id, group_id: selectedGroup.id, content: url, created_at: new Date().toISOString(), status: 'sending', sender: { email: currentUser.email, avatar_url: currentUser.avatar_url } };
+        setMessages(prev => [...prev, optimisticMsg]);
+        setShowGifPicker(false);
+        supabase.from('messages').insert({ sender_id: currentUser.id, group_id: selectedGroup.id, content: url }).then(({ data, error }) => {
+            if (error) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
+            else setMessages(prev => prev.map(m => m.id === tempId ? { ...data, sender: { email: currentUser.email, avatar_url: currentUser.avatar_url }, status: 'sent' } : m));
+        });
     };
 
     const handleReaction = async (msg: Message, emoji: string) => {
@@ -245,23 +261,37 @@ export const GroupWindow: React.FC<{ currentUser: UserProfile; selectedGroup: Gr
             </div>
 
             {showGifPicker && (
-                <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20] border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up w-80">
-                    <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
-                        {Object.keys(GIF_CATEGORIES).map(cat => (
-                            <button key={cat} onClick={() => setGifCategory(cat)} className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap ${gifCategory === cat ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}>{cat}</button>
+                <div className="absolute bottom-20 left-4 z-30 bg-[#1a1a20]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-up w-80">
+                    <div className="relative mb-3">
+                         <input 
+                            autoFocus
+                            type="text" 
+                            value={gifSearch} 
+                            onChange={(e) => setGifSearch(e.target.value)} 
+                            className="w-full bg-black/40 border border-white/10 rounded-full py-2 px-4 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500/50" 
+                            placeholder="Search GIFs..." 
+                         />
+                         {loadingGifs && <div className="absolute right-3 top-2.5 w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                        {gifs.length === 0 && !loadingGifs && <div className="col-span-2 text-center py-10 text-xs text-gray-500">No GIFs found</div>}
+                        {gifs.map((gif, i) => (
+                            <img 
+                                key={gif.id} 
+                                src={gif.images.fixed_height_small.url} 
+                                alt="GIF" 
+                                className="w-full h-24 object-cover rounded-lg cursor-pointer hover:scale-105 transition" 
+                                onClick={() => handleSendGif(gif.images.original.url)} 
+                            />
                         ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar">
-                        {GIF_CATEGORIES[gifCategory].map((gif, i) => (
-                            <img key={i} src={gif} alt="GIF" className="w-full h-24 object-cover rounded-lg cursor-pointer hover:scale-105 transition" onClick={() => handleSendGif(gif)} />
-                        ))}
-                    </div>
+                    <div className="mt-2 text-[8px] text-gray-600 uppercase tracking-widest text-center">Powered by Giphy</div>
                 </div>
             )}
 
             <div className="p-4 pb-safe bg-[#030014]/80 backdrop-blur-md">
                 <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-[#13131a] border border-white/10 p-1.5 pl-4 rounded-full shadow-2xl focus-within:ring-2 focus-within:ring-indigo-500/30">
-                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
+                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className={`p-2 rounded-full transition ${showGifPicker ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
                     <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none placeholder-gray-600 text-[15px]" placeholder="Group message..." />
                     <button type="submit" className="p-2.5 rounded-full text-white font-bold transition shadow-lg" style={{ background: 'var(--theme-gradient)' }}><svg className="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg></button>
                 </form>
